@@ -7,7 +7,7 @@
 
 (set-face-attribute 'default nil
                     :family (cond ((eq system-type 'darwin) "Iosevka Term")
-				  ((eq system-type 'gnu/linux) "Iosevka Nerd Font Propo")
+				  ((eq system-type 'gnu/linux) "Iosevka Term")
 				  (t "Fira Code"))
                     :weight 'regular
                     :height 180
