@@ -201,7 +201,14 @@ during normal emacs operations.")
 
 (use-package color-theme-sanityinc-tomorrow
   :init
-  (load-theme 'sanityinc-tomorrow-night t))
+  (load-theme 'sanityinc-tomorrow-day t))
+
+(use-package auto-dark
+  :ensure t
+  :custom ((auto-dark-dark-theme 'sanityinc-tomorrow-night)
+	   (auto-dark-light-theme 'sanityinc-tomorrow-day))
+  :config
+  (auto-dark-mode t))
 
 ;; If you use `emacs-mac' Mac port then ligatures are handled for you.
 (if (fboundp 'mac-auto-operator-composition-mode)
@@ -337,6 +344,51 @@ during normal emacs operations.")
   :config (pinentry-start)
   :custom (epg-pinentry-mode 'loopback))
 
+(use-package eglot
+  :hook ((python-mode . eglot-ensure)
+	 (clojure-mode . eglot-ensure)
+	 (terraform-mode . eglot-ensure)
+	 (prog-mode . eglot-ensure)
+	 (sh-mode . eglot-ensure)
+	 (latex-mode . eglot-ensure))
+  :bind (:map prog-mode-map
+         ;("M-." . xref-find-definitions)
+         ;("M-?" . xref-find-references)
+	 )
+  :custom (eglot-sync-connect nil)
+  :config
+  (set-face-attribute 'eglot-highlight-symbol-face nil
+		      :background (color-lighten-name
+				   (face-background 'highlight)
+				   42))
+  (add-to-list 'eglot-server-programs '(web-mode . ("typescript-language-server" "--stdio"))))
+
+(use-package dtrt-indent
+  :custom (dtrt-indent-max-merge-deviation 0.0)
+  :hook (eglot--managed-mode . dtrt-indent-global-mode))
+
+(defun format-or-indent-region (orig &rest args)
+  (interactive)
+  (if (and (eglot-current-server) (region-active-p))
+      (eglot-format (region-beginning) (- (region-end) 1))
+    (apply orig args)))
+
+(advice-add 'indent-region :around #'format-or-indent-region)
+
+(defun adjust-tab-width ()
+  "`tab-width' is used by eglot for LSP formatting; adjust it with dtrt."
+  (let ((indent-offset-variables
+         (nth 2 (dtrt-indent--search-hook-mapping major-mode))))
+    (let ((indent-offset-variable
+           (if (listp indent-offset-variables)
+               (nth 0 indent-offset-variables)
+             indent-offset-variables)))
+      (if (boundp indent-offset-variable)
+          (setq tab-width (symbol-value indent-offset-variable))))))
+
+(advice-add 'dtrt-indent-try-set-offset :after #'adjust-tab-width)
+(advice-add 'dtrt-indent-set :after #'adjust-tab-width)
+
 (add-hook 'prog-mode-hook 'display-line-numbers-mode)
 
 (use-package flymake-shellcheck
@@ -384,12 +436,26 @@ during normal emacs operations.")
 	 (tree-sitter-after-on . tree-sitter-hl-mode)
 	 (emacs-startup . my/post-startup-hook)))
 
+(setq my/tree-sitter-langs-grammar-dir "~/.emacs.d/straight/build/tree-sitter-langs/bin/")
+(setq my/tree-sitter-langs-grammar-prefix "libtree-sitter-")
+
+(defun rename-tree-sitter-grammars (orig-fun &rest args)
+  "Prefix tree-sitter grammar files with `treesit-`, as expected by tree-sitter."
+  (dolist (file (directory-files my/tree-sitter-langs-grammar-dir t "\\.so$"))
+    (let ((new-name (concat my/tree-sitter-langs-grammar-dir
+			    my/tree-sitter-langs-grammar-prefix
+			    (file-name-nondirectory file))))
+      (rename-file file new-name t))))
+
 (use-package tree-sitter-langs
-  :ensure t)
+  :ensure t
+  :init
+  (setq treesit-extra-load-path (list my/tree-sitter-langs-grammar-dir))
+  (advice-add 'tree-sitter-langs-install-grammars :after #'rename-tree-sitter-grammars))
 
 (use-package treesit-auto
   :custom
-  (treesit-auto-install t)
+  (treesit-auto-install 'prompt)
   :config
   (treesit-auto-add-to-auto-mode-alist 'all)
   (global-treesit-auto-mode))
@@ -459,23 +525,6 @@ during normal emacs operations.")
   :hook (prog-mode . highlight-indent-guides-mode)
   :config (set-face-foreground 'highlight-indent-guides-character-face "gray"))
 
-(use-package eglot
-  :hook ((python-mode . eglot-ensure)
-	 (clojure-mode . eglot-ensure)
-	 (terraform-mode . eglot-ensure)
-	 (prog-mode . eglot-ensure)
-	 (sh-mode . eglot-ensure)
-	 (latex-mode . eglot-ensure))
-  :bind (:map prog-mode-map
-         ;("M-." . xref-find-definitions)
-         ;("M-?" . xref-find-references)
-	 )
-  :config
-  (set-face-attribute 'eglot-highlight-symbol-face nil
-		      :background (color-lighten-name
-				   (face-background 'highlight)
-				   42)))
-
 (use-package company-mode
   :hook (prog-mode . company-mode))
 
@@ -504,20 +553,27 @@ during normal emacs operations.")
 (use-package yasnippet-snippets
   :after yasnippet)
 
+(use-package web-mode)
+(add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.tsx\\'" . tsx-ts-mode))
+
 (use-package devdocs)
 
 (use-package gptel
   :custom
-  (gptel-model "codellama:34b")
-  (gptel-backend (gptel-make-ollama "Ollama (local)"
-		   :host "localhost:11434"
-		   :stream t
-		   :models '("codellama:34b" "gemma:7b" "llama2:13b")))
-  (gptel-default-mode "markdown-mode"))
+  (gptel-model "gemma2:27b")
+  (gptel-default-mode "markdown-mode")
+  :config
+  (setq gptel-backend (gptel-make-ollama "Ollama (local)"
+    :host "localhost:11434"
+    :stream t
+    :models '("gemma2:27b"))))
 
 (use-package gptel-extensions
   :after gptel
-  :straight (gptel-extensions :type git :host github :repo "kamushadenes/gptel-extensions.el"))
+  :straight (gptel-extensions :type git
+			      :host github
+			      :repo "kamushadenes/gptel-extensions.el"))
 
 (use-package restclient)
 
