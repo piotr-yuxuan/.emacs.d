@@ -1,6 +1,9 @@
+/.cache/
 /auto-save-list/
+/autosaves/
 /backups/
 /eln-cache/
+/elpy/
 /projectile-bookmarks.eld
 /recentf
 /straight/build-cache.el
@@ -8,6 +11,3 @@
 /straight/repos/
 /tramp
 /transient/
-/.cache/
-/autosaves/
-/elpy/
