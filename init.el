@@ -203,12 +203,28 @@ during normal emacs operations.")
   :init
   (load-theme 'sanityinc-tomorrow-day t))
 
-(use-package auto-dark
-  :ensure t
-  :custom ((auto-dark-dark-theme 'sanityinc-tomorrow-night)
-	   (auto-dark-light-theme 'sanityinc-tomorrow-day))
-  :config
+(defun my/auto-dark ()
   (auto-dark-mode t))
+
+(use-package auto-dark
+  :config
+  (setq auto-dark-dark-theme 'sanityinc-tomorrow-night)
+  (setq auto-dark-light-theme 'sanityinc-tomorrow-day)
+
+  (add-hook 'auto-dark-dark-mode-hook
+            (lambda ()
+              (set-face-attribute 'eglot-highlight-symbol-face nil
+		                  :background (color-lighten-name (face-background 'highlight)
+                                                                  42))))
+
+  (add-hook 'auto-dark-light-mode-hook
+            (lambda ()
+              (set-face-attribute 'eglot-highlight-symbol-face nil
+		                  :background (color-darken-name (face-background 'highlight)
+				                                             30))))
+
+  :hook ((emacs-startup . my/auto-dark)
+         (focus-in . my/auto-dark)))
 
 ;; If you use `emacs-mac' Mac port then ligatures are handled for you.
 (if (fboundp 'mac-auto-operator-composition-mode)
@@ -277,6 +293,8 @@ during normal emacs operations.")
 
 (setq backup-directory-alist '(("." . "~/.emacs.d/backups")))
 
+(use-package svg-clock)
+
 (use-package projectile
   :config (projectile-mode +1)
   :bind-keymap ("s-p" . projectile-command-map))
@@ -320,6 +338,9 @@ during normal emacs operations.")
   :bind (("S-f" . isearch-forward)
 	 ("C-s" . swiper)))
 
+(use-package writeroom-mode)
+(use-package centered-cursor-mode)
+
 (use-package magit
   :bind ("C-x g" . magit-status))
 
@@ -358,9 +379,9 @@ during normal emacs operations.")
   :custom (eglot-sync-connect nil)
   :config
   (set-face-attribute 'eglot-highlight-symbol-face nil
-		      :background (color-lighten-name
+		      :background (color-darken-name
 				   (face-background 'highlight)
-				   42))
+				   30))
   (add-to-list 'eglot-server-programs '(web-mode . ("typescript-language-server" "--stdio"))))
 
 (use-package dtrt-indent
@@ -593,6 +614,7 @@ during normal emacs operations.")
   ;; https://www.reddit.com/r/emacs/comments/17nl7cw/comment/k7u1ueu
   :custom ((process-adaptive-read-buffering nil)
 	   (read-process-output-max (* 4 1024 1024))
+	   (eat-enable-directory-tracking t)
 	   (eat-term-name "xterm-256color"))
   :bind (:map eat-mode-map
 	      ("C-k" . eat-reset)))
