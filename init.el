@@ -67,6 +67,9 @@ during normal emacs operations.")
   :init (benchmark-init/activate)
   :config (add-hook 'after-init-hook 'benchmark-init/deactivate))
 
+(use-package general
+  :ensure t)
+
 (setq initial-scratch-message nil ;; No need to remind me what a scratch buffer is.
       ;; Double-spaces after periods is morally wrong.
       sentence-end-double-space nil
@@ -245,6 +248,31 @@ during normal emacs operations.")
 (use-package imenu
   :hook ((prog-mode text-mode org-mode) . imenu-add-menubar-index))
 
+(winner-mode 1)
+
+(defun my/other-window-reverse ()
+  "Switch to the previous window."
+  (interactive)
+  (other-window -1))
+
+(general-define-key
+ :prefix "C-x"
+ "O" 'my/other-window-reverse)
+
+(global-set-key (kbd "M-o") 'ace-window)
+
+(use-package exec-path-from-shell
+  :config
+  (customize-set-variable
+   'exec-path-from-shell-arguments
+   (remove "-i" exec-path-from-shell-arguments))
+  :hook (emacs-startup . (lambda ()
+                           ;; Can be quite slow.
+                           (when (memq window-system '(mac ns x))
+                             (exec-path-from-shell-initialize))
+                           (when (daemonp)
+                             (exec-path-from-shell-initialize)))))
+
 (use-package dashboard
   :custom ((dashboard-startup-banner 'logo)
            (dashboard-items '(;; (bookmarks . 15)
@@ -255,7 +283,11 @@ during normal emacs operations.")
                               ))
            (dashboard-center-content t)
            (dashboard-vertically-center-content t)
-           (inhibit-startup-screen t)))
+           (inhibit-startup-screen t)
+           (dashboard-projects-switch-function
+            (lambda (project)
+              (magit-status project)
+              (delete-other-windows)))))
 (dashboard-setup-startup-hook)
 
 (use-package edit-indirect)
@@ -308,7 +340,20 @@ during normal emacs operations.")
 
 (delete-selection-mode 1)
 
+(use-package writeroom-mode)
+(use-package centered-cursor-mode)
+
+(use-package visual-fill-column
+  :ensure t
+  :hook (visual-line-mode . visual-fill-column-mode)
+  :custom
+  ((visual-fill-column-center-text 1)
+   (visual-fill-column-width 85)))
+
+(defalias 'zsh-mode 'shell-script-mode)
+
 (use-package org
+  :hook ((org-mode . git-gutter-mode))
   :custom
   (org-src-preserve-indentation nil)
   (org-edit-src-content-indentation 0)
@@ -434,9 +479,6 @@ during normal emacs operations.")
   :bind (("S-f" . isearch-forward)
          ("C-s" . swiper)))
 
-(use-package writeroom-mode)
-(use-package centered-cursor-mode)
-
 (use-package magit
   :bind ("C-x g" . magit-status))
 
@@ -460,26 +502,63 @@ during normal emacs operations.")
   :config (pinentry-start)
   :custom (epg-pinentry-mode 'loopback))
 
+(use-package eldoc-box
+  :after (eldoc eglot)
+  :ensure t
+  ;;:hook (eglot-managed-mode . eldoc-box-hover-mode)
+  :bind* (("C-h C-d" . eldoc-box-help-at-point)
+          ;; "C-h ." is already defined.
+          ))
+
+(defun my/eglot-x-on-enter-hook ()
+  "Use eglot-x-on-enter as RET in eglot-managed buffers. We don't want to
+map it to a global or keymap-scoped binding so we can't use `:bind` from
+`use-package`."
+  (local-set-key (kbd "RET") #'eglot-x-on-enter))
+
 (use-package eglot
+  :after which-key
   :hook (prog-mode . eglot-ensure)
   :bind (:map prog-mode-map
               ;; ("M-." . xref-find-definitions)
               ;; ("M-?" . xref-find-references)
-              )
+              ("C-c e r" . eglot-rename)
+              ("C-c e o" . eglot-code-action-organize-imports)
+              ("C-c e a" . eglot-code-actions)
+              ("C-c e f" . eglot-format)
+              ("C-c e i" . eglot-find-implementation)
+              ("C-c e d" . eglot-find-declaration)
+              ("C-c e t" . eglot-find-typeDefinition)
+              ("C-c e x" . eglot-reconnect) ; or eglot-shutdown if preferred
+              ("C-c e q" . eglot-shutdown)
+              ("C-c e l" . eglot-stderr-buffer))
   :custom
   (eglot-sync-connect nil)
   :config
-  (set-face-attribute 'eglot-highlight-symbol-face nil :background (color-darken-name (face-background 'highlight) 30))
+  (set-face-attribute 'eglot-highlight-symbol-face nil :background (color-darken-name (face-background 'highlight) 5))
   (add-to-list 'eglot-server-programs
-               '(web-mode . ("typescript-language-server" "--stdio")))
-  (add-to-list 'eglot-server-programs
-               '(python-mode . ("pyright-langserver" "--stdio"))))
+               '(web-mode . ("typescript-language-server" "--stdio"))))
+
+(use-package eglot-x
+  :straight (eglot-x :type git :host github :repo "nemethf/eglot-x")
+  :after eglot
+  :hook ((eglot-managed-mode . eglot-x-setup)
+         (eglot-managed-mode . my/eglot-x-on-enter-hook))
+  :bind (:map eglot-mode-map
+              ("C-c e E" . eglot-x-execute-command)
+              ("C-c e S" . eglot-x-workspace-restart)
+              ("C-c e C" . eglot-x-inlay-hints-mode)
+              ("C-c e D" . eglot-x-show-documentation)))
+
+(which-key-add-key-based-replacements
+  "C-c e" "eglot")
 
 (use-package tree-sitter
   :defer t
   :hook (;; Here put the modes for which you want tree sitter syntax
          ;; highlighting and fold indicators.
-         (python-mode) . tree-sitter-mode))
+         (emacs-lisp-mode . tree-sitter-mode)
+         (prog-mode . tree-sitter-mode)))
 
 (setq my/tree-sitter-langs-grammar-straight-dir "~/.emacs.d/straight/build/tree-sitter-langs/bin")
 (setq my/tree-sitter-langs-grammar-dir "~/.emacs.d/tree-sitter")
@@ -537,8 +616,27 @@ during normal emacs operations.")
 
 (use-package ts-fold-indicators
   :straight (ts-fold-indicators :type git :host github :repo "emacs-tree-sitter/ts-fold")
-  :hook ((tree-sitter-mode) . ts-fold-indicators-mode)
-  :bind (("C-s-<tab>" . ts-fold-toggle)))
+  :hook ((tree-sitter-mode . ts-fold-indicators-mode)
+         (tree-sitter-mode . ts-fold-line-comment-mode))
+  :bind (("C-s-<tab>" . ts-fold-toggle))
+  :custom ((ts-fold-line-count-show t))
+  :config
+  (fringe-helper-define 'ts-fold-indicators-fr-minus-tail nil
+  "........" "........" "........" "........" "........"
+  "........" "........" "........" "........" "........"
+  "XXXXXXX"
+  "X.....X"
+  "X.....X"
+  "X.XXX.X"
+  "X.....X"
+  "X.....X"
+  "XXXXXXX"
+  "........" "........" "........" "........" "........"
+  "........" "........" "........" "........" "........")
+
+  (fringe-helper-define 'ts-fold-indicators-fr-center nil "")
+  (fringe-helper-define 'ts-fold-indicators-fr-end-left nil "")
+  (fringe-helper-define 'ts-fold-indicators-fr-end-right nil ""))
 
 ;; (defun my/highlight-indent-guides-dark ()
 ;;   ;; The rightmost indent guide currently active.
@@ -576,6 +674,19 @@ during normal emacs operations.")
   :hook
   (tree-sitter-mode . highlight-indent-guides-mode))
 
+(use-package format-all
+  :commands format-all-mode
+  :hook (prog-mode . format-all-mode)
+  :config
+  (setq-default format-all-formatters
+                '(("C"     (astyle "--mode=c"))
+                  ("Shell" (shfmt "-i" "4" "-ci")))))
+
+(general-define-key
+ :keymaps 'prog-mode-map
+ :prefix "C-c"
+ "r" #'format-all-region-or-buffer)
+
 (use-package flymake-shellcheck
   :commands flymake-shellcheck-load
   :hook ((sh-mode . flymake-shellcheck-load)
@@ -595,7 +706,11 @@ during normal emacs operations.")
   :hook (clojure-mode . my/clojure-mode-hook))
 
 (use-package python
-  :custom (python-indent-guess-indent-offset-verbose nil))
+  :after eglot
+  :custom (python-indent-guess-indent-offset-verbose nil)
+  :config
+  (add-to-list 'eglot-server-programs
+               '(python-mode . ("ruff" "server"))))
 
 (use-package poetry
   :hook (python-mode . poetry-tracking-mode)
@@ -604,6 +719,10 @@ during normal emacs operations.")
 
 (use-package blacken
   :hook (python-mode . blacken-mode))
+
+(use-package auto-virtualenv
+  :custom (auto-virtualenv-verbose t)
+  :config (auto-virtualenv-setup))
 
 (use-package elpy
   :ensure t
@@ -614,6 +733,60 @@ during normal emacs operations.")
 (use-package web-mode)
 (add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-ts-mode))
 (add-to-list 'auto-mode-alist '("\\.tsx\\'" . tsx-ts-mode))
+
+(use-package auctex
+  :hook ((LaTeX-mode . tree-sitter-mode)
+         (LaTeX-mode . eglot-ensure)
+         (LaTeX-mode . git-gutter-mode)
+         (LaTeX-mode . turn-on-auto-fill))
+  :custom ((TeX-engine 'xetex)
+           (TeX-PDF-mode t)))
+
+(use-package company-auctex
+  :ensure t
+  :config
+  (company-auctex-init))
+
+(use-package cdlatex
+  :ensure t
+  :hook (LaTeX-mode . turn-on-cdlatex))
+
+(use-package rust-mode
+  :after eglot
+  :config
+  (add-to-list 'eglot-server-programs
+               '((rust-ts-mode rust-mode) .
+                 ("rust-analyzer"
+                  :initializationOptions
+                  (
+                   :cargo (
+                           :allFeatures t
+                           :loadOutDirsFromCheck t
+                           :runBuildScripts t)
+                   :procMacro (:enable t)
+                   :check (:command "clippy")
+                   :inlayHints (
+                                :bindingModeHints t
+                                :chainingHints t
+                                :closingBraceHints t
+                                :parameterHints t
+                                :typeHints t
+                                :maxLength 25
+                                :enabled t)
+                   :lens (
+                          :enable t
+                          :implementations t
+                          :references t
+                          :run t
+                          :debug t))))))
+
+(use-package cargo-mode
+  :hook (rust-mode . cargo-minor-mode)
+  :custom ((compilation-scroll-output t)))
+
+(require 'server)
+(unless (server-running-p)
+    (server-start))
 
 (use-package devdocs)
 
@@ -636,7 +809,7 @@ during normal emacs operations.")
   :custom ((process-adaptive-read-buffering nil)
            (read-process-output-max (* 4 1024 1024))
            (eat-enable-directory-tracking t)
-           (eat-term-name "xterm-256color"))
+           (eat-enable-shell-prompt-annotation nil))
   :bind (:map eat-mode-map
               ("C-k" . eat-reset)))
 
@@ -655,6 +828,16 @@ buffer to '*vterm* btop'. Exit on quit."
           (vterm-send-return))))))
 
 (use-package daemons)
+
+(defun my/garamond-font ()
+  "Set a Garamond font for nov-mode."
+  (face-remap-add-relative 'variable-pitch :family "Garamond" :height 160))
+
+(use-package nov
+  :ensure t
+  :mode ("\\.epub\\'" . nov-mode)
+  :hook ((nov-mode . centered-cursor-mode)
+         (nov-mode . my/garamond-font)))
 
 (use-package esup
   ;; Sometimes an error happens. It is fixed with:
