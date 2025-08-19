@@ -2,13 +2,13 @@
 #+AUTHOR: 胡雨軒 Петр
 #+LANGUAGE: en
 
+[[./startup.png]]
+
 * Choosing an Emacs build on macOS
 
 #+BEGIN_SRC zsh :tangle no
 brew install --cask emacs@nightly
 #+END_SRC
-
-[[./startup.png]]
 
 * How to get help
 
