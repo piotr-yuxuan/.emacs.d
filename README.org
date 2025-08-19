@@ -1,0 +1,108 @@
+#+TITLE:Emacs configuration
+#+AUTHOR: 胡雨軒 Петр
+#+LANGUAGE: en
+
+* Choosing an Emacs build on macOS
+
+#+BEGIN_SRC zsh :tangle no
+brew install --cask emacs@nightly
+#+END_SRC
+
+* How to get help
+
+These are the most important keystrokes of all. If you know these keys
+keystrokes, you can get helpful information whenever you are stuck!
+These keystrokes are far more helpful than Google.
+
+- =C-h(elp) b(indings)= shows the keybindings available in the current
+  buffer.
+- =C-h(elp) d(ocumentation)= lets you search through all available
+  documentation.
+- =C-h(elp) f(unction)= displays the current list of available
+  functions.
+- =C-h(elp) i(nfo)= shows the info docs installed on your computer (no
+  need to have a browser open just to read documentation).
+- =C-h(elp) m(ode)= shows information about all the modes in the
+  buffer.
+- =C-h(elp) k(ey)= let’s you type a keystroke and find out what it
+  does.
+- =C-h(elp) v(ariable)= displays the list of available variables.
+
+* Table of contents :TOC_2_org:
+- [[Choosing an Emacs build on macOS][Choosing an Emacs build on macOS]]
+- [[How to get help][How to get help]]
+- [[Philosophy][Philosophy]]
+- [[Key features][Key features]]
+  - [[User experience][User experience]]
+  - [[Writing & Programming Environment][Writing & Programming Environment]]
+  - [[Interacting with the outside world][Interacting with the outside world]]
+
+* Philosophy
+
+My approach to configuration is guided by a few core principles:
+
+- *Simplicity (KISS)*: Most systems work best when they are kept
+  simple. This configuration avoids unnecessary complexity and doesn't
+  require a special mindset to use or modify. It's a document first,
+  not an automated deployment script.
+- *Locality*: I believe that related settings should be close to each
+  other. This entire setup is self-contained in one place to make it
+  easy to understand and maintain without hidden dependencies or side
+  effects.
+- *Predictability*: My environment should behave consistently, and I
+  want the ability to revert to a a previous state if something goes
+  wrong. Versioning this repository with Git makes that possible.
+- *Declarativeness*: I want to keep a record of the reasoning that led
+  to my configuration choices. Literate programming helps me document
+  these decisions for my future self and for anyone else who might
+  find this useful.
+
+* Key features
+
+This Emacs setup is designed to be a powerful and ergonomic
+environment for both writing and programming. Here are some of the
+highlights:
+
+** User experience
+
+- *Performance-orientated*: The configuration is optimized for a fast
+  startup, with garbage collection settings tuned to be less invasive
+  during initialization.
+- *Ergonomic keybindings*: Sensible, discoverable keybindings are
+  implemented using =general.el= and =which-key= to make interaction
+  intuitive.
+- *Modern aesthetics*: It features a clean, minimalist UI with an
+  adaptive dark/light theme (=sanityinc-tomorrow=), beautiful fonts
+  with ligature support (=Iosevka=), and a functional mode line.
+- *Efficient navigation*: A powerful completion framework powered by
+  =Helm= provides a consistent interface for finding files, switching
+  buffers, and executing commands.
+
+** Writing & Programming Environment
+
+- *LSP integration*: It uses =eglot= for seamless Language Server
+  Protocol support, providing intelligent code completion,
+  diagnostics, and navigation across various languages.
+- *Advanced code parsing*: Leverages =tree-sitter= for fast and
+  accurate syntax highlighting, code folding, and structural editing,
+  which is more robust than traditional regex-based approaches.
+- *Powerful completion*: A rich auto-completion experience is provided
+  by =company-mode=, complemented by fuzzy finding capabilities.
+- *Git integration*: Deep integration with Git is achieved through
+  =Magit=, the magical Git porcelain, along with =git-gutter= to show
+  changes in the fringe.
+- *Language-specific support*: Tailored setups for languages like
+  Python, Clojure, Rust, and Shell scripting, including formatters,
+  linters, and interactive REPL.
+
+** Interacting with the outside world
+
+- *Integrated shell emulator*: Features =eat= (Emacs Application
+  Toolkit), a powerful terminal emulator that integrates seamlessly
+  with the Emacs environment, allowing me to stay within a single
+  application for most of my tasks.
+- *REST client*: Includes =restclient.el= for making HTTP requests
+  directly from within Emacs, which is incredibly useful for API
+  development and testing.
+- *File management*: Uses =Dirvish= to provide a modern and highly
+  customizable file manager experience within Emacs.
