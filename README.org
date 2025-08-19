@@ -8,6 +8,8 @@
 brew install --cask emacs@nightly
 #+END_SRC
 
+[[./startup.png]]
+
 * How to get help
 
 These are the most important keystrokes of all. If you know these keys
