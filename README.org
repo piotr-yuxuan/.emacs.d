@@ -70,32 +70,42 @@ highlights:
 - *Performance-orientated*: The configuration is optimized for a fast
   startup, with garbage collection settings tuned to be less invasive
   during initialization.
-- *Ergonomic keybindings*: Sensible, discoverable keybindings are
-  implemented using =general.el= and =which-key= to make interaction
-  intuitive.
-- *Modern aesthetics*: It features a clean, minimalist UI with an
-  adaptive dark/light theme (=sanityinc-tomorrow=), beautiful fonts
-  with ligature support (=Iosevka=), and a functional mode line.
-- *Efficient navigation*: A powerful completion framework powered by
-  =Helm= provides a consistent interface for finding files, switching
-  buffers, and executing commands.
+- *Ergonomic keybindings*: Sensible, discoverable keybindings with
+  =which-key= showing available completions on demand.
+- *Modern aesthetics*: A clean, minimalist UI with an adaptive
+  dark/light theme (=sanityinc-tomorrow= via =auto-dark=), beautiful
+  fonts with ligature support (=Iosevka= + =ligature=), and a rich
+  mode line powered by =doom-modeline=.
+- *Efficient navigation*: A powerful completion framework built on
+  =vertico=, =consult=, =embark=, =orderless=, and =marginalia=
+  provides a consistent interface for finding files, switching buffers,
+  and executing commands.
 
 ** Writing & Programming Environment
 
-- *LSP integration*: It uses =eglot= for seamless Language Server
+- *LSP integration*: Uses =eglot= for seamless Language Server
   Protocol support, providing intelligent code completion,
-  diagnostics, and navigation across various languages.
-- *Advanced code parsing*: Leverages =tree-sitter= for fast and
-  accurate syntax highlighting, code folding, and structural editing,
-  which is more robust than traditional regex-based approaches.
-- *Powerful completion*: A rich auto-completion experience is provided
-  by =company-mode=, complemented by fuzzy finding capabilities.
-- *Git integration*: Deep integration with Git is achieved through
-  =Magit=, the magical Git porcelain, along with =git-gutter= to show
-  changes in the fringe.
-- *Language-specific support*: Tailored setups for languages like
-  Python, Clojure, Rust, and Shell scripting, including formatters,
-  linters, and interactive REPL.
+  diagnostics, and navigation across various languages, with
+  =eglot-java= for Java and =dape= for DAP-based debugging.
+- *Advanced code parsing*: Leverages the built-in =tree-sitter= for
+  fast and accurate syntax highlighting and =treesit-fold= for code
+  folding, which is more robust than traditional regex-based
+  approaches.
+- *Powerful completion*: A rich in-buffer completion experience
+  provided by =corfu= with =cape= for additional completion-at-point
+  extensions, and =yasnippet= for snippet expansion.
+- *Git integration*: Deep integration with Git through =Magit=, along
+  with =git-gutter= to show changes in the fringe and =forge= for
+  GitHub/GitLab interaction.
+- *Code formatting*: =apheleia= runs formatters asynchronously on
+  save, keeping buffers clean without blocking editing.
+- *Writing aids*: =jinx= for spell checking, =writeroom-mode= for
+  distraction-free writing, and =org-modern= / =org-appear= for a
+  polished Org experience.
+- *Language-specific support*: Tailored setups for Clojure (=cider=,
+  =clj-refactor=), Python (=elpy=, =poetry=), Rust (=rust-mode=,
+  =cargo-mode=), LaTeX (=AUCTeX=, =cdlatex=), Nix (=nix-mode=), Java
+  (=eglot-java=), Dockerfile, and Shell scripting.
 
 ** Interacting with the outside world
 
@@ -108,3 +118,5 @@ highlights:
   development and testing.
 - *File management*: Uses =Dirvish= to provide a modern and highly
   customizable file manager experience within Emacs.
+- *Email*: Full email workflow via =mu4e= with =org-mime= for
+  composing rich HTML messages and =mu4e-alert= for notifications.
