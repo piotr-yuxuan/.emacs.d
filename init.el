@@ -1,10 +1,10 @@
-;;; package -- Summary
+;;; package -- Summary  -*- lexical-binding: t; -*-
 ;;; Commentary:
 ;;;   Emacs configuration generated from =init.org=.
 ;;;
 ;;;   You can modify this file as you wish so, but keep in mind in the
 ;;;   long term it's better to keep a clean generation from the
-;;;   litterate documentation file.
+;;;   literate documentation file.
 
 ;;; Code:
 
@@ -31,33 +31,15 @@
       (eval-print-last-sexp)))
   (load bootstrap-file nil 'nomessage))
 
-(straight-use-package 'use-package)
+(straight-use-package
+ '(use-package
+    :type git
+    :host github
+    :repo "emacs-straight/use-package"
+    :branch "master"))
+
 (setq straight-use-package-by-default t)
 (setq use-package-always-defer t)
-
-(use-package compile-angel
-  :demand t
-  :custom
-  ;; Default is already nil, but be explicit: no per-file messages.
-  (compile-angel-verbose nil)
-  :config
-  (push "/early-init.el" compile-angel-excluded-files)
-  (push "/init.el"       compile-angel-excluded-files)
-  ;; no-littering's state dirs contain generated/data files, not source.
-  ;; etc/custom.el is the main one that gets load-ed and would otherwise
-  ;; be compiled unnecessarily.
-  (add-to-list 'compile-angel-excluded-files-regexps
-               (regexp-quote (expand-file-name "tests/" user-emacs-directory)))
-  (add-to-list 'compile-angel-excluded-files-regexps
-               (regexp-quote (expand-file-name "var/" user-emacs-directory)))
-  (add-to-list 'compile-angel-excluded-files-regexps
-               (regexp-quote (expand-file-name "etc/" user-emacs-directory)))
-  ;; Suppress the *Compile-Log* buffer that byte-compile opens on its own.
-  (setq byte-compile-verbose nil)
-  (compile-angel-on-load-mode 1))
-
-(use-package gcmh
-  :hook (emacs-startup . gcmh-mode))
 
 (use-package no-littering
   :demand t
@@ -65,15 +47,22 @@
   (setq auto-save-file-name-transforms `((".*" ,(no-littering-expand-var-file-name "autosaves/") t))
         custom-file (no-littering-expand-etc-file-name "custom.el")
         backup-directory-alist `((".*" . ,(no-littering-expand-var-file-name "backups/"))))
+  ;; Ensure target directories exist — auto-save and backup fail silently
+  ;; if the directory is missing, especially on a fresh install.
+  (make-directory (no-littering-expand-var-file-name "autosaves/") t)
+  (make-directory (no-littering-expand-var-file-name "backups/") t)
   (when (file-exists-p custom-file)
     (load custom-file)))
 
 (use-package benchmark-init
+  ;; Only activate when explicitly profiling — benchmark-init wraps every
+  ;; `require' call with timing advice, which itself adds latency to each
+  ;; require during normal startup.  Set the EMACS_PROFILE env variable to
+  ;; opt in: EMACS_PROFILE=1 emacs
+  :if (getenv "EMACS_PROFILE")
+  :demand t
   :init (benchmark-init/activate)
   :config (add-hook 'after-init-hook 'benchmark-init/deactivate))
-
-(use-package general
-  :demand t)
 
 (setq initial-scratch-message nil ;; No need to remind me what a scratch buffer is.
       ;; Avoid loading lisp-interaction machinery for the scratch buffer.
@@ -104,11 +93,25 @@
 (set-charset-priority 'unicode)
 (prefer-coding-system 'utf-8-unix)
 
-(delete-selection-mode t)
-(global-hl-line-mode)
-(column-number-mode)
-(savehist-mode)
-(save-place-mode 1)
+;; Defer minor-mode activations to emacs-startup-hook so they don't
+;; slow down the critical init path.  All eight are cheap once Emacs
+;; is up, but calling them at top-level adds latency before the frame
+;; is shown for the first time.
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (delete-selection-mode t)
+            (global-hl-line-mode)
+            (column-number-mode)
+            (savehist-mode)
+            (save-place-mode 1)
+            (global-auto-revert-mode)
+            (when (fboundp 'pixel-scroll-precision-mode)
+              (pixel-scroll-precision-mode 1))
+            (global-so-long-mode 1)
+            (message "Emacs ready in %.3f s with %d GC%s."
+                     (float-time (time-subtract after-init-time before-init-time))
+                     gcs-done
+                     (if (= gcs-done 1) "" "s"))))
 
 (use-package eval-sexp-fu
   :hook (prog-mode . turn-on-eval-sexp-fu-flash-mode))
@@ -143,8 +146,6 @@
   (setq interprogram-cut-function   #'my/wl-copy
         interprogram-paste-function #'my/wl-paste))
 
-(global-auto-revert-mode)
-
 (use-package crux
   :config (global-set-key [remap move-beginning-of-line] #'crux-move-beginning-of-line))
 
@@ -156,11 +157,6 @@
 ;; Auto vertical scroll computes margins on every scroll event — disable it.
 (setq auto-window-vscroll nil)
 
-(when (fboundp 'pixel-scroll-precision-mode)
-  (pixel-scroll-precision-mode 1))
-
-(global-so-long-mode 1)
-
 (use-package which-key
   :hook (emacs-startup . which-key-mode))
 
@@ -168,24 +164,10 @@
 
 (use-package color-theme-sanityinc-tomorrow
   :init
-  ;; Load themes but leave activation to auto-dark.
-  (load-theme 'sanityinc-tomorrow-night t nil)
-  (load-theme 'sanityinc-tomorrow-day t nil))
-
-(defun my/apply-theme-customizations ()
-  "Apply face customizations after theme change."
-  (when (facep 'eglot-highlight-symbol-face)
-    (let ((adjust-fn (if (eq auto-dark-mode 'dark)
-                         #'color-lighten-name
-                       #'color-darken-name))
-          (adjust-val (if (eq auto-dark-mode 'dark) 42 30)))
-      (set-face-attribute 'eglot-highlight-symbol-face nil
-                          :background (funcall adjust-fn (face-background 'highlight) adjust-val)))))
-
-(defun my/load-theme (theme)
-  "Load THEME and apply customizations."
-  (load-theme theme t nil)
-  (my/apply-theme-customizations))
+  ;; Pre-load only the night theme; auto-dark loads the day theme via its
+  ;; light-mode hook when the OS switches.  Loading both eagerly here adds
+  ;; ~100 ms with no benefit since only one is active at startup.
+  (load-theme 'sanityinc-tomorrow-night t nil))
 
 (defun my/auto-dark ()
   "Enable auto-dark-mode and set theme hooks."
@@ -197,14 +179,16 @@
         auto-dark-light-theme 'sanityinc-tomorrow-day)
 
   (add-hook 'auto-dark-dark-mode-hook
-            (lambda () (my/load-theme 'sanityinc-tomorrow-night)))
+            (lambda () (load-theme 'sanityinc-tomorrow-night t nil)))
   (add-hook 'auto-dark-light-mode-hook
-            (lambda () (my/load-theme 'sanityinc-tomorrow-day)))
+            (lambda () (load-theme 'sanityinc-tomorrow-day t nil)))
 
-  :hook ((emacs-startup . my/auto-dark)
-         ;; This makes the window to flicker on each focus.
-         ;(focus-in . my/auto-dark)
-         ))
+  :init
+  ;; Defer auto-dark activation to an idle timer so it doesn't add
+  ;; latency before the first frame is shown.  0.5 s is enough for
+  ;; the OS dark-mode query (dbus on Linux, AppleScript on macOS) to
+  ;; complete without blocking the user.
+  (run-with-idle-timer 0.5 nil #'my/auto-dark))
 
 (set-face-attribute 'default nil
                     :family (cond ((eq system-type 'darwin) "Iosevka Term")
@@ -217,8 +201,16 @@
 (use-package fringe-scale
   :straight (fringe-scale :type git :host github :repo "blahgeek/emacs-fringe-scale"))
 
-(set-fringe-mode 16)
-(fringe-scale-setup)
+;; Defer fringe setup to emacs-startup-hook: these are cosmetic display
+;; operations that do not need to run during init file evaluation.
+;; fringe-scale-setup rescales every fringe bitmap to match the 16 px
+;; fringe width; wrapping it in inhibit-message silences the per-bitmap
+;; "Scaling fringe bitmap …" noise.
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (set-fringe-mode 16)
+            (let ((inhibit-message t))
+              (fringe-scale-setup))))
 
 ;; If you use `emacs-mac' Mac port then ligatures are handled for you.
 (if (fboundp 'mac-auto-operator-composition-mode)
@@ -345,16 +337,14 @@
 
 (use-package svg-clock)
 
-(winner-mode 1)
+(add-hook 'emacs-startup-hook (lambda () (winner-mode 1)))
 
 (defun my/other-window-reverse ()
   "Switch to the previous window."
   (interactive)
   (other-window -1))
 
-(general-define-key
- :prefix "C-x"
- "O" 'my/other-window-reverse)
+(keymap-set global-map "C-x O" #'my/other-window-reverse)
 
 (use-package ace-window
   :bind ("M-o" . ace-window)
@@ -366,40 +356,11 @@
    'exec-path-from-shell-arguments
    (remove "-i" exec-path-from-shell-arguments))
   :hook (emacs-startup . (lambda ()
-                           ;; Can be quite slow. `pgtk' covers Wayland GUI Emacs.
+                           ;; `pgtk' covers Wayland GUI Emacs.
                            (when (memq window-system '(mac ns x pgtk))
                              (exec-path-from-shell-initialize))
                            (when (daemonp)
                              (exec-path-from-shell-initialize)))))
-
-;; Per-directory environment variables via direnv.
-;; A project-local .envrc that sets JAVA_HOME (e.g. via jenv or SDKMAN)
-;; is applied to every subprocess including JDTLS, giving automatic
-;; per-project Java runtime selection.  Run M-x envrc-allow once to
-;; whitelist a new .envrc.  direnv itself is installed via nix/home.nix.
-(use-package envrc
-  :hook (after-init . envrc-global-mode))
-
-(use-package dashboard
-  :custom ((dashboard-startup-banner 'logo)
-           (dashboard-items '((bookmarks . 15)
-                              (projects . 10)
-                              (recents  . 10)
-                              (agenda . 15)
-                              (registers . 15)))
-           (dashboard-center-content t)
-           (dashboard-vertically-center-content t)
-           (inhibit-startup-screen t)
-           (dashboard-projects-switch-function
-            (lambda (project)
-              (magit-status project)
-              (delete-other-windows))))
-  ;; Hide the mode-line on the dashboard buffer to avoid triggering
-  ;; doom-modeline's expensive icon/segment rendering during startup.
-  ;; The setting is buffer-local; switching away naturally shows the
-  ;; modeline in whatever buffer you land in.
-  :hook (dashboard-mode . (lambda () (setq-local mode-line-format nil))))
-(dashboard-setup-startup-hook)
 
 (use-package markdown-toc)
 
@@ -456,12 +417,15 @@
 (defalias 'zsh-mode 'shell-script-mode)
 
 (use-package org
-  :hook ((org-mode . git-gutter-mode)
-         (org-mode . auto-fill-mode))
+  :hook ((org-mode . auto-fill-mode))
   :custom
   (org-src-preserve-indentation nil)
   (org-edit-src-content-indentation 0)
   (org-cycle-global-at-bob t)
+  ;; org-modules defaults to a large set that loads many rarely-used
+  ;; libraries at startup.  Keep only the ones actually used here.
+  (org-modules '(ol-doi ol-info))
+  (org-export-in-background t)
   :custom-face
   ;; Scale headings so each level is visually distinct beyond colour alone
   (org-level-1 ((t (:height 1.35 :weight bold))))
@@ -548,57 +512,142 @@
 
 (use-package recentf
   :init
-  (recentf-mode 1)
+  ;; Activate recentf lazily on the very first interactive command rather
+  ;; than at startup.  Loading recentf reads var/recentf from disk; there is
+  ;; no reason to pay that cost before the user presses a key.  Using
+  ;; `pre-command-hook' (rather than a :before advice on `find-file') ensures
+  ;; that commands like `consult-recent-file' also see recentf as active on
+  ;; their first invocation.  The hook removes itself after one call so there
+  ;; is zero per-command overhead afterwards.
+  (defun my/recentf-enable-once ()
+    "Enable `recentf-mode' before the first interactive command, then remove self."
+    (remove-hook 'pre-command-hook #'my/recentf-enable-once)
+    (recentf-mode 1))
+  (add-hook 'pre-command-hook #'my/recentf-enable-once)
   :custom
   (recentf-max-saved-items 200))
 
+;; straight's transient shadows Emacs 30's weak built-in transient.
+;; dirvish-subtree calls transient--set-layout at load time, a function
+;; missing from the Emacs 30.2 built-in.  Loading transient eagerly here
+;; costs < 10 ms and decouples dirvish's startup dependency from magit.
+(use-package transient
+  :demand t)
+
 (use-package dirvish
-  ;; dirvish-override-dired-mode must be active before any dired call.
-  ;; :commands dired loads dirvish too late — dired is already opening when
-  ;; :config runs, so the override misses the first invocation. Hooking to
-  ;; emacs-startup loads dirvish eagerly and installs the override in time.
-  :after magit
+  ;; :after transient ensures straight's newer transient is loaded and its
+  ;; symbols (transient--set-layout, etc.) are available before dirvish-subtree
+  ;; is configured.  Magit no longer needs :demand t just for this.
+  :after transient
   :custom
   (dirvish-mode-line-format '(:left (sort symlink) :right (omit yank index)))
   (dirvish-attributes '(nerd-icons file-time file-size collapse subtree-state vc-state git-msg))
+  ;; Sidebar-specific: only nerd-icons, subtree-state, vc-state.
+  ;; collapse is intentionally absent: it is a flat-listing feature that
+  ;; misfires when subtrees are expanded, rendering intermediate dirs as
+  ;; redundant collapsed entries (a›b›c then b›c then c).
+  ;; git-msg (commit shortlog) and file-size are hidden to save width;
+  ;; toggle any attribute on the fly with M-s → Attributes.
+  (dirvish-side-attributes '(nerd-icons subtree-state vc-state))
+  ;; Directories first, no . or .. entries (-A), long format required by dired.
+  (dired-listing-switches "-l -A --group-directories-first")
   ;; Three-pane layout: 1 parent dir | current | preview (55% width).
   ;; Format: (depth top-height-ratio preview-width-ratio)
   (dirvish-default-layout '(1 0.11 0.55))
   ;; Cycle through these layouts with M-t (dirvish-layout-toggle)
   (dirvish-layout-switch-recipes
-   '((0 0 0)        ;; plain dired — no frills
-     (0 0.11 0.55)  ;; preview pane only
+   '((0 0 0)         ;; plain dired — no frills
+     (0 0.11 0.55)   ;; preview pane only
      (1 0.11 0.55))) ;; parent + preview (default)
-  ;; Preview dispatchers: images, video, audio, archives, PDF, text.
-  (dirvish-preview-dispatchers
-   (list 'image 'video 'audio 'epub 'pdf-preface 'archive 'tramp 'default))
+  ;; dirvish-preview-dispatchers is left at its built-in default
+  ;; (video image gif audio epub archive font pdf).
+  ;; 'default, 'tramp, 'pdf-preface are not valid symbols and cause errors.
   (delete-by-moving-to-trash t)
   (dired-mouse-drag-files t)
   (mouse-drag-and-drop-region-cross-program t)
+  (dirvish-emerge-groups
+   '(("Directories" (predicate . directories))
+     ("JVM"         (extensions "java" "kt" "clj" "cljs" "cljc"))
+     ("Web"         (extensions "ts" "tsx" "js" "jsx" "css" "html"))
+     ("Data"        (extensions "json" "yaml" "yml" "edn" "sql"))
+     ("Docs"        (extensions "org" "md" "rst" "txt"))
+     ("Config"      (extensions "toml" "ini" "properties" "conf"))
+     ("Tests"       (regex ".*[Tt]est.*"))
+     ("Build"       (extensions "xml" "gradle" "nix" "lock"))))
   :config
-  (dirvish-side-follow-mode) ;; similar to `treemacs-follow-mode'
-  :bind ;; Bind `dirvish|dirvish-side|dirvish-dwim' as you see fit
+  (dirvish-override-dired-mode) ;; override dired globally before any C-x d
+  (dirvish-side-follow-mode) ;; sidebar auto-highlights the active file
+  ;; Use a nerd-icons right-chevron as the path collapse separator
+  ;; (single-child directories are joined as  foo›bar›Baz.java).
+  ;; Set here in :config so nerd-icons is guaranteed to be loaded.
+  (setq dirvish-collapse-separator
+        (concat (nerd-icons-codicon "nf-cod-chevron_right") " "))
+  ;; Expand the directory at point and all its nested sub-directories.
+  ;; Guard with when-let: dired-get-filename returns nil on blank/header lines.
+  (defun my/dirvish-subtree-expand-all-children ()
+    "Expand directory at point and every nested sub-directory within it."
+    (interactive)
+    (when-let ((file (dired-get-filename nil t)))
+      (when (file-directory-p file)
+        (unless (dirvish-subtree--expanded-p)
+          (dirvish-subtree-toggle))
+        (save-excursion
+          (forward-line 1)
+          (while (and (not (eobp)) (dirvish-subtree--parent))
+            (when-let ((f (dired-get-filename nil t)))
+              (when (and (file-directory-p f)
+                         (not (dirvish-subtree--expanded-p)))
+                (dirvish-subtree-toggle)))
+            (forward-line 1))))))
+  ;; Collapse every expanded subtree in the buffer.
+  ;; copy-sequence snapshots the overlay list so toggling doesn't corrupt iteration.
+  (defun my/dirvish-subtree-collapse-all ()
+    "Collapse every expanded subtree in the buffer."
+    (interactive)
+    (save-excursion
+      (dolist (ov (copy-sequence dirvish-subtree--overlays))
+        (when (overlay-buffer ov)
+          (goto-char (max (point-min) (1- (overlay-start ov))))
+          (beginning-of-line)
+          (dirvish-subtree-toggle)))))
+  ;; S-TAB: collapse if directory at point is expanded; otherwise expand it and
+  ;; all its descendants via my/dirvish-subtree-expand-all-children.
+  (defun my/dirvish-subtree-toggle-all ()
+    "Collapse directory at point if expanded; otherwise expand it and all children."
+    (interactive)
+    (when-let ((file (dired-get-filename nil t)))
+      (when (file-directory-p file)
+        (if (dirvish-subtree--expanded-p)
+            (dirvish-subtree-toggle)
+          (my/dirvish-subtree-expand-all-children)))))
+  ;; Bind dirvish-mode-map keys here in :config so dirvish-mode-map is
+  ;; guaranteed to exist.  Global bindings stay in :bind below.
+  (define-key dirvish-mode-map (kbd "a")         #'dirvish-quick-access)
+  (define-key dirvish-mode-map (kbd "f")         #'dirvish-file-info-menu)
+  (define-key dirvish-mode-map (kbd "y")         #'dirvish-yank-menu)
+  (define-key dirvish-mode-map (kbd "N")         #'dirvish-narrow)
+  (define-key dirvish-mode-map (kbd "b")         #'dired-up-directory) ;; easier than ^ (same command)
+  (define-key dirvish-mode-map (kbd "h")         #'dired-omit-mode) ;; toggle dotfiles
+  (define-key dirvish-mode-map (kbd "H")         #'dirvish-history-jump) ;; history list
+  (define-key dirvish-mode-map (kbd "s")         #'dirvish-quicksort)
+  (define-key dirvish-mode-map (kbd "v")         #'dirvish-vc-menu)
+  (define-key dirvish-mode-map (kbd ">")         #'dirvish-side-increase-width)
+  (define-key dirvish-mode-map (kbd "<")         #'dirvish-side-decrease-width)
+  ;; TAB: toggle the subtree under point.
+  ;; S-TAB: on a directory, collapse if open; expand recursively if closed.
+  (define-key dirvish-mode-map (kbd "<tab>")     #'dirvish-subtree-toggle)
+  (define-key dirvish-mode-map (kbd "<backtab>") #'my/dirvish-subtree-toggle-all)
+  (define-key dirvish-mode-map (kbd "M-f")       #'dirvish-history-go-forward)
+  (define-key dirvish-mode-map (kbd "M-b")       #'dirvish-history-go-backward)
+  (define-key dirvish-mode-map (kbd "M-l")       #'dirvish-ls-switches-menu)
+  (define-key dirvish-mode-map (kbd "M-m")       #'dirvish-mark-menu)
+  (define-key dirvish-mode-map (kbd "M-t")       #'dirvish-layout-toggle)
+  (define-key dirvish-mode-map (kbd "M-s")       #'dirvish-setup-menu)
+  (define-key dirvish-mode-map (kbd "M-e")       #'dirvish-emerge-menu)
+  (define-key dirvish-mode-map (kbd "M-j")       #'dirvish-fd-jump)
+  :bind
   (("C-c f" . dirvish-fd)
-   :map dirvish-mode-map ;; Dirvish inherits `dired-mode-map'
-   ("a"   . dirvish-quick-access)
-   ("f"   . dirvish-file-info-menu)
-   ("y"   . dirvish-yank-menu)
-   ("N"   . dirvish-narrow)
-   ("^"   . dirvish-history-last)
-   ("h"   . dirvish-history-jump) ;; remapped `describe-mode'
-   ("s"   . dirvish-quicksort) ;; remapped `dired-sort-toggle-or-edit'
-   ("v"   . dirvish-vc-menu) ;; remapped `dired-view-file'
-   ("TAB" . dirvish-subtree-toggle)
-   ("M-f" . dirvish-history-go-forward)
-   ("M-b" . dirvish-history-go-backward)
-   ("M-l" . dirvish-ls-switches-menu)
-   ("M-m" . dirvish-mark-menu)
-   ("M-t" . dirvish-layout-toggle)
-   ("M-s" . dirvish-setup-menu)
-   ("M-e" . dirvish-emerge-menu)
-   ("M-j" . dirvish-fd-jump)))
-
-(dirvish-override-dired-mode)
+   ("<f8>"  . dirvish-side)))
 
 (use-package project
   :straight nil
@@ -610,68 +659,71 @@
      (project-find-dir "Find dir" "d")
      (magit-status "Magit" "g"))))
 
-(use-package treemacs
-  :bind (("<f8>"    . treemacs)
-         ("C-c t t" . treemacs)
-         ("C-c t s" . treemacs-select-window)
-         ("C-c t f" . treemacs-find-file)
-         ("C-c t p" . treemacs-add-project-to-workspace))
+(use-package imenu-list
+  ;; imenu-list activates hs-minor-mode on its buffer hook.
+  ;; RET → imenu-list-ret-dwim: jump if leaf; fold/unfold if parent.
+  ;; (TAB → forward-button from button-map; not overridable without patching.)
+  :bind ("<f9>" . imenu-list-smart-toggle)
   :custom
-  (treemacs-width 35)
-  (treemacs-is-never-other-window t)
-  (treemacs-show-hidden-files nil)
-  (treemacs-follow-recenter-distance 0.1)
+  (imenu-list-auto-resize t)
+  (imenu-list-focus-after-activation t)
+  (imenu-list-size 0.25))
+
+(use-package breadcrumb
+  ;; Activate only in eglot-managed buffers — eglot 1.14+ attaches
+  ;; breadcrumb-region metadata to every imenu node for precise paths.
+  ;; doom-modeline already shows project/file, so show only imenu crumbs.
+  :hook (eglot-managed-mode . my/breadcrumb-setup)
   :config
-  (treemacs-git-mode 'deferred)          ;; async git status, faster than 'extended
-  (treemacs-follow-mode t)               ;; auto-highlight current file in tree
-  (treemacs-project-follow-mode t)       ;; auto-switch project in tree
-  (treemacs-filewatch-mode t)            ;; auto-refresh on filesystem changes
-  (treemacs-fringe-indicator-mode 'always)
-  (treemacs-git-commit-diff-mode t)
-  (with-eval-after-load 'treemacs
-    (define-key treemacs-mode-map [mouse-1] #'treemacs-single-click-expand-action)))
-
-;; Sync magit operations (commit, stage, etc.) into the treemacs git indicators
-(use-package treemacs-magit
-  :after (treemacs magit))
-
-;; Use nerd-icons for file/directory icons (consistent with the rest of the config)
-(use-package treemacs-nerd-icons
-  :after (treemacs nerd-icons)
-  :config (treemacs-load-theme "nerd-icons"))
+  (defun my/breadcrumb-setup ()
+    "Show nerd-icon + imenu breadcrumb in header line for eglot-managed buffers."
+    (setq-local header-line-format
+                '((:eval
+                   (when-let* ((crumbs (breadcrumb-imenu-crumbs)))
+                     (concat (nerd-icons-icon-for-buffer) " " crumbs)))))))
 
 (use-package editorconfig
-  :config (editorconfig-mode 1))
+  :init
+  ;; Defer editorconfig activation to an idle timer — it parses .editorconfig
+  ;; on each file open, but activating the mode itself has overhead at startup.
+  (run-with-idle-timer 0.3 nil #'editorconfig-mode))
 
 (setq mode-require-final-newline t)
 
 (use-package magit
   :bind ("C-x g" . magit-status))
 
-;; git-gutter-fringe must be loaded first so its fringe bitmaps exist
-;; before git-gutter-mode activates in any buffer.
+;; git-gutter-fringe must be loaded before git-gutter-mode activates its
+;; first buffer — otherwise git-gutter silently falls back to character
+;; display.  :after git-gutter :demand t loads git-gutter-fringe eagerly the
+;; moment git-gutter itself is first required (which is lazy — triggered by
+;; the first prog/conf/text buffer hook), guaranteeing the fringe bitmaps and
+;; side configuration are in place before any buffer's mode hook fires.
+;; treesit-fold-indicators occupies the left fringe; put git-gutter on the
+;; right so the two don't overwrite each other.
+;; [255] = 11111111 fills the full fringe width → solid colour rectangle.
 (use-package git-gutter-fringe
+  :after git-gutter
   :demand t
   :config
-  (define-fringe-bitmap 'git-gutter-fr:added    [224] nil nil '(center repeated))
-  (define-fringe-bitmap 'git-gutter-fr:modified [224] nil nil '(center repeated))
-  (define-fringe-bitmap 'git-gutter-fr:deleted  [128 192 224 240] nil nil 'bottom))
+  (setq git-gutter-fr:side 'right-fringe)
+  (define-fringe-bitmap 'git-gutter-fr:added    [255] nil nil '(center repeated))
+  (define-fringe-bitmap 'git-gutter-fr:modified [255] nil nil '(center repeated))
+  (define-fringe-bitmap 'git-gutter-fr:deleted  [255 255 255 255 255 255 255 255] nil nil 'bottom))
 
-;; global-git-gutter-mode (rather than a prog-mode hook) handles:
-;;   • initial buffer load via find-file-hook
-;;   • mode changes from treesit-auto via after-change-major-mode-hook
-;;   • indicators disappearing on window/buffer switch via window-configuration-change-hook
+;; Enable git-gutter in every programming-language, config-file, and
+;; text/org buffer.  Use-package defers loading until the first hook
+;; fires, so there is no startup overhead.
 (use-package git-gutter
-  :after git-gutter-fringe
+  :hook ((prog-mode . git-gutter-mode)
+         (conf-mode . git-gutter-mode)
+         (text-mode . git-gutter-mode))
   :bind (("C-c g n" . git-gutter:next-hunk)
          ("C-c g p" . git-gutter:previous-hunk)
          ("C-c g s" . git-gutter:stage-hunk)
          ("C-c g r" . git-gutter:revert-hunk)
          ("C-c g d" . git-gutter:popup-hunk))
-  :config
-  (global-git-gutter-mode t)
-  :custom
-  (git-gutter:update-interval 0.1))
+  :custom (git-gutter:update-interval 0.02))
 
 (use-package magit-todos
   :after magit
@@ -721,7 +773,9 @@ map it to a global or keymap-scoped binding so we can't use `:bind` from
   :custom
   (eglot-sync-connect nil)
   :config
-  (set-face-attribute 'eglot-highlight-symbol-face nil :background (color-darken-name (face-background 'highlight) 5)))
+  (set-face-attribute 'eglot-highlight-symbol-face nil
+                      :background (color-darken-name (face-background 'highlight) 5)
+                      :underline t))
 
 ;; flycheck-eglot bridges eglot's flymake backend into flycheck so that
 ;; flycheck is the single diagnostic frontend in prog-mode buffers as well.
@@ -751,27 +805,35 @@ map it to a global or keymap-scoped binding so we can't use `:bind` from
   (which-key-add-key-based-replacements "C-c e" "eglot"))
 
 (when (fboundp 'treesit-parser-create)
+  ;; treesit-auto is kept for on-demand grammar installation only
+  ;; (M-x treesit-auto-install-all).  It does NOT need to be loaded at
+  ;; startup: major-mode-remap-alist is populated directly below via dolist,
+  ;; and auto-install prompting is handled lazily when the package first loads.
   (use-package treesit-auto
-    :demand t
-    :custom
-    (treesit-auto-install 'prompt)
     :config
-    ;; Remove bash from the recipe list so global-treesit-auto-mode's
-    ;; after-change-major-mode-hook never remaps sh-mode → bash-ts-mode.
-    ;; That remapping breaks org-mode src block fontification of zsh/sh
-    ;; blocks, which run in temporary buffers where bash-ts-mode fails.
-    ;; File extensions are handled separately below via auto-mode-alist.
-    (setq treesit-auto-recipe-list
-          (cl-remove 'bash treesit-auto-recipe-list
-                     :key #'treesit-auto-recipe-lang))
-    (treesit-auto-add-to-auto-mode-alist 'all)
-    (global-treesit-auto-mode)
-    ;; Re-add bash-ts-mode for actual shell script files via extension,
-    ;; since we removed bash from the recipe list above.
-    (when (treesit-language-available-p 'bash)
-      (add-to-list 'auto-mode-alist '("\\.sh\\'"   . bash-ts-mode))
-      (add-to-list 'auto-mode-alist '("\\.bash\\'" . bash-ts-mode))
-      (add-to-list 'auto-mode-alist '("\\.zsh\\'"  . bash-ts-mode)))))
+    (setq treesit-auto-install 'prompt))
+
+  ;; Remap only languages we actually use via major-mode-remap-alist.
+  ;; This intercepts after auto-mode-alist selects a mode, with zero
+  ;; per-file overhead (no treesit-language-available-p calls at file open).
+  ;; bash is excluded: global-treesit-auto-mode remapping breaks org-mode's
+  ;; temporary sh-mode buffers used for src-block fontification.
+  (dolist (pair '((python-mode     . python-ts-mode)
+                  (java-mode       . java-ts-mode)
+                  (js-json-mode    . json-ts-mode)
+                  (css-mode        . css-ts-mode)
+                  (html-mode       . html-ts-mode)
+                  (mhtml-mode      . html-ts-mode)
+                  (dockerfile-mode . dockerfile-ts-mode)))
+    (add-to-list 'major-mode-remap-alist pair))
+
+  ;; Modes without a non-ts entry in default auto-mode-alist.
+  (dolist (entry '(("\\.ya?ml\\'"                                              . yaml-ts-mode)
+                   ("\\(?:Dockerfile\\(?:\\..*\\)?\\|\\.[Dd]ockerfile\\)\\'" . dockerfile-ts-mode)
+                   ("\\.sh\\'"   . bash-ts-mode)
+                   ("\\.bash\\'" . bash-ts-mode)
+                   ("\\.zsh\\'"  . bash-ts-mode)))
+    (add-to-list 'auto-mode-alist entry)))
 
 (use-package corfu
   :hook (emacs-startup . global-corfu-mode)
@@ -808,6 +870,7 @@ map it to a global or keymap-scoped binding so we can't use `:bind` from
   :after (yasnippet clojure-mode))
 
 (add-hook 'prog-mode-hook 'display-line-numbers-mode)
+(add-hook 'conf-mode-hook 'display-line-numbers-mode)
 
 (use-package treesit-fold
   :straight (treesit-fold :type git :host github :repo "emacs-tree-sitter/treesit-fold")
@@ -826,23 +889,52 @@ map it to a global or keymap-scoped binding so we can't use `:bind` from
   :config
   (setf (alist-get 'python-mode apheleia-mode-alist) '(black))
   (setf (alist-get 'python-ts-mode apheleia-mode-alist) '(black))
-  (setf (alist-get 'sh-mode apheleia-mode-alist) '(shfmt)))
+  (setf (alist-get 'sh-mode apheleia-mode-alist) '(shfmt))
+  ;; Java is intentionally excluded: JDTLS drives formatting via
+  ;; textDocument/willSaveWaitUntil; adding google-java-format as a second
+  ;; pass re-indents the entire file on every save regardless of project
+  ;; style.  Use C-c e f (eglot-format) for explicit on-demand formatting.
+  (setf apheleia-mode-alist
+        (assoc-delete-all 'java-mode apheleia-mode-alist))
+  (setf apheleia-mode-alist
+        (assoc-delete-all 'java-ts-mode apheleia-mode-alist)))
 
-(general-define-key :keymaps 'prog-mode-map :prefix "C-c"
-  "r" #'apheleia-format-buffer)
+(keymap-set prog-mode-map "C-c r" #'apheleia-format-buffer)
+
+(use-package ws-butler
+  :hook ((prog-mode . ws-butler-mode)
+         (text-mode . ws-butler-mode)))
+
+(use-package dtrt-indent
+  :hook (prog-mode . dtrt-indent-mode)
+  :custom
+  ;; Require at least 4 indented lines before adapting, to avoid
+  ;; mis-inference on short or generated files.
+  (dtrt-indent-min-relevant-lines 4)
+  ;; Do not scan beyond 5000 lines in very large files.
+  (dtrt-indent-max-lines 5000)
+  ;; Suppress the "indentation NN columns" message in the echo area.
+  (dtrt-indent-verbosity 0))
 
 (use-package flymake-shellcheck
   :commands flymake-shellcheck-load
   :hook ((sh-mode . flymake-shellcheck-load)
          (sh-mode . flymake-mode)
          (sh-mode . highlight-indent-guides-mode))
-  :custom (flymake-shellcheck-allow-external-files variable t))
+  :custom (flymake-shellcheck-allow-external-files t))
 
 ;; clojure-mode covers .clj / .cljs / .cljc / .edn
 (use-package clojure-mode
   :hook ((clojure-mode       . paredit-mode)
          (clojurec-mode      . paredit-mode)
-         (clojurescript-mode . paredit-mode)))
+         (clojurescript-mode . paredit-mode))
+  :config
+  ;; Register clojure-lsp here so it is available whenever clojure-mode
+  ;; loads — independent of whether CIDER is loaded.
+  (add-to-list 'eglot-server-programs '(clojure-mode       . ("clojure-lsp")))
+  (add-to-list 'eglot-server-programs '(clojure-ts-mode    . ("clojure-lsp")))
+  (add-to-list 'eglot-server-programs '(clojurec-mode      . ("clojure-lsp")))
+  (add-to-list 'eglot-server-programs '(clojurescript-mode . ("clojure-lsp"))))
 
 ;; Tree-sitter variant — treesit-auto switches to this automatically
 ;; when the Clojure grammar is available.
@@ -863,12 +955,7 @@ map it to a global or keymap-scoped binding so we can't use `:bind` from
   (cider-show-error-buffer 'except-in-repl)
   (cider-auto-select-error-buffer t)
   (cider-eldoc-display-for-symbol-at-point t)
-  (cider-test-show-report-on-success nil)
-  :config
-  (add-to-list 'eglot-server-programs '(clojure-mode       . ("clojure-lsp")))
-  (add-to-list 'eglot-server-programs '(clojure-ts-mode    . ("clojure-lsp")))
-  (add-to-list 'eglot-server-programs '(clojurec-mode      . ("clojure-lsp")))
-  (add-to-list 'eglot-server-programs '(clojurescript-mode . ("clojure-lsp"))))
+  (cider-test-show-report-on-success nil))
 
 (defun my/clojure-mode-hook ()
   (clj-refactor-mode 1)
@@ -952,7 +1039,6 @@ map it to a global or keymap-scoped binding so we can't use `:bind` from
 
 (use-package auctex
   :hook ((LaTeX-mode . eglot-ensure)
-         (LaTeX-mode . git-gutter-mode)
          (LaTeX-mode . turn-on-auto-fill)
          (LaTeX-mode . highlight-indent-guides-mode))
   :custom ((TeX-engine 'xetex)
@@ -1008,23 +1094,42 @@ map it to a global or keymap-scoped binding so we can't use `:bind` from
         docker-compose-command "podman-compose"
         docker-container-tramp-method "podman"))
 
-(add-to-list 'auto-mode-alist '("\\.yml\\'" . yaml-ts-mode))
-(add-to-list 'auto-mode-alist '("\\.yaml\\'" . yaml-ts-mode))
+;; yaml auto-mode-alist entries are handled by the treesit-auto block
+;; (via the dolist above) — no duplicates needed here.
 (add-hook 'yaml-ts-mode-hook 'highlight-indent-guides-mode)
 
 (setq eglot-java-user-init-opts-fn 'custom-eglot-java-init-opts)
 (defun custom-eglot-java-init-opts (server eglot-java-eclipse-jdt)
-  "Custom options that will be merged with any default settings."
-  '(:settings (:java
+  "Custom options merged with default JDTLS settings. Key settings:
+  bundles:                                                  java-debug plugin (Arch: /usr/share/java-debug/)
+  java.format.settings.url:                                 Google style XML (java.format.enabled t)
+  java.maven.downloadSources / java.gradle.downloadSources: fetch -sources.jar
+  java.signatureHelp.enabled:                               parameter hints on method calls
+  java.contentProvider.preferred:                           decompiler fallback (fernflower)
+  java.import.gradle.enabled / java.autobuild.enabled:      explicit defaults"
+  '(
+    :bundles ["/usr/share/java-debug/com.microsoft.java.debug.plugin.jar"]
+    :settings (:java
                (:format
-                (:settings
-                 (:url "https://raw.githubusercontent.com/google/styleguide/gh-pages/eclipse-java-google-style.xml")
-                 :enabled t)))))
+                (
+                 :settings (:url "https://raw.githubusercontent.com/google/styleguide/gh-pages/eclipse-java-google-style.xml")
+                 :enabled t))
+               :maven (:downloadSources t)
+               :gradle (:downloadSources t)
+               :signatureHelp (:enabled t)
+               :contentProvider (:preferred "fernflower")
+               :import (:gradle (:enabled t))
+               :autobuild (:enabled t))))
 
 (use-package eglot-java
-  :hook ((java-ts-mode . eglot-java-mode)
+  :hook ((java-mode . eglot-java-mode)
+         (java-ts-mode . eglot-java-mode)
+         (java-mode . highlight-indent-guides-mode)
          (java-ts-mode . highlight-indent-guides-mode))
   :custom
+  ;; Default 2-space indentation (JDTLS / Google Java Style Guide default).
+  ;; dtrt-indent will override this for files with a different native style.
+  (java-ts-mode-indent-offset 2)
   ;; JVM args — enables Lombok annotation processing.
   (eglot-java-eclipse-jdt-args
    '("--add-modules=ALL-SYSTEM"
@@ -1032,21 +1137,46 @@ map it to a global or keymap-scoped binding so we can't use `:bind` from
      "--add-opens" "java.base/java.lang=ALL-UNNAMED"))
   ;; eglot-java-lombok-jar-path is machine-specific — set it in local.el.
   ;; See local.el.example for the recommended snippet.
+  ;;
+  ;; Prevent eglot-java from managing eglot-server-programs automatically.
+  ;; Its internal use of `mapcan' (which calls `nconc', a destructive
+  ;; concatenation) mutates the car lists of matching alist entries each time
+  ;; eglot-java-mode activates.  With our `(java-mode java-ts-mode)' list key,
+  ;; repeated activations eventually make the list circular, causing:
+  ;;   eglot--lookup-mode: List contains a loop: (java-mode java-ts-mode …)
+  ;; Setting this to t skips the entire mapcan block; our add-to-list below
+  ;; becomes the sole authoritative registration.
+  (eglot-java-eglot-server-programs-manual-updates t)
   :config
-  ;; Register JDTLS with java-debug bundle for DAP support via dape.
-  ;; The bundle path below is Arch Linux specific; override in local.el on other systems.
+  ;; 2-space indent for java-mode (cc-mode uses c-basic-offset).
+  ;; dtrt-indent will override buffer-locally for existing files.
+  (add-hook 'java-mode-hook (lambda () (setq-local c-basic-offset 2)))
+  ;; Register JDTLS using the eglot-java-eclipse-jdt server class with the
+  ;; system `jdtls' binary.  A plain string contact ("jdtls" ...) would create
+  ;; a generic eglot-lsp-server instead.  Without the typed class:
+  ;;   • eglot-java--find-server returns nil (it only finds eglot-java-eclipse-jdt)
+  ;;   • eglot-java--jdt-uri-handler can't request :java/classFileContents
+  ;;   • M-. on library classes (ArrayList, List, …) fails with
+  ;;       xref--not-found-error: No definitions found for: LSP identifier at point
+  ;; Initialization options (including :bundles) come from
+  ;; eglot-initialization-options dispatched on eglot-java-eclipse-jdt, which
+  ;; in turn calls `custom-eglot-java-init-opts' via eglot-java-user-init-opts-fn.
   (add-to-list 'eglot-server-programs
-               '(java-ts-mode .
-                 ("jdtls"
-                  :initializationOptions
-                  (:bundles ["/usr/share/java-debug/com.microsoft.java.debug.plugin.jar"]))))
-  :bind (:map java-ts-mode-map
-              ("C-c j n" . eglot-java-file-new)
-              ("C-c j x" . eglot-java-run-main)
-              ("C-c j t" . eglot-java-run-test)
-              ("C-c j N" . eglot-java-project-new)))
+               '((java-mode java-ts-mode) eglot-java-eclipse-jdt "jdtls"))
+  (with-eval-after-load 'cc-mode
+    (define-key java-mode-map (kbd "C-c j n") #'eglot-java-file-new)
+    (define-key java-mode-map (kbd "C-c j x") #'eglot-java-run-main)
+    (define-key java-mode-map (kbd "C-c j t") #'eglot-java-run-test)
+    (define-key java-mode-map (kbd "C-c j N") #'eglot-java-project-new))
+  (with-eval-after-load 'java-ts-mode
+    (define-key java-ts-mode-map (kbd "C-c j n") #'eglot-java-file-new)
+    (define-key java-ts-mode-map (kbd "C-c j x") #'eglot-java-run-main)
+    (define-key java-ts-mode-map (kbd "C-c j t") #'eglot-java-run-test)
+    (define-key java-ts-mode-map (kbd "C-c j N") #'eglot-java-project-new)))
 
 (use-package dape
+  ;; Only load when first invoked — avoids the 0.5 s eager-require cost.
+  :commands dape
   :hook
   ;; Save breakpoints on quit
   (kill-emacs . dape-breakpoint-save)
@@ -1059,9 +1189,6 @@ map it to a global or keymap-scoped binding so we can't use `:bind` from
   (dape-buffer-window-arrangement 'right)
 
   :config
-  ;; Enable global mouse bindings for setting breakpoints.
-  (dape-breakpoint-global-mode +1)
-
   ;; Save buffers before starting a session.
   (add-hook 'dape-start-hook (lambda () (save-some-buffers t t)))
 
@@ -1070,23 +1197,38 @@ map it to a global or keymap-scoped binding so we can't use `:bind` from
 
   ;; Java debug session via JDTLS — invoke with M-x dape, select java-attach
   ;; or configure a named config in dape-configs for your project.
-  :bind (:map java-ts-mode-map
-              ("C-c j d" . dape)
-              ("C-c j b" . dape-breakpoint-toggle)
-              ("C-c j c" . dape-continue)
-              ("C-c j i" . dape-step-in)
-              ("C-c j o" . dape-step-out)
-              ("C-c j s" . dape-next)
-              ("C-c j e" . dape-evaluate-expression)))
+  (with-eval-after-load 'cc-mode
+    (define-key java-mode-map (kbd "C-c j d") #'dape)
+    (define-key java-mode-map (kbd "C-c j b") #'dape-breakpoint-toggle)
+    (define-key java-mode-map (kbd "C-c j c") #'dape-continue)
+    (define-key java-mode-map (kbd "C-c j i") #'dape-step-in)
+    (define-key java-mode-map (kbd "C-c j o") #'dape-step-out)
+    (define-key java-mode-map (kbd "C-c j s") #'dape-next)
+    (define-key java-mode-map (kbd "C-c j e") #'dape-evaluate-expression))
+  (with-eval-after-load 'java-ts-mode
+    (define-key java-ts-mode-map (kbd "C-c j d") #'dape)
+    (define-key java-ts-mode-map (kbd "C-c j b") #'dape-breakpoint-toggle)
+    (define-key java-ts-mode-map (kbd "C-c j c") #'dape-continue)
+    (define-key java-ts-mode-map (kbd "C-c j i") #'dape-step-in)
+    (define-key java-ts-mode-map (kbd "C-c j o") #'dape-step-out)
+    (define-key java-ts-mode-map (kbd "C-c j s") #'dape-next)
+    (define-key java-ts-mode-map (kbd "C-c j e") #'dape-evaluate-expression)))
 
-;; For a more ergonomic Emacs and `dape' experience
-(use-package repeat
-  :hook (after-init . repeat-mode))
+;; Enable global mouse bindings for breakpoints once dape is loaded —
+;; kept outside :config so it does not prevent dape from being deferred.
+(with-eval-after-load 'dape
+  (dape-breakpoint-global-mode +1))
 
-;; Left and right side windows occupy full frame height
 (use-package emacs
   :custom
-  (window-sides-vertical t))
+  ;; Left and right side windows occupy full frame height.
+  (window-sides-vertical t)
+  ;; Always resolve symbolic links when visiting files so that buffer-file-name
+  ;; contains the canonical real path.  Without this, following an LSP
+  ;; cross-reference can produce two buffers for the same physical file — one
+  ;; with the symlinked path, one with the real path — and lsp-mode treats them
+  ;; as different workspaces, triggering a duplicate JDTLS launch.
+  (find-file-visit-truename t))
 
 (use-package nix-mode
   :hook (nix-mode . eglot-ensure))
@@ -1124,6 +1266,10 @@ map it to a global or keymap-scoped binding so we can't use `:bind` from
          ("C-c ! p" . flycheck-previous-error)
          ("C-c ! l" . flycheck-list-errors)
          ("C-c ! v" . flycheck-verify-setup))
+  :custom
+  ;; Raise the error threshold for large generated files (e.g. minified
+  ;; JS or huge Python modules) so flycheck doesn't give up early.
+  (flycheck-checker-error-threshold 10000)
   :config
   (with-eval-after-load 'which-key
     (which-key-add-key-based-replacements "C-c !" "flycheck")))
@@ -1160,16 +1306,22 @@ map it to a global or keymap-scoped binding so we can't use `:bind` from
   (pangu-spacing-real-insert-separtor t))
 
 ;; Extend the font fallback chain so Han characters render with Noto.
-;; Traditional Chinese (zh-TW) is listed first; the first matching font
-;; for each codepoint wins.
-(set-fontset-font t 'han (font-spec :family "Noto Sans CJK TC") nil 'append)
-(set-fontset-font t 'han (font-spec :family "Noto Sans CJK SC") nil 'append)
-
-(add-hook 'window-setup-hook
+;; Deferred to emacs-startup-hook: fontset modifications are display-only
+;; and safe to apply after after-init-time is recorded.  Traditional
+;; Chinese (zh-TW) is listed first; the first matching font per codepoint wins.
+(add-hook 'emacs-startup-hook
           (lambda ()
-            (require 'server)
-            (unless (server-running-p)
-              (server-start))))
+            (set-fontset-font t 'han (font-spec :family "Noto Sans CJK TC") nil 'append)
+            (set-fontset-font t 'han (font-spec :family "Noto Sans CJK SC") nil 'append)))
+
+;; Defer server-start to an idle timer so it doesn't add latency before
+;; the first frame is shown.  1 s is enough for all startup hooks to
+;; complete; the server is ready before the user can type a command.
+(run-with-idle-timer 1 nil
+                     (lambda ()
+                       (require 'server)
+                       (unless (server-running-p)
+                         (server-start))))
 
 (use-package devdocs)
 

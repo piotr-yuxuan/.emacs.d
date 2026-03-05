@@ -1,10 +1,10 @@
-;;; package -- Summary
+;;; package -- Summary  -*- lexical-binding: t; -*-
 ;;; Commentary:
 ;;;   Emacs configuration generated from =init.org=.
 ;;;
 ;;;   You can modify this file as you wish so, but keep in mind in the
 ;;;   long term it's better to keep a clean generation from the
-;;;   litterate documentation file.
+;;;   literate documentation file.
 
 ;;; Code:
 
@@ -37,10 +37,11 @@ during normal emacs operations.")
 ;; Asynchronous package compilation
 (setq native-comp-jit-compilation t)
 
+;; Suppress the *Compile-Log* buffer that byte-compile would otherwise open.
+(setq byte-compile-verbose nil)
+
 (defvar my/file-name-handler-alist file-name-handler-alist)
-
 (setq file-name-handler-alist nil)
-
 (add-hook 'emacs-startup-hook
           (lambda ()
             (setq file-name-handler-alist my/file-name-handler-alist)))
@@ -52,7 +53,12 @@ during normal emacs operations.")
 (setq inhibit-compacting-font-caches t)
 
 (setq inhibit-startup-screen t
-      inhibit-startup-echo-area-message (user-login-name))
+      inhibit-startup-echo-area-message (user-login-name)
+      ;; Open *scratch* in fundamental-mode with no welcome message —
+      ;; the fastest possible startup buffer.  (lisp-interaction-mode,
+      ;; the default, loads a minor amount of extra code at frame open.)
+      initial-major-mode 'fundamental-mode
+      initial-scratch-message nil)
 
 (when (boundp 'read-process-output-max)
   ;; 1MB in bytes, default 4096 bytes
