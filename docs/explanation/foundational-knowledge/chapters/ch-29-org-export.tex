@@ -1,0 +1,57 @@
+\chapter{\texttt{org-export-in-background t}: async org export}
+\label{ch:org-export}
+\minitoc\label{org-export-in-background-t-async-org-export}
+\index{org-export-in-background}\index{org-mode!async export}\index{export dispatch}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Chapter~\ref{ch:org-modules} trimmed the loading cost of opening an
+org file; this chapter tackles the other bottleneck: export.
+Exporting a large org file blocks Emacs for the full duration.  This chapter explains \texttt{org-export-in-background}, which
+offloads the work to a child \texttt{--batch} process, and covers the
+export stack and interaction with per-file export options.
+
+\section{The problem with synchronous export}\label{the-problem-with-synchronous-export}
+
+Exporting a large org file to LaTeX or PDF calls \texttt{org-export-to-file} synchronously, blocking the Emacs UI for the duration. A 200-page document can take 30--120 seconds during which Emacs is completely unresponsive.
+
+\section{How async export works}\label{how-async-export-works}
+
+With \texttt{(setq org-export-in-background t)}, \texttt{org-export-to-file} spawns a \textbf{child Emacs process} in \texttt{-\/-batch} mode. The child:
+
+\begin{enumerate}
+\item Loads only what \texttt{org-export-async-init-file} specifies (default: \texttt{$\sim$/.emacs.d/init.el}).
+\item Evaluates the export form.
+\item Writes the output file to disk and exits.
+\end{enumerate}
+
+The parent polls for completion and opens the output file when done. Progress is visible in the \texttt{*Org Export Dispatch*} buffer.
+
+\begin{minted}{elisp}
+;; Set in the org use-package :custom block:
+(org-export-in-background t)
+
+;; To use a minimal init file for the child process (faster):
+(setq org-export-async-init-file
+      (expand-file-name "export-init.el" user-emacs-directory))
+\end{minted}
+
+\section{\texttt{org-export-stack}}\label{org-export-stack}
+
+During and after async export, \texttt{M-x org-export-stack} shows a buffer listing all export processes with their status (running / done / error) and output files. Keybindings in this buffer allow re-running or opening results.
+
+\section{Interaction with export options}\label{interaction-with-export-options}
+
+The options \texttt{:with-toc}, \texttt{:section-numbers}, \texttt{:with-author}, and \texttt{\#+OPTIONS:} keywords in the org file are honoured by the child process because it loads and evaluates the same org file. Header arguments in the export dispatch (\texttt{C-c C-e}) are passed as the export form's arguments.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+Setting \texttt{org-export-in-background} to \texttt{t} causes the export
+dispatcher to spawn a child Emacs in \texttt{--batch} mode, so the parent
+Emacs remains responsive during long exports.  The child process loads
+\texttt{org-export-async-init-file} instead of the full user init; pointing
+this at a minimal init file keeps the child fast and predictable.
+\texttt{M-x org-export-stack} provides a dashboard of running and completed
+export processes together with their output.  Per-file \texttt{\#+OPTIONS:}
+keywords and arguments supplied through the export dispatch (\texttt{C-c C-e})
+are honoured by the child process because it loads and evaluates the same org
+file.

@@ -1,0 +1,171 @@
+mode org-mode
+face bold :weight bold
+face font-lock-comment-face :weight light :slant italic
+face font-lock-doc-face
+face font-lock-function-name-face
+face font-lock-keyword-face
+face italic :slant italic
+face org-block
+face org-block-begin-line :slant italic
+face org-block-end-line :slant italic
+face org-checkbox :inherit bold
+face org-code
+face org-document-info-keyword
+face org-document-title :height 1.4 :weight bold
+face org-drawer
+face org-headline-done
+face org-level-1 :inherit rainbow-delimiters-depth-1-face :height 1.35 :weight bold
+face org-level-2 :inherit rainbow-delimiters-depth-2-face :height 1.2 :weight bold
+face org-link
+face org-meta-line :inherit font-lock-comment-face
+face org-modern-block-name :height 0.8 :weight light
+face org-modern-date-active :inherit org-modern-label
+face org-modern-date-inactive :inherit org-modern-label
+face org-modern-done :inherit org-modern-label
+face org-modern-tag :inherit (secondary-selection org-modern-label)
+face org-modern-time-inactive :inherit org-modern-label
+face org-modern-todo :inherit (org-todo org-modern-label) :weight semibold
+face org-property-value :inherit default
+face org-special-keyword
+face org-table
+face org-table-row :inherit org-table
+face org-verbatim :inherit shadow
+face rainbow-delimiters-depth-1-face
+face rainbow-delimiters-depth-2-face
+1:0 org-document-info-keyword "#+TITLE:"
+1:9 org-document-title "A golden fixture of Org\n"
+2:0 org-meta-line "#+STARTUP: showall"
+2:18 font-lock-keyword-face "\n\n"
+4:0 org-level-1 "* "
+4:2 org-modern-todo "NEXT"
+4:6 org-level-1 " Review the inventory module :"
+4:36 org-modern-tag "work"
+4:40 org-level-1 ":"
+4:41 org-modern-tag "code"
+4:45 org-level-1 ":"
+4:46 font-lock-keyword-face "\n"
+5:0 org-special-keyword "SCHEDULED:"
+5:11 org-modern-date-active "<2026-10-12 Mon>"
+5:27 font-lock-keyword-face "\n"
+6:0 org-drawer ":PROPERTIES:"
+7:0 org-special-keyword ":EFFORT:"
+7:11 org-property-value "0:30"
+8:0 org-drawer ":END:"
+8:5 font-lock-keyword-face "\n\n"
+10:6 (org-verbatim) "load"
+10:39 (bold) "short"
+10:58 (italic) "emphasis"
+10:67 font-lock-keyword-face "\n"
+11:21 org-link "[[https://orgmode.org][the Org manual]]"
+11:64 font-lock-keyword-face "\n"
+12:0 org-link "[[file:sample.py][the module]]"
+12:31 font-lock-keyword-face "\n\n"
+14:2 (org-checkbox) "[X]"
+14:21 font-lock-keyword-face "\n"
+15:2 (org-checkbox) "[ ]"
+15:26 (org-code) "16"
+15:35 font-lock-keyword-face "\n"
+16:17 font-lock-keyword-face "\n"
+17:19 font-lock-keyword-face "\n\n"
+19:0 org-level-2 "** "
+19:3 org-modern-todo "TODO"
+19:7 org-level-2 " Measure the load time"
+19:29 font-lock-keyword-face "\n"
+20:0 (:inherit org-table :inverse-video t) "|"
+20:1 org-table " File      "
+20:12 (:inherit org-table :inverse-video t) "|"
+20:13 org-table " Items "
+20:20 (:inherit org-table :inverse-video t) "|"
+20:21 org-table " Seconds "
+20:30 (:inherit org-table :inverse-video t) "|"
+20:31 org-table-row "\n"
+21:0 ((:inherit org-table :inverse-video t) (:overline COLOUR) (:height 0.1)) "|"
+21:1 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:2 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:3 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:4 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:5 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:6 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:7 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:8 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:9 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:10 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:11 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:12 ((:inherit org-table :inverse-video t) (:overline COLOUR) (:height 0.1)) "+"
+21:13 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:14 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:15 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:16 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:17 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:18 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:19 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:20 ((:inherit org-table :inverse-video t) (:overline COLOUR) (:height 0.1)) "+"
+21:21 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:22 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:23 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:24 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:25 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:26 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:27 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:28 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:29 (org-table (:overline COLOUR) (:height 0.1)) "-"
+21:30 ((:inherit org-table :inverse-video t) (:overline COLOUR) (:height 0.1)) "|"
+21:31 (org-table-row (:height 0.1)) "\n"
+22:0 (:inherit org-table :inverse-video t) "|"
+22:1 org-table " items.csv "
+22:12 (:inherit org-table :inverse-video t) "|"
+22:13 org-table "    12 "
+22:20 (:inherit org-table :inverse-video t) "|"
+22:21 org-table "    0.04 "
+22:30 (:inherit org-table :inverse-video t) "|"
+22:31 org-table-row "\n"
+23:0 (:inherit org-table :inverse-video t) "|"
+23:1 org-table " empty.csv "
+23:12 (:inherit org-table :inverse-video t) "|"
+23:13 org-table "     0 "
+23:20 (:inherit org-table :inverse-video t) "|"
+23:21 org-table "    0.01 "
+23:30 (:inherit org-table :inverse-video t) "|"
+23:31 org-table-row "\n"
+24:0 font-lock-keyword-face "\n"
+25:0 org-block-begin-line "#+BEGIN_"
+25:8 (org-block-begin-line org-modern-block-name) "SRC"
+25:11 org-block-begin-line " elisp\n"
+26:0 (rainbow-delimiters-depth-1-face org-block) "("
+26:1 (font-lock-keyword-face org-block) "defun"
+26:6 (org-block) " "
+26:7 (font-lock-function-name-face org-block) "sample-double"
+26:20 (org-block) " "
+26:21 (rainbow-delimiters-depth-2-face org-block) "("
+26:22 (org-block) "n"
+26:23 (rainbow-delimiters-depth-2-face org-block) ")"
+26:24 (org-block) "\n  "
+27:2 (font-lock-doc-face org-block) "\"Return twice N.\""
+27:19 (org-block) "\n  "
+28:2 (rainbow-delimiters-depth-2-face org-block) "("
+28:3 (org-block) "* 2 n"
+28:8 (rainbow-delimiters-depth-2-face org-block) ")"
+28:9 (rainbow-delimiters-depth-1-face org-block) ")"
+28:10 (org-block) "\n"
+29:0 org-block-end-line "#+END_"
+29:6 (org-block-end-line org-modern-block-name) "SRC"
+29:9 org-block-end-line "\n"
+30:0 font-lock-keyword-face "\n"
+31:0 org-level-2 "** "
+31:3 org-modern-done "DONE"
+31:7 org-level-2 " "
+31:8 (org-headline-done org-level-2) "Archive the old notes"
+31:29 font-lock-keyword-face "\n"
+32:0 org-special-keyword "CLOSED:"
+32:8 org-modern-date-inactive "[2026-10-01 Thu"
+32:23 org-modern-time-inactive " 09:15]"
+32:30 font-lock-keyword-face "\n\n"
+34:0 font-lock-comment-face "# A comment line."
+34:17 font-lock-keyword-face "\n"
+35:0 org-block-begin-line "#+BEGIN_"
+35:8 (org-block-begin-line org-modern-block-name) "QUOTE"
+35:13 org-block-begin-line "\n"
+36:31 font-lock-keyword-face "\n"
+37:0 org-block-end-line "#+END_"
+37:6 (org-block-end-line org-modern-block-name) "QUOTE"
+37:11 org-block-end-line "\n"

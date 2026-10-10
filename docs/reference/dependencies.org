@@ -1,0 +1,125 @@
+#+TITLE: External dependencies
+#+OPTIONS: toc:nil num:nil
+#+KEYMAPS: prog-mode-map clojure-mode-map
+
+Every program and font the configuration uses outside Emacs, found on
+=PATH=.  The last column is the nixpkgs attribute, for Home Manager's
+=home.packages= or NixOS's =environment.systemPackages=; [[file:../tutorials/getting-started.org][Getting
+started]] installs them on NixOS and macOS.  A missing optional program
+disables only its feature: the language server of a language, for
+example, does not start.
+
+* Emacs
+
+| Need                | Version | Why                                                                           |
+|---------------------+---------+-------------------------------------------------------------------------------|
+| GNU Emacs, minimum  |    29.1 | lsp-mode, =enable-theme-functions=                                            |
+| GNU Emacs, advised  |    30.1 | ships which-key and editorconfig; the tests need it (=handler-bind=)          |
+| GNU Emacs, tested   |    31.1 | the build this configuration is tested with: pgtk on NixOS (=emacs-pgtk=)     |
+| Native compilation  |         | faster packages; Emacs built with libgccjit                                   |
+| Tree-sitter support |         | the =-ts-mode= major modes, folding; grammars go to =~/.emacs.d/tree-sitter/= |
+
+On Emacs 30, Java indents by 4 until JDTLS formats the file.  Install
+the tree-sitter grammars once with =M-x treesit-auto-install-all=,
+which needs git and a C compiler.
+
+* Core
+
+| Program                             | Used by                                                                | nixpkgs                        |
+|-------------------------------------+------------------------------------------------------------------------+--------------------------------|
+| =git=                               | straight.el, magit, diff-hl, project.el, the tests                     | =git=                          |
+| =rg=                                | project search (=C-c s r=), magit-todos; required by the tests         | =ripgrep=                      |
+| =fd=                                | =C-c f= in Dirvish                                                     | =fd=                           |
+| =delta=                             | magit's diffs (magit-delta)                                            | =delta=                        |
+| =difft=                             | structural diffs (difftastic)                                          | =difftastic=                   |
+| =python3=                           | Treemacs, the task dashboard's server, the MCP bridge, tests           | =python3=                      |
+| =gcc= or =cc=, =make=, =pkg-config= | jinx builds its module at first start                                  | =gcc=, =gnumake=, =pkg-config= |
+| =gpg=                               | =~/.authinfo.gpg=, the forge token; prompts use gpg-agent's own dialog | =gnupg=                        |
+| =zsh=                               | the shell of the terminals                                             | =zsh=                          |
+| =Xvfb=                              | the tests' private displays, on Linux                                  | =xorg.xvfb=                    |
+
+* Fonts
+
+| Font                   | Used for                                                                                                                    | nixpkgs               |
+|------------------------+-----------------------------------------------------------------------------------------------------------------------------+-----------------------|
+| Iosevka Nerd Font Mono | the default face; else the first installed of Iosevka Term, Iosevka, JetBrains Mono, then DejaVu Sans Mono (Menlo on macOS) | =nerd-fonts.iosevka=  |
+| Noto Sans CJK          | Chinese, Japanese and Korean text                                                                                           | =noto-fonts-cjk-sans= |
+| Garamond               | reading EPUB books (nov); the family must be named Garamond                                                                 | none                  |
+
+The icons of Dirvish, the mode line and completion come from the Nerd
+Font; =M-x nerd-icons-install-fonts= installs the symbols alone.
+
+* Spelling and grammar
+
+| Program                           | Used by                                                              | nixpkgs                                                                                                     |
+|-----------------------------------+----------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------|
+| enchant 2, with its headers       | jinx, the spell checker; its build reads the headers with pkg-config | =enchant=, headers in =enchant.dev=                                                                         |
+| =hunspell= and dictionaries       | jinx: en_GB, fr_FR, pl_PL, es_ES                                     | =hunspell=, =hunspellDicts.en_GB-ise=, =hunspellDicts.fr-any=, =hunspellDicts.pl_PL=, =hunspellDicts.es_ES= |
+| =aspell= and its Latin dictionary | jinx: Latin                                                          | =aspell=, =aspellDicts.la=                                                                                  |
+| =ltex-ls-plus=                    | grammar of prose buffers (LanguageTool)                              | =ltex-ls-plus=                                                                                              |
+| =grammalecte-cli.py=              | French grammar (flycheck-grammalecte)                                | =python3Packages.grammalecte=                                                                               |
+
+* Language servers
+
+Started by lsp-mode when a buffer of the language opens.
+
+| Program                                                                                    | Language                                  | nixpkgs                              |
+|--------------------------------------------------------------------------------------------+-------------------------------------------+--------------------------------------|
+| =basedpyright-langserver=                                                                  | Python (=pyright-langserver= as fallback) | =basedpyright=                       |
+| =ruff=                                                                                     | Python lint and fixes                     | =ruff=                               |
+| =clojure-lsp=                                                                              | Clojure, ClojureScript                    | =clojure-lsp=                        |
+| =jdtls=                                                                                    | Java                                      | =jdt-language-server=                |
+| =typescript-language-server=                                                               | TypeScript, JavaScript                    | =typescript-language-server=         |
+| =vscode-html-language-server=, =vscode-css-language-server=, =vscode-json-language-server= | HTML, CSS, JSON                           | =vscode-langservers-extracted=       |
+| =tailwindcss-language-server=                                                              | Tailwind classes                          | =tailwindcss-language-server=        |
+| =htmx-lsp=                                                                                 | HTMX attributes                           | =htmx-lsp=                           |
+| =rust-analyzer=                                                                            | Rust                                      | =rust-analyzer=                      |
+| =nixd=                                                                                     | Nix                                       | =nixd=                               |
+| =bash-language-server=                                                                     | shell scripts, with =shellcheck=          | =bash-language-server=, =shellcheck= |
+| =yaml-language-server=                                                                     | YAML                                      | =yaml-language-server=               |
+| =docker-langserver=                                                                        | Dockerfile                                | =dockerfile-language-server-nodejs=  |
+| =docker-compose-langserver=                                                                | Docker Compose, optional                  | =docker-compose-language-service=    |
+| =lua-language-server=                                                                      | Lua                                       | =lua-language-server=                |
+| =tofu-ls=                                                                                  | OpenTofu and Terraform                    | =tofu-ls=                            |
+| =marksman=                                                                                 | Markdown                                  | =marksman=                           |
+| =texlab=                                                                                   | LaTeX                                     | =texlab=                             |
+
+* Formatters
+
+apheleia runs them when a file is saved, and =C-c r= on demand.
+
+| Program          | Language                                      | nixpkgs          |
+|------------------+-----------------------------------------------+------------------|
+| =isort=, =black= | Python, in that order                         | =isort=, =black= |
+| =cljfmt=         | Clojure                                       | =cljfmt=         |
+| =prettier=       | JavaScript, TypeScript, CSS, HTML, JSON, YAML | =prettier=       |
+| =shfmt=          | shell                                         | =shfmt=          |
+| =alejandra=      | Nix                                           | =alejandra=      |
+| =rustfmt=        | Rust                                          | =rustfmt=        |
+| =tofu=           | OpenTofu, also =tofu validate= for checks     | =opentofu=       |
+
+* Languages and projects
+
+| Program                    | Used by                                                | nixpkgs                  |
+|----------------------------+--------------------------------------------------------+--------------------------|
+| =uv=, =poetry= or =pipenv= | Python environments, which PET finds                   | =uv=, =poetry=, =pipenv= |
+| =debugpy=, =pytest=, =ptw= | debugging and tests, inside each Python project        | in the project           |
+| =java=, JDK 17 or later    | Clojure, jdtls                                         | =jdk=                    |
+| =clojure=                  | Clojure projects and =C-c M-j=                         | =clojure=                |
+| =lein=, =bb=               | Leiningen projects, babashka scripts; optional         | =leiningen=, =babashka=  |
+| =cargo=, =rustc=           | Rust projects (cargo-mode)                             | =cargo=, =rustc=         |
+| =tflint=                   | Terraform lint, after the language server              | =tflint=                 |
+| =xelatex=, =lualatex=      | AUCTeX builds with XeTeX; the LaTeX book with LuaLaTeX | =texliveFull=            |
+| =mmdc=                     | Mermaid diagrams in Org (ob-mermaid)                   | =mermaid-cli=            |
+
+* Other features
+
+| Program                             | Used by                                       | nixpkgs                |
+|-------------------------------------+-----------------------------------------------+------------------------|
+| =fzf=                               | the shell keys of the terminals               | =fzf=                  |
+| =zig= 0.15.2 or later               | building gterm's module                       | =zig=                  |
+| =podman=, or =docker=               | =C-c D=, docker.el; podman wins on Linux      | =podman=, =docker=     |
+| =unzip=                             | reading EPUB books (nov)                      | =unzip=                |
+| =mpv=, =vlc=, =ffplay= or =mplayer= | playing music (ready-player), the first found | =mpv=, =vlc=, =ffmpeg= |
+| =socat=                             | clients that talk to the MCP socket directly  | =socat=                |
+| =starship=                          | the shell prompt, optional                    | =starship=             |

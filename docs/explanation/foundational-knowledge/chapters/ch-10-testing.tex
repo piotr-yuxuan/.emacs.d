@@ -1,0 +1,150 @@
+\chapter{Testing: ERT, Buttercup, and why the tests matter}
+\label{ch:testing}
+\minitoc\label{testing-ert-buttercup-and-why-the-tests-matter}
+\index{ERT}\index{Buttercup}\index{testing}\index{regression testing}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Every performance change in Part~\ref{part:startup} carries a risk:
+the optimisation works, but a feature silently breaks.
+An Emacs config is a program, and programs need tests.  This chapter
+covers ERT and Buttercup (the two testing frameworks available in
+Emacs) and explains the specific regression vectors that the
+configuration's test suite guards against.  Understanding these
+patterns lets you add tests for any new feature you introduce.
+
+\section{Why test an Emacs config?}\label{why-test-an-emacs-config}
+
+An Emacs config is not a static document; it is a program that runs on startup. Performance regressions are introduced silently: a package update changes a default, a new \texttt{use-package} declaration accidentally uses \texttt{:config} instead of \texttt{:init}, or a global mode resets a variable. Without tests, these regressions are discovered only when startup becomes painfully slow weeks later, with no git bisect breadcrumb.
+
+\section{ERT (Emacs Lisp Regression Testing)}\label{ert-emacs-lisp-regression-testing}
+
+\texttt{(info "(ert) Top")}
+
+ERT is built into Emacs. Tests are defined with \texttt{ert-deftest} and run with \texttt{M-x ert} or from the command line.
+
+\subsection{Anatomy of a test}\label{anatomy-of-a-test}
+
+\begin{minted}{elisp}
+(ert-deftest test/gc-threshold-matches-early-init ()
+  "gc-cons-threshold must equal my/gc-cons-threshold after startup."
+  (should (boundp 'my/gc-cons-threshold))
+  (should (= gc-cons-threshold my/gc-cons-threshold)))
+\end{minted}
+
+\begin{itemize}
+\item \texttt{should} is the assertion macro. Test fails if the body evaluates to \texttt{nil}.
+\item \texttt{should-not} asserts the body is \texttt{nil}.
+\item \texttt{should-error} asserts the body signals an error.
+\end{itemize}
+
+\subsection{Running tests from the command line}\label{running-tests-from-the-command-line}
+
+\begin{minted}{bash}
+gtimeout 30 emacs --batch -l ~/.emacs.d/init.el \
+  -l tests/test-performance.el \
+  -f ert-run-tests-batch-and-exit
+\end{minted}
+
+\texttt{-\/-batch} means no GUI, output to stdout/stderr, exit on completion. The exit code is 0 if all tests pass, non-zero otherwise.
+
+\subsection{The Emacs-under-test problem}\label{the-emacs-under-test-problem}
+
+When you run \texttt{emacs -\/-batch -l init.el -l tests.el}, the tests run in a fully initialised Emacs with all your packages loaded. This is both an advantage (you're testing the real config) and a limitation:
+
+\begin{itemize}
+\item Tests that check mode activation (e.g., \texttt{savehist-mode}) need the corresponding hooks to have fired. In \texttt{-\/-batch} mode, \texttt{emacs-startup-hook} fires, but \texttt{window-setup-hook} does \textbf{not} (there's no window to set up).
+\item Tests that use \texttt{sit-for} (e.g., waiting for an idle timer) won't work in \texttt{-\/-batch} because there's no event loop to trigger idle.
+\end{itemize}
+
+For idle-timer tests, you need to run them interactively or use a workaround:
+
+\begin{minted}{elisp}
+;; Force idle timers to fire in batch mode:
+(let ((timers (copy-sequence timer-idle-list)))
+  (dolist (timer timers)
+    (timer-event-handler timer)))
+\end{minted}
+
+\section{Buttercup (BDD-style testing)}\label{buttercup-bdd-style-testing}
+
+Buttercup provides \texttt{describe} / \texttt{it} / \texttt{expect} syntax, which reads more naturally for complex test suites:
+
+\begin{minted}{elisp}
+(describe "GC configuration"
+  (it "maintains the threshold set in early-init.el"
+    (expect gc-cons-threshold :to-equal my/gc-cons-threshold))
+
+  (it "has completed fewer than 20 GCs during startup"
+    (expect gcs-done :to-be-less-than 20)))
+\end{minted}
+
+\subsection{Running Buttercup}\label{running-buttercup}
+
+\begin{minted}{bash}
+gtimeout 30 emacs --batch -l ~/.emacs.d/init.el \
+  -l buttercup -f buttercup-run
+\end{minted}
+
+Buttercup discovers test files by convention (files matching \texttt{*-test.el} or \texttt{test-*.el}) or you can specify them explicitly.
+
+\section{What the suggested tests actually verify}\label{what-the-suggested-tests-actually-verify}
+
+The tests in the fix log are not arbitrary: each one guards a specific regression vector:
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+Test category & What it catches \\
+\midrule
+GC threshold check & Another package resetting \texttt{gc-cons-threshold} \\
+\texttt{gcmh-mode} not active & Accidental re-introduction of GCMH \\
+Global modes active & A mode silently disabled by \texttt{always-defer} \\
+Keybinding checks & A package overriding your binding \\
+\texttt{general.el} not loaded & Accidental re-addition of the package \\
+\texttt{editorconfig-mode} active & Regression of the "dead \texttt{:config}" bug \\
+Dashboard buffer exists & Dashboard broken again by defer changes \\
+Server running after idle & \texttt{server-start} removed or broken \\
+\bottomrule
+\end{longtable}
+
+\subsection{The "feature still works" pattern}\label{the-feature-still-works-pattern}
+
+For every performance change that touches user-facing functionality, include a test that exercises the feature:
+
+\begin{minted}{elisp}
+(ert-deftest test/git-gutter-keybindings ()
+  "git-gutter keybindings should remain accessible."
+  (should (eq (keymap-lookup global-map "C-c g n")
+              'git-gutter:next-hunk)))
+\end{minted}
+
+This catches the case where you defer git-gutter but accidentally break its keybindings in the process.
+
+\section{Limitations}\label{limitations}
+
+\begin{itemize}
+\item ERT/Buttercup test the config \textbf{as loaded}. They cannot test the load \textbf{process} itself (timing, order). For that, use the profiling techniques in Chapter~\ref{ch:profiling}.
+\item \texttt{-\/-batch} mode does not fire \texttt{window-setup-hook}. Tests for dashboard, doom-modeline, or other window-dependent features must be run interactively or must force the hooks.
+\item Tests that rely on external state (Git repos, LSP servers, network) are inherently flaky. Guard them with \texttt{:condition} or \texttt{skip-unless}:
+\end{itemize}
+
+\begin{minted}{elisp}
+(ert-deftest test/git-gutter-activates () (skip-unless
+  (bound-and-true-p global-git-gutter-mode)) (should ...))
+\end{minted}
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+Emacs ships ERT (\texttt{ert-deftest}) as its built-in test framework,
+while Buttercup (\texttt{describe}/\texttt{it}/\texttt{expect}) layers
+BDD-style syntax on top.  Both frameworks run inside a fully initialised
+\texttt{--batch} Emacs, which means the tests verify the real
+configuration rather than a mock, but \texttt{window-setup-hook} does
+not fire in batch mode, so any feature that depends on it needs a
+workaround.  Each test should guard a specific regression vector: a GC
+threshold that gets silently reset, a \texttt{:config} block that never
+executes, or a keybinding that another package overrides.  The
+complementary ``feature still works'' pattern exercises the user-facing
+command after every performance change, ensuring that optimisation does
+not break functionality.  Where a test depends on external state (a Git
+repository, an LSP server), \texttt{skip-unless} gates execution so the
+absence of that state produces a skip rather than a false failure.

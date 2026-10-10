@@ -1,0 +1,213 @@
+#+TITLE: Working with Org tasks
+#+OPTIONS: toc:2 num:nil
+#+KEYMAPS: org-mode-map
+
+This system keeps task management small enough to trust.  Org files
+remain the source of truth.  Agenda is the working view and the local
+dashboard is a read-only visual view of the same active headings.
+
+* Mental model
+
+Each active repository owns one root =todo.org=.  The sources are:
+
+- the personal file, with the journal
+- the task file of each repository this machine works on, such as
+  the Emacs configuration
+
+The personal file is =my/gtd-file=, =~/org/todo.org= unless
+=local.el= sets it; =my/org-agenda-source-files= lists the others (see
+[[file:../reference/local-el.org][the local.el reference]]).  Missing files are skipped.
+
+The repository is the category.  There is no =CATEGORY= property to
+maintain.  Supporting notes stay in their natural README, transcript,
+or design file and the task links to them when useful.
+
+Inside a task file:
+
+- a plain top-level heading is an area
+- a task with task children is a project and states its finish line
+- a leaf task is an action
+
+For example:
+
+#+begin_example
+,* Website
+
+,** TODO Publish the new documentation site
+[[file:docs/site-design.org][Design notes]]
+
+,*** NEXT Build and check the site locally
+,*** TODO Deploy the checked site
+#+end_example
+
+No extra property is needed to distinguish the project from its
+actions.  The outline already contains that information.
+
+* Task states
+
+There are five states:
+
+- =TODO= means valid backlog, not selected yet.
+- =NEXT= means deliberately selected work.
+- =WAIT= means another person or event must move first.  Org asks for
+  a note when this state is entered.
+- =DONE= means completed.  Org records the closing time.
+- =CANCELLED= means intentionally abandoned.  Org asks for a reason.
+
+Use =C-c C-t= on a heading to change its state.  Keep =NEXT= scarce.
+It is a commitment list, not another name for every active task.
+
+The workflow does not require estimates, priorities, controlled tags,
+manual IDs, stage counters, or contact dates.  Add a real scheduled
+time or deadline only when the outside world supplies one.
+
+* Recurring tasks
+
+Org handles recurrence on the task's normal =SCHEDULED= line.  For
+example, the weekly review is written once:
+
+#+begin_example
+,** TODO Review the week and protect next week's calendar
+SCHEDULED: <2026-08-28 Fri ++1w>
+#+end_example
+
+It appears in the daily Agenda on Friday and remains visible there as
+overdue until it is completed.  Marking it =DONE= resets the heading to
+=TODO= and advances the scheduled date to the next Friday.
+
+Use =C-c C-s= on a task to schedule it.  Add =++1w= when the cadence
+must remain anchored to the calendar; if several occurrences were
+missed, Org advances to the first future one.  Use =.+1w= only when the
+next occurrence should be one week after completion instead.
+
+No habit property is required.  The morning briefing is simply the act
+of opening =C-c a g=, not another checkbox.  Protected breaks and social
+engagements belong in the calendar because they reserve time rather
+than represent work to complete.
+
+* Capture and clarify
+
+Press =C-c i= anywhere to capture an unscheduled =TODO= in the
+personal =* Inbox=.  This is deliberately the easiest path.  Capture
+first and decide where it belongs later.
+
+Press =C-c c n= for a dated journal note.  Journal notes have no task
+state and therefore do not appear on the task board or task-only daily
+Agenda.
+
+During clarification:
+
+1. Delete the item if it no longer matters.
+2. Rewrite it as a visible action if it takes one step.
+3. Rewrite it as a finish line with child actions if it is a project.
+4. Refile it with =C-c C-w= to the right repository and area.
+5. Mark it =NEXT= only when you are choosing to act on it.
+
+Refile offers headings from every canonical task source.  It does not
+scan READMEs or nested project notes.
+
+* Morning briefing
+
+Start focused days with =C-c a g=.  The view shows:
+
+- real dated work for today
+- selected =NEXT= actions
+- =WAIT= items
+- work closed today
+
+A useful ten-minute briefing is:
+
+1. Look at the calendar and protect fixed commitments first.
+2. Read the =WAIT= list and send any quick follow-up that is due.
+3. Choose the small set of =NEXT= actions that would make today useful.
+4. Start one before opening general email or browsing the full backlog.
+
+The source label and outline breadcrumb explain where each item came
+from.  Open an Agenda entry with =RET=.
+
+* End-of-day reset
+
+Use a short shutdown ritual:
+
+1. Mark completed work =DONE= and abandoned work =CANCELLED=.
+2. Move blocked work to =WAIT= with a concrete note.
+3. Capture loose thoughts without trying to organise all of them.
+4. Leave one clear =NEXT= action ready for the next morning.
+
+This is also a mood-management practice.  The goal is to close open
+loops and preserve a sense of control, not to judge the day by how many
+cards moved.
+
+* Weekly review and the 40-hour boundary
+
+Treat 40 focused hours as a weekly planning boundary, not as task
+metadata.  Estimates inside Org would create upkeep without making the
+work more predictable.
+
+Once a week:
+
+1. Review first the source that holds the main objective of the
+   moment.
+2. Review every project finish line and make sure each active project
+   has a credible next action.
+3. Archive terminal projects and stale tasks.
+4. Look at the real calendar before selecting work.  Preserve its
+   fixed commitments, breaks and travel time.
+5. Leave slack for what the week brings, and for recovery.  Forty
+   hours is a ceiling for focused work, not a quota that must consume
+   every open space.
+
+The main objective should dominate the week.  Side projects are
+useful, but must not become a refuge from it.
+
+* Archive
+
+When a terminal task no longer belongs in the active file, place point
+on its heading and run =org-archive-subtree-default=, normally available
+through =C-c C-x C-a=.  Org moves it into the sibling
+=todo.org_archive= and records its origin.
+
+Archive completed and cancelled work.  Do not archive =WAIT= merely
+because waiting is uncomfortable.
+
+* Visual dashboard
+
+Run =M-x my/org-dashboard-open=.  Emacs exports the current active
+headings and opens a local board at =127.0.0.1=.  The board provides:
+
+- one swim lane per repository
+- columns for =NEXT=, =TODO=, and =WAIT=
+- board and list views
+- source and state filters
+- text search
+- outline breadcrumbs and real dates
+
+Select a card to open its exact heading in Emacs.  The browser cannot
+edit or refile Org data.  Use *Refresh from Org* after changing files.
+
+The dashboard has no database, account, cloud service, or second task
+model.  Closing Emacs also ends the local server process.
+
+* Journal
+
+The personal =todo.org= still contains =* Journal=.  Journal captures
+land under today's dated heading.  They have no task state, so they stay
+out of task-only Agenda and dashboard views.
+
+* Small command reference
+
+| Action                      | Command                       |
+|-----------------------------+-------------------------------|
+| Quick task                  | =C-c i=                       |
+| Capture menu                | =C-c c=                       |
+| Journal note                | =C-c c n=                     |
+| Daily task view             | =C-c a g=                     |
+| Change task state           | =C-c C-t=                     |
+| Schedule task               | =C-c C-s=                     |
+| Refile                      | =C-c C-w=                     |
+| Archive subtree             | =C-c C-x C-a=                 |
+| Open visual board           | =M-x my/org-dashboard-open=   |
+| Refresh board data directly | =M-x my/org-dashboard-export= |
+
+That is the whole required workflow.  Use standard Org features beyond
+it only when a real need appears.

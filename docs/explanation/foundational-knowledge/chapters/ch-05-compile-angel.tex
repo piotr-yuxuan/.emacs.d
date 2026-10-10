@@ -1,0 +1,115 @@
+\chapter{\texttt{compile-angel}}
+\label{ch:compile-angel}
+\minitoc\label{compile-angel}
+\index{compile-angel}\index{byte-compilation}\index{native compilation}\index{.elc}\index{.eln}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Once \texttt{straight.el} (Chapter~\ref{ch:straight}) has cloned and
+built a package, byte-compilation and native-compilation improve runtime performance,
+but automating them via \texttt{compile-angel-on-load-mode} can
+introduce severe startup regressions.  This chapter explains why the
+\texttt{on-load} mode is dangerous, why the \texttt{on-save} mode is
+safe, and how to diagnose unwanted recompilation on every startup.
+
+\section{What \texttt{compile-angel-on-load-mode} does}\label{what-compile-angel-on-load-mode-does}
+
+When enabled, this mode advises both \texttt{load} and \texttt{require} with before-advice that:
+
+\begin{enumerate}
+\item Resolves the \texttt{.el} source file for the feature being loaded.
+\item Checks whether the \texttt{.elc} (byte-compiled) or \texttt{.eln} (native-compiled) file is missing or stale.
+\item If stale, byte-compiles the \texttt{.el} file \textbf{synchronously} before allowing the \texttt{load} / \texttt{require} to proceed.
+\end{enumerate}
+
+\section{The cost model}\label{the-cost-model}
+
+Every \texttt{require} call, even for already-loaded features, must pass through the advice. The \texttt{featurep} fast-path (checking if already loaded) is cheap, but the advice dispatch itself adds overhead per call. With \(\sim\)200 packages, each triggering multiple \texttt{require} calls, the cumulative advice overhead during a single file-open was \(\sim\)0.8 s.
+
+\section{The \texttt{normal-mode} re-entry loop}\label{the-normal-mode-re-entry-loop}
+
+The worst-case scenario: compile-angel decides to byte-compile a file. Byte-compilation opens the source file in a temp buffer, which triggers \texttt{normal-mode}, which calls mode hooks, which may \texttt{require} other packages, each of which passes through compile-angel's advice again. On a cold cache (first startup after a Homebrew Emacs upgrade), this cascade recompiled 100+ files and took 20+ seconds.
+
+\section{The safe alternative: \texttt{compile-angel-on-save-local-mode}}\label{the-safe-alternative-compile-angel-on-save-local-mode}
+
+Instead of advising every \texttt{load} / \texttt{require}, this mode watches for file saves in \texttt{prog-mode} buffers and byte-compiles the saved file. Zero overhead on file-open; recompilation happens only when you explicitly save an \texttt{.el} file.
+
+\section{Exclusion patterns}\label{exclusion-patterns}
+
+Even with \texttt{on-save} mode, you need exclusions to prevent compile-angel from recompiling files it shouldn't touch:
+
+\begin{minted}{elisp}
+;; Core Emacs lisp (already compiled by the build system):
+(setq compile-angel-exclude-core-emacs-directory t)
+
+;; straight.el repos (already compiled by straight):
+(add-to-list 'compile-angel-excluded-files-regexps
+             (regexp-quote (expand-file-name "straight/" user-emacs-directory)))
+
+;; Generated/data files:
+(add-to-list 'compile-angel-excluded-files-regexps
+             (regexp-quote (expand-file-name "var/" user-emacs-directory)))
+
+;; Your own init files (you don't want compile-angel fighting with
+;; your running Emacs over init.elc):
+(push "/init.el" compile-angel-excluded-files)
+(push "/early-init.el" compile-angel-excluded-files)
+\end{minted}
+
+\section{Diagnosing whether compile-angel recompiles on every startup}\label{diagnosing-whether-compile-angel-recompiles-on-every-startup}
+
+On a warm cache, compile-angel should compile \textbf{zero} files per startup. If it is recompiling files on every run (cold-cache behaviour in steady state), you need to know which files and how long they take. Wrap compile-angel's internal compilation function with counting advice. Save as \texttt{/tmp/profile-compile-angel.el}:
+
+\begin{minted}{elisp}
+;;; profile-compile-angel.el -*- lexical-binding: t; -*-
+(defvar my/ca-compile-count 0)
+(defvar my/ca-total-time 0.0)
+
+(defun my/ca-track-compile (orig file &rest args)
+  (let ((start (float-time)))
+    (apply orig file args)
+    (cl-incf my/ca-compile-count)
+    (cl-incf my/ca-total-time (- (float-time) start))
+    (message "compile-angel compiling: %s" file)))
+
+;; Wrap at load time so the advice is in place before init.el runs:
+(with-eval-after-load 'compile-angel
+  (when (fboundp 'compile-angel--byte-compile)
+    (advice-add 'compile-angel--byte-compile
+                :around #'my/ca-track-compile)))
+
+(add-hook 'kill-emacs-hook
+  (lambda ()
+    (message "Files compiled: %d, TOTAL compile time: %.3fs"
+             my/ca-compile-count my/ca-total-time)))
+\end{minted}
+
+\begin{minted}{bash}
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+timeout 60 /Applications/Emacs.app/Contents/MacOS/Emacs --batch \
+  -l ~/.emacs.d/early-init.el -l ~/.emacs.d/init.el \
+  -l /tmp/profile-compile-angel.el 2>&1 | \
+  grep -E '(compile-angel compiling|TOTAL|Files compiled)'
+\end{minted}
+
+On a warm cache you should see \texttt{Files compiled: 0}. Any non-zero count means compile-angel is finding stale \texttt{.elc} files on every startup. The individual \texttt{compile-angel compiling:} lines identify the exact files; add their paths or parent directories to the exclusion list in Section~\ref{exclusion-patterns}.
+
+The internal function name \texttt{compile-angel-\/-byte-compile} may change between versions. If \texttt{fboundp} returns \texttt{nil}, inspect compile-angel's source for the function it uses to call \texttt{byte-compile-file} and wrap that instead.
+
+% ── Mental model summary ────────────────────────────────────────────
+\section{Mental model}
+\texttt{compile-angel-on-load-mode} works by advising every
+\texttt{require}, which means its dispatch overhead is cumulative and
+becomes measurable once you have 200+ packages.  On a cold cache the
+situation is worse: the \texttt{normal-mode} re-entry loop can cascade
+byte-compilation through hundreds of files, because each compile opens
+the source, which triggers \texttt{normal-mode} again.  A safer
+alternative for day-to-day editing is
+\texttt{compile-angel-on-save-local-mode}, which compiles only when you
+explicitly save a file and therefore adds zero overhead to file-open.
+
+Exclusion patterns are essential regardless of which mode you choose:
+core Emacs files, \texttt{straight/} repositories, \texttt{var/} data
+files, and your own init files should all be excluded to prevent
+unnecessary recompilation.  On a warm cache, compile-angel should compile
+exactly zero files per startup; any non-zero count means it is detecting
+stale \texttt{.elc} files and doing redundant work on every launch.

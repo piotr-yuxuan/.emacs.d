@@ -1,0 +1,99 @@
+\chapter{Major modes, minor modes, and the mode infrastructure}
+\label{ch:major-minor-modes}
+\minitoc\label{major-modes-minor-modes-and-the-mode-infrastructure}
+\index{major mode}\index{minor mode}\index{define-derived-mode}\index{define-minor-mode}\index{prog-mode}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Chapter~\ref{ch:tree-sitter} showed how
+\texttt{major-mode-remap-alist} redirects one mode to another, but
+what \emph{is} a mode?  Almost everything Emacs does in a buffer is
+controlled by modes.
+This chapter explains how major modes and minor modes are defined,
+how \texttt{auto-mode-alist} and \texttt{major-mode-remap-alist}
+select the right mode, and how the hook naming conventions let you
+attach behaviour to any mode activation event.
+
+\section{Major modes}\label{major-modes}
+
+A major mode is an Emacs Lisp function (by convention named \texttt{<language>-mode} or \texttt{<language>-ts-mode}) that:
+
+\begin{enumerate}
+\item Sets \texttt{major-mode} to its own symbol.
+\item Sets \texttt{mode-name} to a human-readable string.
+\item Installs a buffer-local keymap via \texttt{use-local-map}.
+\item Configures syntax table, \texttt{comment-start}, \texttt{comment-end}, etc.
+\item Runs \texttt{<major-mode>-hook}.
+\end{enumerate}
+
+All "programming language" major modes should inherit from \texttt{prog-mode} via \texttt{define-derived-mode}. This gives them \texttt{prog-mode-hook} for free, which is the hook this config uses to activate \texttt{eglot-ensure}, \texttt{display-line-numbers-mode}, \texttt{yas-minor-mode}, \texttt{flycheck-mode}, etc.
+
+\begin{minted}{elisp}
+(define-derived-mode my-lang-mode prog-mode "MyLang"
+  "Major mode for MyLang files."
+  (setq-local comment-start "// "))
+\end{minted}
+
+\texttt{define-derived-mode} automatically creates \texttt{my-lang-mode-hook}, a buffer-local keymap \texttt{my-lang-mode-map} that inherits from \texttt{prog-mode-map}, and wires up the inheritance chain.
+
+\section{\texttt{auto-mode-alist} and \texttt{major-mode-remap-alist}}\label{auto-mode-alist-and-major-mode-remap-alist}
+
+When a file is opened, Emacs walks \texttt{auto-mode-alist}, an alist of \texttt{(REGEXP . MODE)} pairs, to decide which major mode to invoke. This is the first dispatch mechanism.
+
+\texttt{major-mode-remap-alist} (Emacs 29+) is applied \textbf{after} \texttt{auto-mode-alist} selects a mode. It redirects one mode to another without touching \texttt{auto-mode-alist}:
+
+\begin{minted}{elisp}
+(add-to-list 'major-mode-remap-alist '(python-mode . python-ts-mode))
+\end{minted}
+
+The advantage: \texttt{auto-mode-alist} keeps its existing \texttt{python-mode} entries (maintained by hundreds of packages). The remap layer transparently substitutes the tree-sitter variant. No package needs to be aware of the remap.
+
+The \texttt{bash} exclusion in this config illustrates a subtle trap: \texttt{bash-ts-mode} breaks org-mode's internal temporary \texttt{sh-mode} buffers (created during src-block fontification via \texttt{org-src-fontify-natively}). Org creates these buffers without visiting real files, so the \texttt{auto-mode-alist} path is followed but the buffer is an internal scratch that must not trigger \texttt{bash-ts-mode}'s heavier initialisation. The fix: register \texttt{bash-ts-mode} in \texttt{auto-mode-alist} for real file extensions only, and omit bash from \texttt{major-mode-remap-alist}.
+
+\section{Minor modes}\label{minor-modes}
+
+A minor mode is a function that toggles an optional behaviour in one or all buffers. Two flavours:
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule
+Flavour & Activation scope & Defined by \\
+\midrule
+\textbf{Buffer-local} & Only the current buffer & \texttt{define-minor-mode} \\
+\textbf{Global} & All buffers & \texttt{define-globalized-minor-mode} \\
+\bottomrule
+\end{longtable}
+
+\texttt{define-minor-mode} creates a variable (\texttt{<mode>-mode}) that is non-nil when active, a keymap (\texttt{<mode>-mode-map}), and an entry in \texttt{minor-mode-alist}. The mode function toggles the variable.
+
+Global minor modes use \texttt{define-globalized-minor-mode} with a predicate that decides per-buffer whether to activate. \texttt{global-flycheck-mode} for example uses \texttt{flycheck-mode-on-safe-hook} as a predicate, so it only activates in buffers where flycheck is safe.
+
+\section{The hook naming convention}\label{the-hook-naming-convention}
+
+Emacs hook variables follow rigorous naming conventions:
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+Pattern & When it fires \\
+\midrule
+\texttt{<major-mode>-hook} & After that mode fully activates \\
+\texttt{prog-mode-hook} & After any \texttt{prog-mode} derivative activates \\
+\texttt{after-change-major-mode-hook} & After \textbf{any} major mode change (includes first one) \\
+\texttt{change-major-mode-hook} & \textbf{Before} the current major mode is about to change \\
+\texttt{<feature>-mode-hook} & After a minor mode activates (minor mode specific) \\
+\texttt{find-file-hook} & After any file is visited \\
+\texttt{before-save-hook} & Before a buffer is saved \\
+\texttt{after-save-hook} & After a buffer is saved \\
+\bottomrule
+\end{longtable}
+
+The hook variable \texttt{prog-mode-hook} is particularly powerful because all derived modes (\texttt{python-mode}, \texttt{clojure-mode}, \texttt{rust-mode}, etc.) run their \textbf{parent's} hooks first. A function added to \texttt{prog-mode-hook} runs for every programming language without touching individual mode hooks:
+
+\begin{minted}{elisp}
+(add-hook 'prog-mode-hook #'display-line-numbers-mode)
+(add-hook 'prog-mode-hook #'eglot-ensure)
+\end{minted}
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+Every buffer has exactly one major mode, and that mode defines the buffer's keymap, syntax table, and hooks.  New major modes are almost always created with \texttt{define-derived-mode}, which builds a parent--child inheritance chain; \texttt{prog-mode} sits at the root for programming languages, so \texttt{prog-mode-hook} fires for every derived language mode, making it the ideal place for cross-language setup such as line numbers or LSP activation.
+
+When tree-sitter variants of modes exist, \texttt{major-mode-remap-alist} transparently substitutes them (e.g.\ \texttt{python-mode} → \texttt{python-ts-mode}) without any package needing to know about the swap.  Minor modes, by contrast, are toggled independently of the major mode; global minor modes use a predicate function to decide per-buffer activation.  Hook variables throughout the system follow strict naming conventions (\texttt{<mode>-hook}, \texttt{after-change-major-mode-hook}, \texttt{find-file-hook}, and so on), which makes them predictable to discover and use.

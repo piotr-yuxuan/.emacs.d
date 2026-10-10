@@ -1,0 +1,8 @@
+[tool.poetry]
+name = "scenario-poetry"
+version = "0.1.0"
+description = "PET Poetry fixture"
+authors = []
+
+[tool.poetry.dependencies]
+python = "^3.12"

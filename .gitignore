@@ -3,8 +3,6 @@
 /autosaves/
 /backups/
 /eln-cache/
-/elpy/
-/projectile-bookmarks.eld
 /recentf
 /straight/build-cache.el
 /straight/build/
@@ -12,3 +10,40 @@
 /tramp
 /transient/
 /tree-sitter/
+/projects
+/multisession/
+/elpa/
+/nov-places
+/share/
+/var/
+**/*.elc
+/local.el
+
+# LaTeX build artifacts
+**/*.aux
+**/*.fdb_latexmk
+**/*.fls
+**/*.log
+**/*.maf
+**/*.mtc*
+**/*.out
+**/*.pdf
+**/*.toc
+**/*.ptc*
+**/*.mlt*
+**/*.mlf*
+**/_minted/
+**/*.dtoc
+**/*.idx
+**/*.ilg
+**/*.ind
+**/*.lot
+/etc/*
+# Plan 049b ships etc/lsp/alpine-data.json (and any future LSP custom-data
+# files) under version control; the rest of /etc remains user-local.
+!/etc/lsp/
+/tmp/
+/.worktree/
+
+# Python bytecode of the test harness (tests/runner, tests/performance).
+__pycache__/

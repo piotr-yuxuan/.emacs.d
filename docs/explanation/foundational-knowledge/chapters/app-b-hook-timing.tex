@@ -1,0 +1,25 @@
+\chapter{Hook-to-timing cheat sheet}
+\label{app:hook-timing}
+\index{hook timing}\index{after-init-hook}\index{emacs-startup-hook}\index{window-setup-hook}\index{find-file-hook}
+
+\noindent
+Table~\ref{tab:hook-timing} summarises each hook's firing point and whether it contributes to \texttt{emacs-init-time}.
+
+\begin{sidewaystable}[p]
+\centering
+\caption{Hook timing reference}
+\label{tab:hook-timing}
+\begin{tabularx}{\linewidth}{@{}lXll@{}}
+\toprule
+Hook & When & In \texttt{emacs-init-time}? & In \texttt{-{}-batch}? \\
+\midrule
+(top-level forms in init.el) & During init.el eval & Yes & Yes \\
+\texttt{after-init-hook} & After init.el finishes & Yes & Yes \\
+\texttt{emacs-startup-hook} & After \texttt{after-init-hook}, after CLI args & Yes & Yes \\
+\texttt{window-setup-hook} & After frame is visible & No & \textbf{No} \\
+\texttt{run-with-idle-timer} (any) & After N seconds of idle & No & \textbf{No} \\
+\texttt{find-file-hook} & Per file open & N/A & Yes \\
+\texttt{after-change-major-mode-hook} & Per mode activation & N/A & Yes \\
+\bottomrule
+\end{tabularx}
+\end{sidewaystable}

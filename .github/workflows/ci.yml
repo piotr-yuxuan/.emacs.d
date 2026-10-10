@@ -1,0 +1,56 @@
+# Checks of the published configuration on macOS.
+#
+# Three checks block: the configuration loads in batch mode, which
+# installs the packages it declares; each installed repository sits at
+# its pin of the lock file; the static checks pass.  The two canaries
+# report without failing the run.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 120
+    env:
+      # The bootstrap installs the packages in the checkout, and the
+      # tests read them from there.
+      EMACS_LIVE_DIR: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Install Emacs from the cask
+        run: brew install --cask jimeh/emacs-builds/emacs-app
+
+      - name: Show the versions of the tools
+        run: |
+          emacs --version
+          git --version
+          python3 --version
+
+      - name: Bootstrap every package from the lock file
+        run: emacs --batch --init-directory="$GITHUB_WORKSPACE" --load early-init.el --load init.el
+
+      - name: Check that each installed repository sits at its pin
+        run: emacs --batch --load .github/check-pins.el
+
+      - name: Run the static checks
+        run: tests/run static
+
+      - name: "Canary: start a daemon"
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          emacs --init-directory="$GITHUB_WORKSPACE" --daemon=canary
+          emacsclient --socket-name=canary --eval '(if init-file-had-error (error "The init file signalled an error") (emacs-init-time))'
+          emacsclient --socket-name=canary --eval '(kill-emacs)'
+
+      - name: "Canary: run the logic tests"
+        continue-on-error: true
+        timeout-minutes: 30
+        run: EMACS_TEST_GUI=0 tests/run fast test.el

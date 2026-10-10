@@ -1,0 +1,71 @@
+mode markdown-mode
+face markdown-blockquote-face :inherit font-lock-doc-face
+face markdown-bold-face :inherit bold
+face markdown-code-face :inherit fixed-pitch
+face markdown-footnote-marker-face :inherit markdown-markup-face
+face markdown-header-delimiter-face :inherit markdown-markup-face
+face markdown-header-face-1 :inherit markdown-header-face :height 1.0
+face markdown-header-face-2 :inherit markdown-header-face :height 1.0
+face markdown-hr-face :inherit markdown-markup-face
+face markdown-inline-code-face :inherit markdown-code-face
+face markdown-italic-face :inherit italic
+face markdown-language-keyword-face :inherit font-lock-type-face
+face markdown-link-face
+face markdown-list-face :inherit markdown-markup-face
+face markdown-markup-face :inherit shadow :weight normal :slant normal
+face markdown-plain-url-face :inherit markdown-link-face
+face markdown-pre-face :inherit (markdown-code-face font-lock-constant-face)
+face markdown-table-face :inherit (markdown-code-face)
+face markdown-url-face :inherit link
+1:0 markdown-header-delimiter-face "# "
+1:2 markdown-header-face-1 "A golden fixture of Markdown"
+3:27 (markdown-markup-face) "**"
+3:29 (markdown-bold-face) "one item"
+3:37 (markdown-markup-face) "**"
+3:53 (markdown-markup-face) "_"
+3:54 (markdown-italic-face) "name"
+3:58 (markdown-markup-face) "_"
+4:5 (markdown-markup-face) "`"
+4:6 (markdown-inline-code-face) "load()"
+4:12 (markdown-markup-face) "`"
+4:20 markdown-markup-face "["
+4:21 markdown-link-face "the Python docs"
+4:36 markdown-markup-face "]("
+4:38 markdown-url-face "https://docs.python.org/3/"
+4:64 markdown-markup-face ")"
+5:0 markdown-markup-face "<"
+5:1 markdown-plain-url-face "https://example.org"
+5:20 markdown-markup-face ">"
+7:0 markdown-header-delimiter-face "## "
+7:3 markdown-header-face-2 "Usage"
+9:0 markdown-list-face "1."
+9:9 (markdown-markup-face) "`"
+9:10 (markdown-inline-code-face) "items.csv"
+9:19 (markdown-markup-face) "`"
+10:0 markdown-list-face "2."
+12:0 (markdown-code-face) "   "
+12:3 (markdown-markup-face markdown-code-face) "```"
+12:6 (markdown-language-keyword-face markdown-code-face) "sh"
+12:8 (markdown-code-face) "\n"
+13:0 (markdown-pre-face markdown-code-face) "   python3 sample.py\n"
+14:0 (markdown-markup-face markdown-code-face) "   ```"
+14:6 (markdown-code-face) "\n"
+16:0 markdown-list-face "-"
+16:16 (markdown-markup-face) "*"
+16:17 (markdown-italic-face) "emphasis"
+16:25 (markdown-markup-face) "*"
+17:0 markdown-list-face "-"
+18:0 markdown-list-face "-"
+20:0 (markdown-markup-face markdown-blockquote-face) ">"
+20:1 (markdown-blockquote-face) " A quotation, kept as is."
+22:0 (markdown-table-face) "| File      | Items |\n"
+23:0 (markdown-table-face) "|-----------|------:|\n"
+24:0 (markdown-table-face) "| items.csv |    12 |\n"
+26:0 markdown-hr-face "---"
+28:25 markdown-markup-face "[^"
+28:27 markdown-footnote-marker-face "1"
+28:28 markdown-markup-face "]"
+30:0 markdown-markup-face "[^"
+30:2 markdown-footnote-marker-face "1"
+30:3 markdown-markup-face "]:"
+30:6 markdown-url-face "The footnote."

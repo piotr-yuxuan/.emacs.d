@@ -1,0 +1,535 @@
+\chapter{Profiling and diagnostic commands}
+\label{ch:profiling}
+\minitoc\label{profiling-and-diagnostic-commands}
+\index{profiling}\index{emacs-init-time}\index{benchmark-init}\index{esup}\index{CPU profiler}
+
+% ── Opening signpost ──────────────────────────────────────────────
+The previous chapters explained \emph{what} to tune; this one
+explains \emph{how} to measure.  When something is slow, you need
+numbers, not guesses.  This chapter
+is a reference catalogue of every profiling technique available for
+Emacs, from simple wall-clock shell measurements through
+per-\texttt{require} timing advice to the built-in CPU sampler.  Each
+technique targets a different layer of the performance stack; together
+they let you pinpoint any bottleneck to a single function call.
+This chapter assumes familiarity with Chapter~\ref{ch:startup-lifecycle}.
+
+\section{The benchmark command (external timing)}\label{the-benchmark-command-external-timing}
+
+The most reliable startup measurement uses wall-clock time from the shell, because it includes framework initialisation that Emacs's own timers miss:
+
+\begin{minted}{bash}
+EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs
+start=$(gdate +%s.%N)        # gdate from coreutils on macOS
+gtimeout 15 "$EMACS" --eval "(kill-emacs)" >/dev/null 2>&1
+end=$(gdate +%s.%N)
+awk "BEGIN {printf \"%.3f\n\", $end - $start}"
+\end{minted}
+
+Always use \texttt{gtimeout} to prevent a hung Emacs from blocking indefinitely. Run 5--7 times and take the median (discard obvious outliers from disk cache misses on the first run).
+
+\section{\texttt{emacs-init-time}}\label{emacs-init-time}
+
+From inside a running Emacs:
+
+\begin{minted}{elisp}
+(emacs-init-time)  ;; → "0.623 seconds"
+\end{minted}
+
+This measures the time between the start of Emacs and the end of \texttt{emacs-startup-hook}. It does \textbf{not} include \texttt{window-setup-hook} or idle timers.
+
+\section{\texttt{benchmark-init}}\label{benchmark-init}
+
+A package that wraps \texttt{require} and \texttt{load} to record per-package timing. Gate it behind an environment variable to avoid its own overhead in normal use:
+
+\begin{minted}{elisp}
+(use-package benchmark-init
+  :if (getenv "EMACS_BENCHMARK")
+  :init (benchmark-init/activate)
+  :config (add-hook 'after-init-hook 'benchmark-init/deactivate))
+\end{minted}
+
+Then: \texttt{EMACS\_BENCHMARK=1 emacs}, and after startup: \texttt{M-x benchmark-init/show-durations-tree}.
+
+\section{\texttt{esup} (Emacs Start Up Profiler)}\label{esup-emacs-start-up-profiler}
+
+Profiles \texttt{init.el} form-by-form by launching a child Emacs:
+
+\begin{minted}{elisp}
+(use-package esup
+  :custom (esup-depth 0))  ;; depth 0 avoids a common hang bug
+\end{minted}
+
+\texttt{M-x esup} shows each top-level form with its elapsed time. Limitation: it profiles init.el forms, not individual \texttt{require} calls inside packages. It also does not profile \texttt{early-init.el}.
+
+\section{Wrapping \texttt{require} / \texttt{load} with timing advice}\label{wrapping-require-load-with-timing-advice}
+
+The most powerful technique for finding hidden costs. This advice records the elapsed time for every \texttt{require} that actually loads a new feature:
+
+\begin{minted}{elisp}
+(defvar my/require-times nil "Alist of (feature . elapsed-ms).")
+
+(defun my/require-timing-advice (orig-fn feature &rest args)
+  "Time every `require' that actually loads something."
+  (if (featurep feature)
+      (apply orig-fn feature args)
+    (let* ((start (current-time))
+           (result (apply orig-fn feature args))
+           (elapsed (* 1000 (float-time
+                             (time-subtract (current-time) start)))))
+      (when (> elapsed 1.0)
+        (push (cons feature elapsed) my/require-times))
+      result)))
+
+(advice-add 'require :around #'my/require-timing-advice)
+
+;; After startup, inspect:
+;; (sort my/require-times (lambda (a b) (> (cdr a) (cdr b))))
+\end{minted}
+
+Load this with \texttt{-l /path/to/profiler.el} \textbf{before} init.el (the \texttt{-l} flag processes before \texttt{init.el}). Important: use \texttt{kill-emacs-hook} or \texttt{emacs-startup-hook} with a high priority (the second arg to \texttt{add-hook}) to dump results, because \texttt{-\/-eval "(kill-emacs)"} runs before hooks.
+
+\subsection{Variant A: write results to a file via \texttt{emacs-startup-hook}}\label{variant-a-write-results-to-a-file-via-emacs-startup-hook}
+
+\begin{expertdepth}
+The inline advice snippet above relies on capturing stdout. A more robust approach writes a sorted table to a file and then kills Emacs. Save as \texttt{/tmp/profile-quick3.el}:
+
+\begin{minted}{elisp}
+;;; profile-quick3.el -*- lexical-binding: t; -*-
+(defvar my/req-times nil)
+
+(defun my/req-adv (orig feature &rest args)
+  "Record require time for features not already loaded."
+  (if (featurep feature) (apply orig feature args)
+    (let* ((s (current-time))
+           (r (apply orig feature args))
+           (e (* 1000 (float-time (time-subtract (current-time) s)))))
+      (when (> e 1.0) (push (cons feature e) my/req-times))
+      r)))
+
+(advice-add 'require :around #'my/req-adv)
+
+(add-hook 'emacs-startup-hook
+  (lambda ()
+    (advice-remove 'require #'my/req-adv)
+    (with-temp-file "/tmp/req-profile-out.txt"
+      (let ((sorted (sort (copy-sequence my/req-times)
+                          (lambda (a b) (> (cdr a) (cdr b))))))
+        (dolist (r (seq-take sorted 30))
+          (insert (format "%7.1fms  %s\n" (cdr r) (car r))))))
+    (kill-emacs))
+  99)   ;; priority 99 = run after all other startup hooks
+\end{minted}
+
+The priority \texttt{99} ensures the cleanup lambda runs \textbf{last}, so the advice stays in place long enough to capture every package \texttt{require}.
+
+\begin{minted}{bash}
+EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs
+gtimeout 15 "$EMACS" -l /tmp/profile-quick3.el >/dev/null 2>&1
+cat /tmp/req-profile-out.txt
+\end{minted}
+
+\end{expertdepth}
+
+\subsection{Variant B: write results to a file via \texttt{kill-emacs-hook}}\label{variant-b-write-results-to-a-file-via-kill-emacs-hook}
+
+\begin{expertdepth}
+When Emacs is terminated by \texttt{-\/-eval "(kill-emacs)"}, the order is: \texttt{emacs-startup-hook} fires, then \texttt{kill-emacs-hook} fires, so Variant A captures everything. For defensive scripting (e.g., if the process is killed before hooks complete), use \texttt{kill-emacs-hook} with \texttt{write-region}:
+
+\begin{minted}{elisp}
+;;; prof-v4.el -*- lexical-binding: t; -*-
+(defvar my/req-times nil)
+
+(defun my/req-adv (orig feature &rest args)
+  (if (featurep feature) (apply orig feature args)
+    (let* ((s (current-time))
+           (r (apply orig feature args))
+           (e (* 1000 (float-time (time-subtract (current-time) s)))))
+      (when (> e 1.0) (push (cons feature e) my/req-times))
+      r)))
+
+(advice-add 'require :around #'my/req-adv)
+
+(add-hook 'kill-emacs-hook
+  (lambda ()
+    (let ((buf (generate-new-buffer " *prof*")))
+      (with-current-buffer buf
+        (let ((sorted (sort (copy-sequence my/req-times)
+                            (lambda (a b) (> (cdr a) (cdr b))))))
+          (dolist (r (seq-take sorted 30))
+            (insert (format "%7.1fms  %s\n" (cdr r) (car r)))))
+        (write-region (point-min) (point-max)
+                      "/tmp/req-prof-v4.txt" nil 'silent)))))
+\end{minted}
+
+Two details: \texttt{generate-new-buffer} (not \texttt{with-temp-buffer}) avoids a race where \texttt{with-temp-buffer} disposes the buffer before \texttt{write-region} completes; the \texttt{'silent} fifth argument to \texttt{write-region} suppresses the "Wrote /tmp/\ldots" echo-area message.
+
+\begin{minted}{bash}
+EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs
+rm -f /tmp/req-prof-v4.txt
+gtimeout 15 "$EMACS" -l /tmp/prof-v4.el --eval "(kill-emacs)" >/dev/null 2>&1
+cat /tmp/req-prof-v4.txt
+\end{minted}
+
+\end{expertdepth}
+
+\subsection{Variant C: inline \texttt{-\/-batch} one-liner}\label{variant-c-inline---batch-one-liner}
+
+\begin{expertdepth}
+For quick spot-checks when you don't want a temp file. Lacks the \texttt{featurep} guard so double-\texttt{require} calls are double-counted; use Variants A or B for accurate totals.
+
+\begin{minted}{bash}
+/Applications/Emacs.app/Contents/MacOS/Emacs --batch --eval '
+(progn
+  (defvar my-require-times nil)
+  (defun my-require-advice (orig feature &rest args)
+    (let ((start (float-time)))
+      (apply orig feature args)
+      (let ((elapsed (- (float-time) start)))
+        (when (> elapsed 0.01)
+          (push (cons feature elapsed) my-require-times)))))
+  (advice-add (quote require) :around (quote my-require-advice))
+  (load (expand-file-name "~/.emacs.d/early-init.el") nil t)
+  (load (expand-file-name "~/.emacs.d/init.el") nil t)
+  (setq my-require-times
+        (sort my-require-times (lambda (a b) (> (cdr a) (cdr b)))))
+  (dolist (entry (seq-take my-require-times 25))
+    (princ (format "%8.3fs  %s\n" (cdr entry) (car entry)))))' 2>&1 | head -30
+\end{minted}
+
+\end{expertdepth}
+
+\section{Tracing who loads what}\label{tracing-who-loads-what}
+
+When you know a library is expensive (e.g., \texttt{dbus} at 17 ms), but don't know \textbf{who} requires it:
+
+\begin{minted}{elisp}
+(defvar my/trace-targets '(dbus tree-widget))
+(defvar my/trace-results nil)
+
+(defun my/trace-load-advice (orig-fn file &rest args)
+  (let* ((basename (file-name-sans-extension
+                    (file-name-nondirectory (if (stringp file) file ""))))
+         (sym (intern basename)))
+    (when (memq sym my/trace-targets)
+      (push (cons sym (or load-file-name "top-level"))
+            my/trace-results)))
+  (apply orig-fn file args))
+
+(advice-add 'load :around #'my/trace-load-advice)
+\end{minted}
+
+After startup, \texttt{my/trace-results} contains entries like: \texttt{(dbus . "/path/to/auto-dark.elc")}.
+
+\section{\texttt{-\/-batch} mode for isolation}\label{batch-mode-for-isolation}
+
+\texttt{emacs -\/-batch} skips all GUI initialisation. Useful for testing whether a slowdown is GUI-related:
+
+\begin{minted}{bash}
+gtimeout 15 emacs --batch -l ~/.emacs.d/early-init.el \
+  -l ~/.emacs.d/init.el --eval "(kill-emacs)"
+\end{minted}
+
+If \texttt{-\/-batch} is fast but GUI is slow, the bottleneck is frame creation, font rendering, or a \texttt{window-setup-hook} function.
+
+\subsection{Isolating file-open cost: nil all hooks, add back cumulatively}\label{isolating-file-open-cost-nil-all-hooks-add-back-cumulatively}
+
+The most systematic approach to finding a slow hook: nil every relevant hook variable before the file open, verify the baseline is fast, then add hooks back one subset at a time.
+
+\begin{minted}{bash}
+timeout 60 /Applications/Emacs.app/Contents/MacOS/Emacs --batch \
+  -l ~/.emacs.d/early-init.el -l ~/.emacs.d/init.el --eval '
+(progn
+  (setq org-mode-hook                  nil
+        text-mode-hook                 nil
+        outline-mode-hook              nil
+        prog-mode-hook                 nil
+        after-change-major-mode-hook   nil
+        find-file-hook                 nil)
+  (message "start: %s" (float-time))
+  (find-file-noselect "~/Documents/todo/todo.org")
+  (message "end: %s" (float-time)))' 2>&1 | grep -E '(start:|end:)'
+\end{minted}
+
+Compute \texttt{(end - start)} by hand. This is your true baseline: the cost of loading the file with zero hook overhead. Then add hooks back in groups:
+
+\begin{minted}{bash}
+timeout 15 emacsclient -e '
+(progn
+  (add-hook (quote after-change-major-mode-hook)
+            (quote global-eldoc-mode-enable-in-buffer))
+  (add-hook (quote after-change-major-mode-hook)
+            (quote global-corfu-mode-enable-in-buffer))
+  (add-hook (quote after-change-major-mode-hook)
+            (quote global-jinx-mode-enable-in-buffer))
+  (add-hook (quote after-change-major-mode-hook)
+            (quote global-flycheck-mode-enable-in-buffer))
+  (let ((start (float-time)))
+    (find-file-noselect "/tmp/tiny-test.txt")
+    (let ((elapsed (- (float-time) start)))
+      (kill-buffer)
+      (cons "eldoc+corfu+jinx+flycheck" elapsed))))' 2>&1
+\end{minted}
+
+The delta from the baseline is the cost of those four hooks combined. Repeat with different subsets (binary search) to isolate the expensive one. Within 4--5 iterations you will have it.
+
+\section{\texttt{find-file-literally} for isolation}\label{find-file-literally-for-isolation}
+
+If opening a specific file is slow, \texttt{find-file-literally} bypasses coding-system detection, \texttt{normal-mode}, and all mode hooks. If this is fast, the problem is in your modes/hooks, not in file I/O:
+
+\begin{minted}{elisp}
+(find-file-literally "/path/to/slow-file.org")
+\end{minted}
+
+\texttt{(info "(emacs) Visiting")}
+
+\section{\texttt{(setq debug-on-quit t)}: why not to leave it on}\label{setq-debug-on-quit-t-why-not-to-leave-it-on}
+
+Setting \texttt{debug-on-quit} to \texttt{t} makes \texttt{C-g} drop you into the debugger, which is invaluable for finding where Emacs is stuck: press \texttt{C-g} while it's hung and read the backtrace.
+
+But \textbf{leaving it on permanently} is expensive: Emacs wraps every function call in a \texttt{condition-case} handler for the \texttt{quit} signal. This overhead is measurable on large file opens; we measured \(\sim\)2× slowdown on a 35,000-line org file. Use it as a diagnostic tool, then turn it off:
+
+\begin{minted}{elisp}
+;; Temporarily enable for debugging:
+(setq debug-on-quit t)
+;; ... reproduce the hang, read the backtrace ...
+(setq debug-on-quit nil)
+\end{minted}
+
+\section{Built-in CPU profiler}\label{built-in-cpu-profiler}
+
+The built-in CPU profiler samples the call stack at regular intervals. Unlike \texttt{require} timing, it reveals costs \textbf{inside} functions, e.g., that \texttt{font-lock-ensure} dominates a file-open, or that a C-level primitive is unexpectedly hot. \texttt{(info "(elisp) Profiling")}
+
+\subsection{From a running Emacs via emacsclient}\label{from-a-running-emacs-via-emacsclient}
+
+Profile the cost of opening a file in your live session:
+
+\begin{minted}{bash}
+timeout 15 emacsclient -e '
+(progn
+  (profiler-start (quote cpu))
+  (with-current-buffer (find-file-noselect "/tmp/test-prof-a.txt")
+    (kill-buffer))
+  (profiler-stop)
+  (with-current-buffer (profiler-report-cpu)
+    (profiler-report-render-calltree)
+    (goto-char (point-min))
+    (let ((lines nil) (n 0))
+      (while (and (not (eobp)) (< n 30))
+        (push (buffer-substring (line-beginning-position)
+                                (line-end-position)) lines)
+        (forward-line 1)
+        (setq n (1+ n)))
+      (reverse lines))))' 2>&1
+\end{minted}
+
+Look for functions consuming >5\% that you would not expect during a simple file open. Use \texttt{M-x profiler-report} interactively to expand individual tree nodes.
+
+\subsection{From \texttt{-\/-batch} for whole-startup profiling}\label{from---batch-for-whole-startup-profiling}
+
+Profile the cost of opening a large org file under a clean startup:
+
+\begin{minted}{bash}
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+timeout 60 /Applications/Emacs.app/Contents/MacOS/Emacs --batch \
+  -l ~/.emacs.d/early-init.el -l ~/.emacs.d/init.el --eval '
+(progn
+  (profiler-start (quote cpu))
+  (find-file-noselect "~/Documents/todo/todo.org")
+  (profiler-stop)
+  (profiler-report)
+  (with-current-buffer "*Profiler Report CPU*"
+    (let ((inhibit-read-only t))
+      (profiler-report-render-calltree)
+      (goto-char (point-min))
+      (dotimes (_ 40)
+        (ignore-errors (profiler-report-toggle-entry))
+        (forward-line 1))
+      (message "%s"
+               (buffer-substring (point-min)
+                                  (min (point-max) 3000))))))' \
+  2>&1 | grep -v '^[[:space:]]*$' | tail -40
+\end{minted}
+
+\texttt{profiler-report-toggle-entry} expands one collapsed node; calling it 40 times unrolls enough levels to see specific function names. \texttt{tail -40} discards the shallow summary and shows the deepest hot paths.
+
+\section{Timing individual mode-hook functions}\label{timing-individual-mode-hook-functions}
+
+When the CPU profiler shows many small contributors spread across mode hooks, you need per-function wall-clock timing. This emacsclient block calls each global-mode enable function in an isolated temp buffer and records its elapsed time:
+
+\begin{minted}{bash}
+timeout 15 emacsclient -e '
+(let ((results nil))
+  (dolist (fn-pair
+           (list
+            (cons "global-git-gutter-mode"
+                  (lambda () (global-git-gutter-mode-enable-in-buffer)))
+            (cons "global-flycheck-mode"
+                  (lambda () (global-flycheck-mode-enable-in-buffer)))
+            (cons "global-jinx-mode"
+                  (lambda () (global-jinx-mode-enable-in-buffer)))
+            (cons "global-treesit-auto-mode"
+                  (lambda () (global-treesit-auto-mode-enable-in-buffer)))
+            (cons "global-corfu-mode"
+                  (lambda () (global-corfu-mode-enable-in-buffer)))
+            (cons "global-eldoc-mode"
+                  (lambda () (global-eldoc-mode-enable-in-buffer)))
+            (cons "doom-modeline-auto-set-modeline"
+                  (lambda () (doom-modeline-auto-set-modeline)))))
+    (with-temp-buffer
+      (fundamental-mode)
+      (let ((start (float-time)))
+        (ignore-errors (funcall (cdr fn-pair)))
+        (push (cons (car fn-pair)
+                    (- (float-time) start)) results))))
+  (sort (reverse results) (lambda (a b) (> (cdr a) (cdr b)))))' 2>&1
+\end{minted}
+
+Each function runs in its own \texttt{with-temp-buffer} at \texttt{fundamental-mode} to prevent cross-contamination. \texttt{ignore-errors} ensures one broken function does not abort the whole measurement. Adapt the list for your config: \texttt{-enable-in-buffer} is the standard suffix for per-buffer enable functions registered by \texttt{define-global-minor-mode}.
+
+\subsection{Testing in a real file-visiting buffer}\label{testing-in-a-real-file-visiting-buffer}
+
+Some hook functions behave differently when \texttt{buffer-file-name} is set (e.g., \texttt{vc-refresh-state}, \texttt{epa-file-find-file-hook}). Create a file-visiting buffer \textbf{without} triggering \texttt{normal-mode}, then activate the mode manually:
+
+\begin{minted}{bash}
+timeout 15 emacsclient -e '
+(progn
+  ;; Suppress normal-mode so no hooks fire on find-file-noselect:
+  (advice-add (quote normal-mode)
+              :override (lambda (&rest _) nil))
+  (find-file-noselect "/tmp/test-realfile.txt")
+  (advice-remove (quote normal-mode)
+                 (lambda (&rest _) nil))
+  ;; Now activate a mode in the file-visiting buffer and time it:
+  (with-current-buffer "test-realfile.txt"
+    (let ((start (float-time)))
+      (text-mode)
+      (prog1 (cons "text-mode-real-file" (- (float-time) start))
+        (kill-buffer)))))' 2>&1
+\end{minted}
+
+The \texttt{:override} advice replaces \texttt{normal-mode} entirely for the duration of \texttt{find-file-noselect}, then is removed. The resulting buffer has \texttt{buffer-file-name} set correctly but no mode hooks have fired, leaving a clean slate for isolated measurement of any mode.
+
+\section{Per-function org-mode hook profiling}\label{per-function-org-mode-hook-profiling}
+
+\begin{expertdepth}
+When the slow path is inside org-mode's own activation sequence, wrap each function org calls during startup with timing advice. Save as \texttt{/tmp/profile-org.el}:
+
+\begin{minted}{elisp}
+;;; profile-org.el -*- lexical-binding: t; -*-
+(defvar my/timing-results nil)
+
+(dolist (fn '(org-set-regexps-and-options
+              org-fold-initialize
+              org-cycle-set-startup-visibility
+              org-element-cache-reset
+              org-macro-initialize-templates
+              org-babel-hide-all-hashes
+              org-update-radio-target-regexp
+              font-lock-ensure
+              vc-refresh-state
+              flycheck-mode
+              jinx-mode
+              git-gutter-mode
+              org-modern-mode
+              svg-tag-mode
+              org-appear-mode
+              toc-org-enable
+              breadcrumb-local-mode))
+  (when (fboundp fn)
+    (let ((fn-name (symbol-name fn)))
+      (advice-add fn :around
+        `(lambda (orig &rest args)
+           (let ((start (float-time)))
+             (apply orig args)
+             (push (cons ,fn-name (- (float-time) start))
+                   my/timing-results)))))))
+
+(let ((start (float-time)))
+  (find-file-noselect "~/Documents/todo/todo.org")
+  (message "TOTAL file open: %.3fs" (- (float-time) start)))
+
+(dolist (r (sort (copy-sequence my/timing-results)
+                 (lambda (a b) (> (cdr a) (cdr b)))))
+  (message "  %-45s %8.3fs" (car r) (cdr r)))
+\end{minted}
+
+The backtick/comma in \texttt{\textasciigrave{}(lambda ... ,fn-name ...)} is essential: it captures the \textbf{value} of \texttt{fn-name} at the moment each advice is added. Without it, all lambdas close over the same binding and would all report the last \texttt{fn-name} from the \texttt{dolist}.
+
+\begin{minted}{bash}
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+timeout 60 /Applications/Emacs.app/Contents/MacOS/Emacs --batch \
+  -l ~/.emacs.d/early-init.el -l ~/.emacs.d/init.el \
+  -l /tmp/profile-org.el 2>&1 | grep -E '(TOTAL|[0-9]+\.[0-9]+s)'
+\end{minted}
+
+The \texttt{-l /tmp/profile-org.el} flag is processed after the user init files, but the top-level \texttt{dolist} runs immediately, so the advice is already in place when the \texttt{find-file-noselect} at the bottom triggers org-mode. Extend the \texttt{dolist} with any function you saw in the hook dump from Step 3 of the diagnostic playbook.
+
+\end{expertdepth}
+
+\section{Form-by-form \texttt{init.el} timing}\label{form-by-form-init.el-timing}
+
+\texttt{esup} (Section~\ref{esup-emacs-start-up-profiler}) launches a child Emacs. As a lighter alternative, read \texttt{user-init-file} in-process and eval each form, recording per-form wall-clock time:
+
+\begin{minted}{bash}
+gtimeout 15 /Applications/Emacs.app/Contents/MacOS/Emacs --eval '
+(progn
+  (with-temp-buffer
+    (insert-file-contents user-init-file)
+    (goto-char (point-min))
+    (let ((results nil))
+      (while (< (point) (point-max))
+        (let* ((start-pos (point))
+               (form (read (current-buffer)))
+               (eval-start (current-time))
+               (_ (condition-case nil (eval form t) (error nil)))
+               (elapsed (float-time
+                          (time-subtract (current-time) eval-start))))
+          (when (> elapsed 0.01)
+            (push (format "%.3fs  L%-4d  %.80s"
+                          elapsed
+                          start-pos
+                          (replace-regexp-in-string
+                           "\n" " " (format "%S" form)))
+                  results))))
+      (setq results (sort results #'string>))
+      (dolist (r (seq-take results 25))
+        (message "%s" r))))
+  (kill-emacs))' 2>&1 | grep -E '^[0-9]'
+\end{minted}
+
+Output: \texttt{0.047s  L892   (use-package magit ...)}. The \texttt{L<n>} is a \textbf{byte offset} into the file, not a line number; use \texttt{(goto-char N)} to navigate directly to it.
+
+\textbf{Caveat:} This runs inside a fully bootstrapped Emacs evaluating \texttt{user-init-file} a \textbf{second} time. All \texttt{featurep} checks return \texttt{t}, making \texttt{use-package} declarations appear near-zero. Most useful for detecting forms that do non-package work: file I/O, \texttt{shell-command} calls, spawning subprocesses, or large list operations.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+Wall-clock shell timing is the most reliable way to measure startup;
+always wrap the invocation with \texttt{timeout} so a hang does not
+stall the benchmark forever.  Keep in mind that
+\texttt{emacs-init-time} only measures up to \texttt{emacs-startup-hook}
+and therefore misses any work deferred to \texttt{window-setup-hook} or
+idle timers.  For finer granularity, per-\texttt{require} timing advice
+reveals which libraries are expensive to load; gate it with
+\texttt{featurep} to avoid double-counting, and inspecting
+\texttt{load-file-name} inside that advice identifies \emph{who} caused
+each load.
+
+When the cost lies inside a function rather than at load time, the
+built-in CPU profiler (\texttt{profiler-start}/\texttt{profiler-stop})
+samples the call stack and pinpoints hot paths.  Timing individual hook
+functions in isolated \texttt{with-temp-buffer} calls prevents
+cross-contamination between measurements, and opening files with
+\texttt{find-file-literally} bypasses all mode processing, cleanly
+separating I/O cost from hook cost.  \texttt{debug-on-quit} is
+invaluable for finding hangs, but it roughly doubles function-call
+overhead, so never leave it enabled permanently.
+
+For diffuse bottlenecks spread across many packages, binary-bisecting
+\texttt{init.el}, loading truncated slices, narrows the problem to a
+\(\sim\)50-line window in just a few rounds.  Whatever technique you
+choose, always run at least five iterations, take the median, and
+compare before and after; improvements within \(\pm\)3\,ms are
+indistinguishable from noise.
+Chapter~\ref{ch:diagnostic-playbook} distils these techniques into a
+step-by-step troubleshooting workflow.

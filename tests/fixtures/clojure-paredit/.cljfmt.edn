@@ -1,0 +1,23 @@
+;; cljfmt configuration for the clojure-paredit fixture.
+;;
+;; Plan 062b's expected-output drift caveat (see
+;; docs/work/changelog/062b-clojure-deferred-slices.org) was about
+;; the fixture inheriting a user-side cljfmt config; pinning the
+;; configuration here side-steps that risk and lets the L3
+;; format-buffer scenarios assert a single deterministic shape.
+;;
+;; cljfmt is conservative by default: it leaves multi-space gaps
+;; between symbols (`(defn  weird-spacing', `( *   x    x)') alone
+;; because collapsing them is treated as too aggressive for the
+;; default profile.  The L3 scenario in
+;; `tests/scenarios/l3-batch-clojure-lsp-format.el' wants the
+;; aggressive shape so the post-format buffer is fully canonical
+;; (no internal whitespace residue), which matches the user's
+;; on-keystroke expectation for `C-c l = ='.  Enabling
+;; :remove-multiple-non-indenting-spaces? gives that.
+;;
+;; clojure-lsp picks this file up via its `:cljfmt-config-path'
+;; setting (default `.cljfmt.edn').  The file is intentionally
+;; tracked (the fixture's `.gitignore' does not list `.cljfmt.edn')
+;; so a fresh clone reproduces the same format-buffer outcome.
+{:remove-multiple-non-indenting-spaces? true}

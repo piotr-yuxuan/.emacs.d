@@ -1,0 +1,133 @@
+\chapter{\texttt{straight.el}: building, locking, and bypassing packages}
+\label{ch:straight}
+\minitoc\label{straight.el-building-locking-and-bypassing-packages}
+\index{straight.el}\index{straight-freeze-versions}\index{lockfile}\index{package management}
+
+% ── Opening signpost ──────────────────────────────────────────────
+\texttt{straight.el} replaces \texttt{package.el} with a
+clone-build-activate pipeline that makes every package's source
+available on disk.  This chapter covers the pipeline mechanics,
+the lockfile system, recipe format, autoload caching, and
+modification-detection strategies.  Understanding these internals
+lets you debug build failures and keep startup fast.
+This chapter assumes familiarity with Chapter~\ref{ch:use-package};
+the lockfile and recipe concepts introduced here reappear in the
+idioms chapter (Chapter~\ref{ch:configuration-idioms}).
+
+\section{The clone-build-activate pipeline}\label{the-clone-build-activate-pipeline}
+
+\texttt{straight.el} replaces \texttt{package.el}'s download-and-activate model with a three-step pipeline applied to every package:
+
+\begin{enumerate}
+\item \textbf{Clone}: fetch the source from a Git remote into
+  \texttt{\~{}/.emacs.d/\allowbreak straight/\allowbreak repos/\allowbreak <package>/}.
+  The lockfile (\texttt{straight/\allowbreak versions/\allowbreak default.el}) records commit
+  SHAs, ensuring reproducible installs.
+\item \textbf{Build}: byte-compile the source and generate an autoload
+  file; outputs go to
+  \texttt{\~{}/.emacs.d/\allowbreak straight/\allowbreak build/\allowbreak <package>/}.
+  Unlike \texttt{package.el}, straight rebuilds only when the source
+  changes (via mtime comparison).
+\item \textbf{Activate}: add the build directory to \texttt{load-path}
+  and load the generated autoloads.
+\end{enumerate}
+
+This means every package is always available as source on disk, so you can edit a package's source directly and \texttt{straight-rebuild-package} to test the change. This is impossible with the \texttt{package.el} model (installed packages are byte-compiled tarballs).
+
+\section{The lockfile and \texttt{straight-freeze-versions}}\label{the-lockfile-and-straight-freeze-versions}
+
+Running \texttt{M-x straight-freeze-versions} writes the current commit SHA of every cloned package to \texttt{$\sim$/.emacs.d/straight/versions/default.el}. Committing this file makes your entire package state reproducible: on a new machine, \texttt{straight-thaw-versions} checks out the exact commits recorded.
+
+The config exempts this file from its \texttt{.gitignore} specifically so it can be versioned:
+
+\begin{minted}{text}
+# .gitignore (excerpt)
+straight/repos/
+straight/build/
+# straight/versions/default.el   ← intentionally NOT ignored
+\end{minted}
+
+\section{\texttt{:straight nil}: bypassing straight for built-ins}\label{straight-nil-bypassing-straight-for-built-ins}
+
+Not every \texttt{use-package} declaration installs a package from a remote. Built-in packages (\texttt{project}, \texttt{eglot}, \texttt{flymake}, \texttt{treesit}) should not be cloned because they ship with Emacs. \texttt{:straight nil} tells straight to skip the clone-build step and just configure the package:
+
+\begin{minted}{elisp}
+(use-package project
+  :straight nil          ; built into Emacs, do not clone
+  :bind-keymap ("s-p" . project-prefix-map))
+\end{minted}
+
+Without \texttt{:straight nil}, straight would attempt to find a recipe for \texttt{project} on MELPA and clone it, potentially shadowing the built-in version.
+
+\section{Git recipe format}\label{git-recipe-format}
+
+For packages not yet on MELPA or requiring a specific fork, straight accepts inline git recipes:
+
+\begin{minted}{elisp}
+(use-package treesit-fold
+  :straight (treesit-fold :type git
+                          :host github
+                          :repo "emacs-tree-sitter/treesit-fold"))
+
+(use-package eglot-x
+  :straight (eglot-x :type git
+                     :host github
+                     :repo "nemethf/eglot-x"))
+\end{minted}
+
+The recipe overrides whatever MELPA has (or provides a source when MELPA has none). \texttt{:host} can be \texttt{github}, \texttt{gitlab}, or \texttt{codeberg}; \texttt{:repo} is \texttt{<owner>/<name>}. An optional \texttt{:branch} key selects a non-default branch.
+
+\section{\texttt{straight-cache-autoloads} and startup cost}\label{straight-cache-autoloads-and-startup-cost}
+
+By default, straight generates a \textbf{separate} autoload file per package and loads them one by one during \texttt{straight-use-package} calls. With \texttt{straight-cache-autoloads t} (or the equivalent bootstrap option), all autoloads are merged into a single file that is loaded in one \texttt{load} call. The difference can be 30--100 ms on a cold start with many packages.
+
+The bootstrap snippet in this config sets this during the bootstrap phase so it takes effect before any package is added:
+
+\begin{minted}{elisp}
+;; In the straight.el bootstrap block (near top of init.el):
+(setq straight-cache-autoloads t)
+\end{minted}
+
+\section{\texttt{straight-check-for-modifications}: modification detection strategies}\label{straight-check-for-modifications-modification-detection-strategies}
+
+This variable controls how straight decides whether a package needs rebuilding. It must be set \textbf{before the bootstrap snippet}:
+
+\begin{minted}{elisp}
+;; Must appear before the bootstrap let-block:
+(setq straight-check-for-modifications '(find-when-checking check-on-save))
+\end{minted}
+
+The four strategies and their trade-offs are compared in Table~\ref{tab:straight-check-strategies}.
+
+\begin{sidewaystable}[p]
+\centering
+\caption{Modification check strategies}
+\label{tab:straight-check-strategies}
+\begin{tabularx}{\linewidth}{@{}llX@{}}
+\toprule
+Strategy & When it checks & Cost \\
+\midrule
+\texttt{watch-files} & Continuously via inotify (Linux) / kqueue (macOS) & One FD per repo dir; can exhaust OS limits with 200+ pkgs \\
+\texttt{find-when-checking} & On demand when straight explicitly checks a package & Zero at startup; spawns \texttt{find} on check \\
+\texttt{check-on-save} & When any \texttt{.el} file is saved (advises \texttt{save-buffer}) & Zero; one lightweight \texttt{advice-add} at startup \\
+\texttt{never} & Never & Zero; requires manual \texttt{straight-rebuild-package} \\
+\bottomrule
+\end{tabularx}
+\end{sidewaystable}
+
+The pair \texttt{'(find-when-checking check-on-save)} provides automatic detection from saves plus on-demand scanning, with zero continuous I/O overhead.
+
+\subsection{What happens when no strategy detects a modification}\label{what-happens-when-no-strategy-detects-a-modification}
+
+If straight does not know that a \texttt{.el} file has changed, the stale \texttt{.elc} is loaded silently on the next startup. Force a rebuild explicitly:
+
+\begin{minted}{elisp}
+(straight-rebuild-package "package-name")  ;; single package
+(straight-rebuild-all)                     ;; all packages (slow)
+\end{minted}
+
+% ── Mental model summary ────────────────────────────────────────────
+\section{Mental model}
+straight.el operates a three-step pipeline for every package: it clones the repository, builds it (byte-compiling and generating autoloads), and then activates it by adding the build directory to \texttt{load-path}.  The lockfile at \texttt{straight/versions/default.el} records exact commit SHAs, so committing it to version control gives fully reproducible installs across machines.
+
+When declaring a built-in package, \texttt{:straight nil} tells straight to skip cloning entirely; without this flag, straight may shadow the bundled version with a stale or different copy.  For forks or packages not registered on MELPA, inline git recipes in the \texttt{use-package} declaration override the default recipe.  Performance-wise, \texttt{straight-cache-autoloads t} merges all package autoloads into a single file, saving 30--100\,ms on cold starts.  The modification-checking strategy \texttt{(find-when-checking check-on-save)} provides automatic rebuild detection from saves and on-demand scanning, with zero continuous I/O overhead.  \(\rightarrow\) See Appendix~\ref{app:straight-internals} for the build-graph resolution algorithm.

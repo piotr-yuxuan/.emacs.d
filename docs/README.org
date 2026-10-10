@@ -1,0 +1,64 @@
+#+TITLE: Documentation
+#+OPTIONS: toc:nil num:nil
+
+The documentation follows [[https://diataxis.fr/][Diataxis]]: four kinds of document, each
+for one need.  Pick the kind that matches what you are doing, then the
+document.  The configuration itself, with the reference and the
+explanation of each of its blocks, is [[file:../README.org][README.org]] at the root of the
+repository.
+
+| Kind        | Read it when you want to                   | Directory      |
+|-------------+--------------------------------------------+----------------|
+| Tutorial    | learn, by doing a guided lesson            | =tutorials/=   |
+| How-to      | get a task done, and know what the task is | =how-to/=      |
+| Reference   | look up a fact: a key, a command, a name   | =reference/=   |
+| Explanation | understand why it is built this way        | =explanation/= |
+
+* Tutorials
+
+- [[file:tutorials/getting-started.org][Getting started]]: install the configuration on NixOS or macOS, start
+  it, run the tests.
+- [[file:tutorials/first-day.org][A first day with this configuration]]: files, search, windows, git
+  and tasks on a practice project.
+
+* How-to guides
+
+- [[file:how-to/files-with-dirvish.org][Work with files in Dirvish]]: open, move, rename, copy and delete
+  files.
+- [[file:how-to/wide-tables.org][Read a table wider than the window]], in Org or Markdown.
+- [[file:how-to/terminals.org][Use a terminal inside Emacs]]: eat, mistty and gterm.
+- [[file:how-to/shell-prompt.org][Set up a shell prompt readable in every terminal]], with Starship.
+- [[file:how-to/python.org][Work on a Python project]]: navigation, fixes, REPL, tests, debugger.
+- [[file:how-to/clojure.org][Work on a Clojure project]]: navigation, paredit, CIDER, tests.
+- [[file:how-to/org-tasks.org][Working with Org tasks]]: capture, the daily agenda, reviews.
+- [[file:how-to/update-packages.org][Update the packages safely]].
+- [[file:how-to/add-a-scenario-test.org][Add a scenario test]].
+
+* Reference
+
+- [[file:reference/keys.org][Key bindings]]: every key the configuration binds, generated from the
+  keymaps; do not edit it by hand.
+- [[file:reference/dependencies.org][External dependencies]]: every program and font, with its nixpkgs
+  attribute.
+- [[file:reference/local-el.org][local.el variables]]: what each machine sets.
+- [[file:reference/tests.org][Tests]]: commands, tiers, file headers and environment variables.
+
+* Explanation
+
+- [[file:explanation/architecture.org][How the configuration is built and loaded]]: the literate source and
+  the load order.
+- [[file:explanation/startup-performance.org][Startup performance]]: what is measured, and what helped.
+- [[file:explanation/test-strategy.org][Why the tests look the way they do]].
+- [[file:explanation/package-choices.org][Why these packages]].
+- [[file:explanation/foundational-knowledge/Foundational knowledge.tex][Emacs: Foundational Knowledge]], a LaTeX book on the Emacs internals
+  this configuration relies on.  Build it with =latexmk= in its
+  directory.  It was written before plans 085 to 095, so some chapters
+  describe packages since removed, such as compile-angel or eglot.
+
+* Work records
+
+=work/= is not documentation for a reader of the configuration: it
+holds the plans of work in progress (=work/plans/=), the record of
+finished plans (=work/changelog/=), and the research behind them
+(=work/findings/=).  Its index, =work/README.org=, lists them.  The
+work records are not published with the configuration.

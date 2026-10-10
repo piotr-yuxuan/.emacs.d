@@ -1,0 +1,8 @@
+{
+  "name": "plan-049-stack-attach-fixture",
+  "version": "0.0.0",
+  "description": "Tiny package.json so vscode-json-language-server attaches.",
+  "scripts": {
+    "build": "echo build"
+  }
+}

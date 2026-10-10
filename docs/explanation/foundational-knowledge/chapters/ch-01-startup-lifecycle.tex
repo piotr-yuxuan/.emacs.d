@@ -1,0 +1,199 @@
+\part{Startup, Performance \& Diagnostics}
+\label{part:startup}
+
+A freshly installed Emacs with a hundred packages ought to start in
+under a second, yet many configurations take five or ten.  The
+difference is almost never the packages themselves; it is the order
+in which things load, the garbage-collection strategy during init,
+and a handful of frame-parameter and file-handler settings that
+compound silently.
+
+This part disassembles the startup sequence from its first
+instruction to the moment the cursor blinks.
+Chapter~\ref{ch:startup-lifecycle} maps the two-file split and the
+hook chain; Chapter~\ref{ch:gc-tuning} explains the dual GC triggers
+whose mis-configuration can cost seconds;
+Chapter~\ref{ch:general-performance} surveys a dozen runtime knobs
+(font-lock deferral, bidi inhibition, process-output limits) that
+affect daily editing speed.
+Chapter~\ref{ch:early-init-frame} and
+Chapter~\ref{ch:pre-command-hook} address the two places where timing
+is critical: before the first frame and before the first keypress.
+The part closes with the profiling toolkit
+(Chapter~\ref{ch:profiling}) and a step-by-step diagnostic playbook
+(Chapter~\ref{ch:diagnostic-playbook}) that ties everything together
+into a repeatable debugging workflow.
+
+Master this material and you will be able to reason about every
+millisecond between \texttt{emacs} and your first keystroke, and to
+recover quickly when a package update makes something slow.
+
+\chapter{Emacs startup lifecycle}
+\label{ch:startup-lifecycle}
+\minitoc\label{emacs-startup-lifecycle}
+\index{startup lifecycle}\index{early-init.el}\index{init.el}\index{package-initialize}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Every Emacs session begins with a carefully ordered sequence of file
+loads, hook invocations, and frame creation steps.  This chapter maps
+that entire sequence, from the C core dump through
+\texttt{early-init.el}, \texttt{init.el}, and the hook chain that
+follows, so that you can place any piece of configuration at exactly
+the right moment.  By the end you will understand why
+\texttt{early-init.el} exists, what each startup hook controls, and
+how a file-open request cascades through dozens of internal functions
+before a fontified buffer appears on screen.  The GC and
+frame-parameter optimisations that depend on this sequence are
+covered in Chapters~\ref{ch:gc-tuning}
+and~\ref{ch:early-init-frame}.
+
+\section{The two-file split: \texttt{early-init.el} vs \texttt{init.el}}\label{the-two-file-split-early-init.el-vs-init.el}
+
+Emacs loads configuration in two phases. Understanding this split is the single most important thing for startup performance.
+
+\subsection{Phase 1: \texttt{early-init.el} (Emacs 27+)}\label{phase-1-early-init.el-emacs-27}
+
+Loaded \textbf{before} the package system initialises and \textbf{before} the first graphical frame is created. At this point:
+
+\begin{itemize}
+\item \texttt{package.el} has \textbf{not} called \texttt{package-initialize}.
+\item No frame exists; \texttt{(display-graphic-p)} returns \texttt{nil}.
+\item No X/Wayland/NS resources have been read.
+\item \texttt{file-name-handler-alist} is active (regex matching on every file operation).
+\end{itemize}
+
+This is the right place for:
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+Setting & Why here? \\
+\midrule
+\texttt{package-enable-at-startup nil} & Prevent \texttt{package.el} from scanning \texttt{elpa/} \\
+\texttt{gc-cons-threshold} suppression & Must be set before any lisp loads \\
+\texttt{file-name-handler-alist nil} & Removes regex overhead from every \texttt{load} \\
+Frame parameters (tool-bar, etc.) & Prevents frame redraw flash \\
+\texttt{native-comp-jit-compilation} & Must be set before first native-comp trigger \\
+\texttt{org-fold-core-style} & Must be set before org loads \\
+\bottomrule
+\end{longtable}
+
+\subsection{Phase 2: \texttt{init.el}}\label{phase-2-init.el}
+
+Loaded after \texttt{early-init.el} and after \texttt{package-initialize} (if it wasn't suppressed). This is where \texttt{use-package} declarations, keybindings, mode hooks, and everything else goes.
+
+\subsection{The \texttt{straight.el} wrinkle}\label{the-straight.el-wrinkle}
+
+With \texttt{straight.el} as the package manager, \texttt{package-initialize} is suppressed (\texttt{(setq package-enable-at-startup nil)} in \texttt{early-init.el}). Instead, \texttt{straight.el} bootstraps itself at the top of \texttt{init.el}, builds its autoloads cache, and registers packages. The \texttt{straight-cache-autoloads} variable controls whether autoloads are written to a single cache file (fast) or recomputed per session.
+
+\section{Hook firing order at startup}\label{hook-firing-order-at-startup}
+
+This is the exact sequence of events from Emacs launch to the first user interaction:
+
+\begin{minted}{elisp}
+1. C core initialises (dump, pure space, Vloadup)
+2. early-init.el evaluated
+3. package-initialize called (unless suppressed)
+4. init.el evaluated (top-to-bottom, synchronously)
+5. after-init-hook fires
+6. emacs-startup-hook fires
+7. [Frame is now visible]
+8. window-setup-hook fires (only in GUI mode)
+9. [User can interact]
+10. Idle timers begin firing (run-with-idle-timer callbacks)
+\end{minted}
+
+The critical distinction:
+
+\begin{itemize}
+\item \textbf{\texttt{after-init-hook}}: Fires immediately after \texttt{init.el} finishes evaluating, but \textbf{before} the frame is fully set up. The \texttt{emacs-init-time} timer stops here. \texttt{(info "(elisp) Startup Summary")}
+\item \textbf{\texttt{emacs-startup-hook}}: Fires after \texttt{after-init-hook}, after \texttt{command-line} processing is complete. This is the hook measured by \texttt{emacs-init-time}. Safe for activating modes that need a complete environment.
+\item \textbf{\texttt{window-setup-hook}}: Fires after the frame and window system are fully configured. This is the \textbf{latest} hook before user interaction. Work placed here (e.g., dashboard rendering) does not appear in \texttt{emacs-init-time}.
+\end{itemize}
+
+\subsection{Practical implication}\label{practical-implication}
+
+If you want something to run after init but contribute to \texttt{emacs-init-time}, put it on \texttt{emacs-startup-hook}. If you want it to run but \textbf{not} show up in \texttt{emacs-init-time}, put it on \texttt{window-setup-hook}. If you want it completely off the startup path, use \texttt{run-with-idle-timer}.
+
+\section{What happens when you open a file}\label{what-happens-when-you-open-a-file}
+
+The chain from \texttt{C-x C-f} (or \texttt{find-file}) to a stable, fontified buffer:
+
+\begin{minted}{text}
+find-file
+  → find-file-noselect
+    → create buffer, insert file contents
+    → file-name-handler-alist matched against filename
+    → after-insert-file-functions run (coding, encoding)
+    → normal-mode
+      → set-auto-mode
+        → check file-local variables (first line, -*- mode -*- )
+        → match filename against auto-mode-alist
+        → match against magic-mode-alist (first bytes)
+        → check interpreter-mode-alist (shebang line)
+        → apply major-mode-remap-alist (tree-sitter remapping)
+        → call the winning major-mode function
+          → major mode runs → derived-mode hooks fire
+          → after-change-major-mode-hook fires
+      → hack-local-variables (apply .dir-locals.el, file-local vars)
+    → find-file-hook fires
+      → git-gutter, vc-refresh, etc. run here
+    → after-find-file runs
+  → switch-to-buffer
+    → window-buffer-change-functions run
+    → jit-lock fontifies the visible portion
+\end{minted}
+
+\subsection{\texttt{file-name-handler-alist} and performance}\label{file-name-handler-alist-and-performance}
+
+Every file operation (\texttt{load}, \texttt{require}, \texttt{insert-file-contents}) matches the filename against every entry in \texttt{file-name-handler-alist}. The default list includes handlers for TRAMP (\texttt{/ssh:}), compressed files (\texttt{.gz}), and more. During startup, when hundreds of \texttt{.elc} files are loaded, this regex matching is pure waste.
+
+The standard pattern: nil it out in \texttt{early-init.el}, restore on \texttt{emacs-startup-hook}:
+
+\begin{minted}{elisp}
+;; early-init.el
+(defvar my/file-name-handler-alist file-name-handler-alist)
+(setq file-name-handler-alist nil)
+
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (setq file-name-handler-alist my/file-name-handler-alist)))
+\end{minted}
+
+\texttt{(info "(elisp) Magic File Names")}
+
+\section{\texttt{normal-mode} re-entry: the hidden performance trap}\label{normal-mode-re-entry-the-hidden-performance-trap}
+
+\texttt{normal-mode} calls \texttt{set-auto-mode}, which determines the major mode, which triggers mode hooks. If any hook triggers a file operation that itself calls \texttt{normal-mode} (e.g., byte-compiling a file on load, which opens the \texttt{.el} to read it), you get re-entrant \texttt{normal-mode} calls. This was the root cause of the \texttt{compile-angel-on-load-mode} slowdown: every \texttt{require} triggered a byte-compile check, which opened the source file, which triggered \texttt{normal-mode} → \texttt{set-auto-mode} → mode hooks → potential further \texttt{require} calls.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+Emacs loads configuration in two distinct phases: \texttt{early-init.el}
+runs before any frames are created and before the package system
+initialises, making it the only safe place for settings that must precede
+those events; \texttt{init.el} handles everything else.  Once evaluation
+is complete, hooks fire in a fixed order---\texttt{after-init-hook}, then
+\texttt{emacs-startup-hook}, then \texttt{window-setup-hook}, and finally
+idle timers, and \texttt{emacs-init-time} measures only up to the end of
+\texttt{emacs-startup-hook}, so work deferred to \texttt{window-setup-hook}
+or later is invisible to that metric.
+
+Opening a file initiates its own chain of dispatch:
+\texttt{find-file} calls \texttt{normal-mode}, which calls
+\texttt{set-auto-mode}, which selects a major mode and fires its hooks.
+If any of those hooks trigger file operations that themselves invoke
+\texttt{normal-mode}, re-entrant calls can cascade, a hidden performance
+trap.  Meanwhile, \texttt{file-name-handler-alist} imposes a regex match
+on every \texttt{load} and \texttt{require}; nilling it during startup
+eliminates that overhead entirely.
+\texttt{major-mode-remap-alist} offers a lightweight way to redirect
+modes (e.g.\ to tree-sitter variants) without modifying
+\texttt{auto-mode-alist} at all.
+
+On the package-management side, \texttt{straight.el} replaces the
+built-in \texttt{package-initialize} with its own bootstrap, which is why
+\texttt{package-enable-at-startup} must be set to \texttt{nil} in
+\texttt{early-init.el}.  The overarching strategy is to place every piece
+of configuration at the latest safe hook so that \texttt{emacs-init-time}
+stays low and interactive startup feels snappy.
+Chapter~\ref{ch:pre-command-hook} develops this idea further with the
+self-removing hook pattern.

@@ -1,0 +1,52 @@
+#+TITLE: local.el variables
+#+OPTIONS: toc:nil num:nil
+
+=~/.emacs.d/local.el= holds what differs between machines: identity,
+paths and hosts.  git ignores it.  Copy =local.el.example= to start
+one.  =init.el= loads it at its very end, so its values win; the
+agenda files are computed from them later still, from
+=after-init-hook=.
+
+* Variables of this configuration
+
+All but the last belong to the customization group =my=:
+=M-x customize-group RET my= shows them with their documentation.
+
+| Variable                              | Default                                        | Effect                                                                                    |
+|---------------------------------------+------------------------------------------------+-------------------------------------------------------------------------------------------|
+| =my/gtd-file=                         | =~/org/todo.org=                               | personal task and journal file; =C-c i= and =C-c c= capture into it                       |
+| =my/org-agenda-source-files=          | =todo.org= of =~/.emacs.d=                     | the other task files, in display order; missing files are skipped                         |
+| =my/org-source-label-alist=           | Personal for =org=, Emacs for =.emacs.d=       | the label the agenda and the dashboard show for a repository, keyed by its directory name |
+| =my/org-dashboard-port=               | 8765                                           | port of the local task dashboard, on 127.0.0.1                                            |
+| =my/org-dashboard-directory=          | =org-dashboard/= of =~/.emacs.d=               | the dashboard's web files                                                                 |
+| =my/org-dashboard-data-file=          | =tmp/org-dashboard/tasks.json= of =~/.emacs.d= | where =M-x my/org-dashboard-export= writes the tasks                                      |
+| =my/vellum-directory=                 | nil                                            | directory of the vellum LaTeX class; nil exports with Org's own classes                   |
+| =my/nixd-flake=                       | nil                                            | NixOS flake whose options nixd completes in Nix buffers                                   |
+| =my/nixd-flake-host=                  | the host name                                  | the flake's =nixosConfigurations= entry for this machine                                  |
+| =my/treesit-fold-mode-language-alist= | Emacs Lisp, Clojure, Nix, shell and others     | tree-sitter language of each major mode that folds without a =-ts-mode=                   |
+
+* Variables of Emacs and its packages
+
+| Variable                              | Why set it here                                                                   |
+|---------------------------------------+-----------------------------------------------------------------------------------|
+| =user-full-name=, =user-mail-address= | your identity, for mail and change logs                                           |
+| =inhibit-startup-echo-area-message=   | hides the startup message; Emacs honours only your login name, set with Customize |
+| =lsp-java-bundles=                    | path of the java-debug bundle, which Java debugging with dape needs               |
+| =dirvish-quick-access-entries=        | the places of Dirvish's =a= menu                                                  |
+| =JAVA_HOME=, with =setenv=            | the JDK, when the shell profile does not set it                                   |
+
+* Example
+
+#+BEGIN_SRC elisp
+(setq user-mail-address "you@example.com"
+      user-full-name    "Your Name")
+(custom-set-variables '(inhibit-startup-echo-area-message "your-login-name"))
+(setq my/gtd-file (expand-file-name "~/Documents/todo.org")
+      my/org-agenda-source-files
+      (list (expand-file-name "~/src/example/project/todo.org")))
+(setq my/nixd-flake "~/src/example/nixos-configuration"
+      my/nixd-flake-host "my-host")
+#+END_SRC
+
+=local.el.example= shows the common ones.  Restart Emacs after a
+change: the values are read at startup.

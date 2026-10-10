@@ -1,0 +1,10 @@
+[project]
+name = "python-intelligence-fixture"
+version = "0.0.0"
+requires-python = ">=3.12"
+
+[tool.basedpyright]
+typeCheckingMode = "recommended"
+
+[tool.ruff.lint]
+select = ["F", "I"]

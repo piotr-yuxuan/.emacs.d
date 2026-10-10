@@ -1,0 +1,64 @@
+\chapter{Early-init frame parameters and startup suppression}
+\label{ch:early-init-frame}
+\minitoc\label{early-init-frame-parameters-and-startup-suppression}
+\index{default-frame-alist}\index{frame-inhibit-implied-resize}\index{early-init.el!frame parameters}\index{site-run-file}\index{vc-handled-backends}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Chapter~\ref{ch:startup-lifecycle} introduced the two-file split and
+noted that \texttt{early-init.el} runs before the first frame exists.
+Several categories of startup overhead can only be avoided if the
+relevant settings are applied before the first frame is created.
+This chapter covers the four \texttt{early-init.el} mechanisms that
+prevent frame resize flashes, suppress site-level interference, and
+eliminate unnecessary version-control probes on every file open.
+
+Four mechanisms in \texttt{early-init.el} prevent specific categories of startup overhead that cannot be avoided if set in \texttt{init.el}.
+
+\section{\texttt{default-frame-alist}: prevent frame resize on creation}\label{default-frame-alist-prevent-frame-resize-on-creation}
+
+Parameters pushed to \texttt{default-frame-alist} before the first frame is created take effect on that first frame without a resize cycle.
+
+\begin{minted}{elisp}
+;; early-init.el
+(push '(menu-bar-lines . 0) default-frame-alist)
+(push '(tool-bar-lines . 0) default-frame-alist)
+(push '(vertical-scroll-bars) default-frame-alist)
+(setq default-frame-alist '((width . 100) (height . 55)))
+\end{minted}
+
+If these were set after the frame exists (in \texttt{init.el}), Emacs would create the frame with default parameters and then resize it, causing a visible flash and extra computation.
+
+\section{\texttt{frame-inhibit-implied-resize t}}\label{frame-inhibit-implied-resize-t}
+
+Setting a font whose metrics differ from the default causes Emacs to resize the frame to maintain the same number of rows and columns (the "implied resize" behaviour). During early-init, the font is set before the frame exists, so this resize is normally free, but on some platforms it still triggers a synchronous geometry negotiation with the window manager. Setting this inhibits that:
+
+\begin{minted}{elisp}
+;; early-init.el
+(setq frame-inhibit-implied-resize t)
+\end{minted}
+
+\section{\texttt{site-run-file nil}}\label{site-run-file-nil}
+
+Emacs loads \texttt{/etc/emacs/site-start.el} (or the OS equivalent) before \texttt{init.el}. On shared systems this file may load packages, set variables, or add to \texttt{load-path} in ways that conflict with \texttt{straight.el} or shadow packages. Silencing it:
+
+\begin{minted}{elisp}
+;; early-init.el
+(setq site-run-file nil)
+\end{minted}
+
+\section{\texttt{vc-handled-backends '(Git)}}\label{vc-handled-backends-git}
+
+On every \texttt{find-file}, Emacs probes the file against every registered VC backend (Git, SVN, Mercurial, Bazaar, etc.) to determine file state. Restricting to Git eliminates all non-Git probes:
+
+\begin{minted}{elisp}
+;; early-init.el
+(setq vc-handled-backends '(Git))
+\end{minted}
+
+Measured saving: \(\sim\)20--30 ms on startup and on every \texttt{find-file} call.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+The central theme of these settings is that they must take effect before the first frame is created or the package system initialises; placing them in \texttt{init.el} is too late.  Setting \texttt{default-frame-alist} entries (font, dimensions, toolbar/scrollbar visibility) before frame creation avoids a visible resize-and-flicker cycle.  \texttt{frame-inhibit-implied-resize} goes further by preventing the synchronous geometry negotiation that Emacs would otherwise perform whenever fonts or fringes change.
+
+Two additional early settings improve startup hygiene.  \texttt{site-run-file} set to \texttt{nil} silences \texttt{/etc/emacs/site-start.el}, whose system-level configuration may conflict with \texttt{straight.el} or other user choices.  \texttt{vc-handled-backends} restricted to \texttt{'(Git)} eliminates probes for SVN, Mercurial, and Bazaar on every \texttt{find-file}, saving 20--30\,ms per file visit.  Together, these four \texttt{early-init.el} settings remove visible flicker, avoid redundant work, and prevent external configuration from interfering with the rest of the init process.

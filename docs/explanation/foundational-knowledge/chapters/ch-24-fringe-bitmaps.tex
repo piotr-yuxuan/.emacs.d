@@ -1,0 +1,77 @@
+\chapter{Custom fringe bitmaps: \texttt{define-fringe-bitmap}}
+\label{ch:fringe-bitmaps}
+\minitoc\label{custom-fringe-bitmaps-define-fringe-bitmap}
+\index{fringe}\index{define-fringe-bitmap}\index{fringe bitmaps}\index{git-gutter-fringe}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Several packages in this book display information in the fringe:
+git-gutter (changed lines), flycheck (diagnostics), and fold
+indicators.  Fringe bitmaps are the small icons that appear beside
+lines---
+indicate git changes, breakpoints, or fold indicators.  This chapter
+explains the fringe display model, the anatomy of
+\texttt{define-fringe-bitmap}, and how to assign bitmaps to specific
+fringe sides to prevent mutual overwriting.
+
+\texttt{(info "(elisp) Fringe Bitmaps")}
+
+\section{Fringe display model}\label{fringe-display-model}
+
+Emacs frames have two fringes: a narrow strip to the left of the window and one to the right. Each strip is \texttt{fringe-mode} pixels wide (default: 8 px). Fringe bitmaps are small monochrome images installed by name and displayed via overlay or text-property specifications.
+
+The left and right fringes are independent assignment spaces. Only one bitmap can occupy a given fringe slot in a given line, so placing \texttt{git-gutter-fringe} on the right and \texttt{treesit-fold-indicators} on the left prevents mutual overwriting.
+
+\section{\texttt{define-fringe-bitmap} anatomy}\label{define-fringe-bitmap-anatomy}
+
+\begin{minted}{elisp}
+(define-fringe-bitmap SYMBOL BITS &optional HEIGHT WIDTH ALIGN)
+\end{minted}
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule
+Argument & Type & Meaning \\
+\midrule
+\texttt{SYMBOL} & symbol & Name under which the bitmap is registered \\
+\texttt{BITS} & vector of integers & One integer per row; each bit = one pixel column \\
+\texttt{HEIGHT} & integer or nil & Number of rows; nil = length of BITS \\
+\texttt{WIDTH} & integer or nil & Number of columns; nil = fringe width (\texttt{fringe-mode} value) \\
+\texttt{ALIGN} & list \texttt{(ALIGN PERIODIC)} & Vertical placement and repeat behaviour \\
+\bottomrule
+\end{longtable}
+
+A row integer is a bitmask of the pixel columns. For an 8-pixel-wide fringe, the integer \texttt{255} (binary \texttt{11111111}) fills all 8 columns, producing a solid horizontal bar.
+
+\begin{minted}{elisp}
+;; [255] = a single 8-column-wide solid row.
+;; nil height = 1 row.
+;; nil width = use fringe width.
+;; '(center repeated) = centre vertically, repeat the row to fill height.
+(define-fringe-bitmap 'git-gutter-fr:added    [255] nil nil '(center repeated))
+(define-fringe-bitmap 'git-gutter-fr:modified [255] nil nil '(center repeated))
+
+;; Deleted marker: 8 solid rows from the bottom
+(define-fringe-bitmap 'git-gutter-fr:deleted
+  [255 255 255 255 255 255 255 255] nil nil 'bottom)
+\end{minted}
+
+\section{Assigning bitmaps to fringe slots}\label{assigning-bitmaps-to-fringe-slots}
+
+After defining, assign the bitmap to a specific fringe side via the package's configuration variable:
+
+\begin{minted}{elisp}
+(setq git-gutter-fr:side 'right-fringe)  ; 'left-fringe or 'right-fringe
+\end{minted}
+
+The \texttt{'center repeated} alignment flag makes the single-row bitmap repeat vertically to fill the entire line height, producing a solid coloured rectangle alongside each changed line.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+Each fringe line-slot holds at most one bitmap, and the left and right
+fringes operate independently of each other.  A bitmap is defined with
+\texttt{define-fringe-bitmap}, which takes a vector of row integers where each
+bit represents one pixel column.  When the alignment flag
+\texttt{'(center repeated)} is specified, a single-row pattern is tiled
+vertically to fill the full line height, which is how git-gutter produces its
+solid coloured bars.  To avoid collisions, assign different packages to
+different fringe sides; for example, git-gutter on the right fringe and fold
+indicators on the left.

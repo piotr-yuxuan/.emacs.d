@@ -1,0 +1,71 @@
+%% preamble-layout.tex
+%% Page geometry, running headers/footers, and chapter-opening style.
+%% Loaded by main.tex after preamble-packages and preamble-fonts.
+
+%% ── Page geometry ─────────────────────────────────────────────────
+%% A4 two-sided with asymmetric inner/outer margins (extra inner for binding).
+\geometry{
+  paper       = a4paper,
+  twoside     = true,
+  inner       = 32mm,           %% binding margin (recto left / verso right)
+  outer       = 24mm,           %% fore-edge margin
+  top         = 25mm,
+  bottom      = 32mm,
+  headheight  = 14pt,           %% sufficient for two-line running heads
+  headsep     = 8pt,
+  footskip    = 20pt,
+}
+
+%% ── Chapter openings on recto pages ───────────────────────────────
+%% scrbook with open=right (set in \documentclass) calls \cleardoublepage
+%% before each \chapter, guaranteeing chapters begin on a right-hand (recto)
+%% page. Confirmed here explicitly for documentation purposes.
+\KOMAoptions{open=right}
+
+%% ── Running headers and footers ───────────────────────────────────
+%% Using scrlayer-scrpage (loaded in preamble-packages).
+\clearpairofpagestyles
+%%
+%% Mark hierarchy:
+%%   Left  mark (\leftmark)  = chapter title   → displayed on verso (even) pages
+%%   Right mark (\rightmark) = section title   → displayed on recto (odd) pages
+\automark[section]{chapter}
+%%
+%% Layout: inner header = title mark; outer header = page number.
+%% The plain page style (used on chapter-opening pages) shows only the
+%% page number in the footer; the header is suppressed automatically by KOMA.
+\ihead{\normalfont\small\itshape\headmark}
+\ohead[\pagemark]{\pagemark}
+\pagestyle{scrheadings}
+
+%% ── minitoc depth and formatting ──────────────────────────────────
+%% \dominitoc is called in main.tex (must precede the first \chapter).
+%% Depth: 2 = down to \subsection (matches the standard ToC depth).
+\setcounter{minitocdepth}{2}
+%% Reduce minitoc font size to \small for a lighter appearance.
+\mtcsetfont{minitoc}{*}{\small\rmfamily}
+
+%% ── Heading fonts ─────────────────────────────────────────────────
+%% KOMA-Script defaults all headings to \sffamily. No sans-serif font has
+%% been configured, so the fallback is Latin Modern Sans, which carries no
+%% small-caps shape (TU/lmss/.../sc is undefined). Any \textsc{} inside a
+%% heading silently degrades to lowercase. Switching the 'disposition'
+%% key to \rmfamily routes all heading levels through Junicode (the main
+%% font), which does have a proper OpenType small-caps variant.
+\setkomafont{disposition}{\normalfont\rmfamily\bfseries}
+
+%% ── Table spacing ─────────────────────────────────────────────────
+\renewcommand{\arraystretch}{1.30}   %% extra vertical padding in table rows
+
+%% ── Paragraph spacing ─────────────────────────────────────────────
+%% parskip=half- is set in the \documentclass options in main.tex.
+%% No duplicate \setlength needed here; class option takes effect first.
+\setlength{\parindent}{0pt}
+
+%% ── Footnote rule ─────────────────────────────────────────────────
+\setlength{\footnotesep}{6pt}
+
+%% ── Widow / orphan control ────────────────────────────────────────
+\widowpenalty   = 10000
+\clubpenalty    = 10000
+\displaywidowpenalty = 10000

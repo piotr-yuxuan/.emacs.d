@@ -1,0 +1,104 @@
+#+TITLE: Read a table wider than the window
+#+OPTIONS: toc:nil num:nil
+#+KEYMAPS: org-mode-map my/table-view-mode-map tabulated-list-mode-map
+
+A wide table is hard to read in its source: Org truncates its lines at
+the window edge, and Markdown wraps them, so that the columns no longer
+line up.  The source keeps its wrapping, so that the prose around the
+table reads as before.  Pick one of the ways below.
+
+* Narrow the columns of an Org table in place
+
+1. Add a row of width cookies under the header rule, for example
+   =| | <20> | <30> |=: each cookie gives the width of its column.
+   Org export hides the row.
+2. With point in the table, press =C-c TAB=
+   (=org-table-toggle-column-width=) to shrink the column at point to
+   its cookie width, or to one character without a cookie.  Press it
+   again to expand the column.
+3. Press =C-u= then =C-c TAB= to shrink every column that has a cookie
+   and expand the others; press =C-u= twice then =C-c TAB= to expand
+   them all.
+4. To shrink the tables of a file whenever it opens, add
+   =#+STARTUP: shrink= at its top.
+
+Hover the mouse over a shrunk cell to read all of it, or expand its
+column.
+
+* Keep the header row of an Org table in view
+
+Press =M-x org-table-header-line-mode= in the Org buffer; press it
+again to turn the mode off.  Once the header row of the table at the
+top of the window has scrolled off, the top line of the window shows
+it.  The mode is off by default; see Limits.
+
+* View any table in full, in a box
+
+This works for Org tables and for Markdown pipe tables.
+
+1. Put point anywhere in the table and press =C-c v t=.  A read-only
+   box replaces the source in the window: a border around every cell,
+   every cell in full, and the header row as the header line.  The box
+   fits the window: when the table is wider, its widest columns narrow
+   to a common width, and their cells wrap onto as many lines as they
+   need, between words.  A row is as tall as its tallest cell.
+2. A table with many columns can stay wider than the window, since
+   fitting never narrows a column below 10 characters
+   (=my/table-view-min-width=).
+   Scroll sideways with =C-x <= and =C-x >=, which take a prefix
+   argument as a number of columns, or move from column to column with
+   =M-<right>= and =M-<left>=; the window follows point.  The header
+   line scrolls with the rows.
+3. Press =S= to sort the rows by the column at point; press it again to
+   reverse the order.  =}= widens the column at point and ={= narrows
+   it, so its cells wrap less or more.
+4. After the window changed size, for example after =C-x 3=, press =g=
+   to fit the box to it again.
+5. Press =RET= to go back to the source, at the cell point was on, from
+   any line of its row, or =q= to bury the box and show the source
+   again.
+
+The box does not follow edits: press =C-c v t= in the source again to
+read the table anew.
+
+How the box reads a table:
+- the first row is the header when a rule follows it: =|---+---|= in
+  Org, an alignment row such as =|:---|---:|= in Markdown.  Otherwise,
+  and for an empty or repeated label, a column is named after its
+  number: =$1=, =$2= and so on;
+- a row shorter than the others gets empty cells at its end;
+- in Markdown, a table line starts with =|=, after any indentation, and
+  =\|= is a pipe inside a cell;
+- in Org, rows of width cookies, =<>= included, are hidden, as Org
+  export hides them.
+
+* Limits
+
+- The box is read-only: edit the table in its source.
+- =S= sorts cells as text, so 10 comes before 9.
+- The header line of a tabulated list does not scroll sideways in Emacs
+  31; the box computes its own header line from the horizontal
+  scroll.  So the header line shows no sort arrow, and clicking it does
+  not sort: press =S= instead.
+- A Markdown table must start each line with =|=; a GitHub table whose
+  lines do not is not found.
+- With =markdown-enable-wiki-links= on, a pipe inside a wiki link,
+  =[[page|label]]=, ends a cell in the box, while Markdown mode keeps
+  it in the cell; =RET= may then land one cell off.
+- In the Markdown source itself, a wide table still wraps, as all
+  Markdown text does.
+- The Org header row covers the top line of the window even when point
+  is on that line: what you type there edits a row you do not see.
+  Move point down a line, or scroll, to see the row again.
+- With =org-table-header-line-mode= on, Emacs hangs, and =C-g= does not
+  stop it, when the table at the top of the window holds only rules
+  and runs to the end of a buffer without a final newline, as when
+  you type =|-= in a new file.  This is an Org bug.  The mode also
+  redisplays after every command, which slows down holding a key.
+- The Org header row belongs to the buffer, not to the window: another
+  window on the same buffer that shows that line shows the header row
+  in its place, in the middle of the table.
+- Wrapping turns runs of spaces and tabs inside a cell into one space.
+- A header label wider than its column ends with =…= in the header
+  line; widen the column with =}= to read it.
+- =g= fits the columns again, so it also undoes =}= and ={=.

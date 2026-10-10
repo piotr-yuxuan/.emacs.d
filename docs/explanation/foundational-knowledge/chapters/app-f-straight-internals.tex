@@ -1,0 +1,72 @@
+\chapter{\texttt{straight.el} build-graph internals}
+\label{app:straight-internals}
+\index{straight.el!internals}\index{recipe resolution}\index{dependency tracking}\index{modification detection}\index{MELPA}
+
+This appendix supplements Chapter~\ref{ch:straight} with a deeper
+look at how \texttt{straight.el} resolves package dependencies and
+decides what to rebuild.
+
+\section{The recipe resolution algorithm}
+
+When \texttt{straight-use-package} is called, straight resolves the
+package's recipe through a priority chain:
+
+\begin{enumerate}
+  \item The literal recipe given in the \texttt{use-package}
+    declaration (e.g.\ \texttt{:straight (pkg :type git :host github ...)}).
+  \item A recipe registered by \texttt{straight-register-package}.
+  \item The default recipe from the first recipe repository that
+    knows the package (typically MELPA, then GNU ELPA).
+\end{enumerate}
+
+Recipes specify the repository URL, branch, files to include, and
+build steps.  The \texttt{:files} key defaults to
+\texttt{("*.el" "*.el.in" "dir" "*.info" "*.texi" "*.texinfo"
+"doc/dir" "doc/*.info" ...)}.
+
+\section{Dependency tracking}
+
+straight.el extracts dependencies from the package's
+\texttt{Package-Requires} header (for single-file packages) or
+\texttt{PACKAGE-pkg.el} (for multi-file packages).  Each dependency
+is recursively resolved through the same recipe chain.
+
+If a dependency is listed in \texttt{Package-Requires} but no recipe
+is found, straight signals an error at install time.  The fix is
+either a \texttt{straight-register-package} call or a
+\texttt{:straight (...)} recipe for the dependency's own
+\texttt{use-package} declaration.
+
+\section{Rebuild decision logic}
+
+A package is rebuilt when straight detects that its source has
+changed since the last build.  The detection strategy is
+controlled by \texttt{straight-check-for-modifications}
+(see Chapter~\ref{ch:straight}).
+
+The rebuild itself:
+
+\begin{enumerate}
+  \item Copy \texttt{:files}-matched sources from
+    \texttt{repos/PACKAGE/} to \texttt{build/PACKAGE/}.
+  \item Byte-compile every \texttt{.el} file, producing \texttt{.elc}
+    files.
+  \item Generate \texttt{PACKAGE-autoloads.el} by scanning
+    \texttt{;;;\#\#\#autoload} cookies.
+  \item If \texttt{straight-cache-autoloads} is set, merge the
+    individual autoload file into the global autoload cache.
+\end{enumerate}
+
+Native compilation (\texttt{.eln} files) is handled separately by
+\texttt{comp-el-to-eln-rel-filename} and runs asynchronously after
+byte-compilation completes.
+
+\section{Symlinks versus copies}
+
+On systems that support symlinks, straight creates symbolic links
+from \texttt{build/PACKAGE/} back to \texttt{repos/PACKAGE/} for
+\texttt{.el} files, so edits to source files are reflected
+immediately without rebuilding.  On Windows (where symlinks
+require elevated privileges), straight falls back to file copies,
+and a manual \texttt{straight-rebuild-package} is required after
+edits.

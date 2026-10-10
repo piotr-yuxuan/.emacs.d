@@ -1,0 +1,68 @@
+\chapter{Wayland clipboard bridge}
+\label{ch:wayland-clipboard}
+\minitoc\label{wayland-clipboard-bridge}
+\index{Wayland}\index{clipboard}\index{wl-copy}\index{interprogram-cut-function}\index{interprogram-paste-function}
+
+% ── Opening signpost ──────────────────────────────────────────────
+The previous chapters in this part dealt with universal Emacs
+mechanisms.  This one addresses a platform-specific gap: terminal
+Emacs on a Wayland session cannot reach the system clipboard through
+X11 APIs.  This chapter describes the
+\texttt{wl-copy}/\texttt{wl-paste} bridge and the two
+\texttt{interprogram-*-function} hooks that make it transparent.
+
+\section{The problem}\label{the-problem-2}
+
+Emacs uses X11 clipboard APIs (\texttt{x-select-text}, \texttt{x-get-selection}) for system clipboard integration. When Emacs runs as a terminal client (\texttt{window-system} is \texttt{nil}) on a Wayland-native session (\texttt{WAYLAND\_DISPLAY} is set, no Xwayland), these X11 calls fail silently and the system clipboard is unreachable.
+
+PGTK GUI Emacs (compiled with \texttt{-\/-with-pgtk}) has native Wayland clipboard support. The bridge below applies \textbf{only} to terminal Emacs (\texttt{emacs -nw}) on Wayland.
+
+\section{The bridge implementation}\label{the-bridge-implementation}
+
+\begin{minted}{elisp}
+(when (and (eq system-type 'gnu/linux)
+           (getenv "WAYLAND_DISPLAY")
+           (not (display-graphic-p)))
+
+  (defun my/wl-copy (text)
+    "Send TEXT to the Wayland clipboard via wl-copy."
+    (let ((proc (make-process :name "wl-copy"
+                              :buffer nil
+                              :command '("wl-copy" "-f" "-n")
+                              :connection-type 'pipe)))
+      (process-send-string proc text)
+      (process-send-eof proc)))
+
+  (defun my/wl-paste ()
+    "Read the Wayland clipboard contents via wl-paste."
+    (shell-command-to-string "wl-paste --no-newline"))
+
+  (setq interprogram-cut-function   #'my/wl-copy
+        interprogram-paste-function #'my/wl-paste))
+\end{minted}
+
+\section{\texttt{interprogram-cut-function} and \texttt{interprogram-paste-function}}\label{interprogram-cut-function-and-interprogram-paste-function}
+
+These two variables are the system clipboard hooks:
+
+\begin{itemize}
+\item \texttt{interprogram-cut-function} is called with a string whenever text is added to the kill ring. Setting it to \texttt{my/wl-copy} propagates every kill to the Wayland clipboard.
+\item \texttt{interprogram-paste-function} is called (no args) before \texttt{yank} to retrieve external clipboard content. Its return value, if non-nil and different from the top of the kill ring, is pre-pended to the ring and yanked.
+\end{itemize}
+
+\section{\texttt{make-process} with \texttt{:connection-type 'pipe}}\label{make-process-with-connection-type-pipe}
+
+\texttt{make-process} spawns an asynchronous subprocess. The \texttt{:connection-type 'pipe} option connects the process's stdin to a pipe that Emacs can write to via \texttt{process-send-string}. The \texttt{-f} flag to \texttt{wl-copy} ("run in foreground") and \texttt{-n} ("no trailing newline") ensure the process stays alive exactly long enough to receive the text. \texttt{process-send-eof} closes the write end of the pipe, signalling end-of-input to \texttt{wl-copy}.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+PGTK GUI Emacs already has native Wayland clipboard support, so this bridge
+is needed only for terminal Emacs (\texttt{emacs -nw}).  The integration
+relies on two hooks: \texttt{interprogram-cut-function}, called on every
+kill, is set to a function that pipes the killed text to \texttt{wl-copy};
+\texttt{interprogram-paste-function}, called before every yank, is set to a
+function that reads the current clipboard contents from \texttt{wl-paste}.
+Under the hood, \texttt{make-process} with \texttt{:connection-type 'pipe}
+connects the subprocess's stdin to a pipe that Emacs can write to via
+\texttt{process-send-string}, and \texttt{process-send-eof} closes the write
+end to signal end-of-input.

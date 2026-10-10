@@ -1,0 +1,98 @@
+\part{Language Support \& Development Tooling}
+\label{part:lang}
+
+With packages loaded and configured (Part~\ref{part:packages}), the
+question becomes: what do they actually \emph{do} when you open a
+source file?  This part traces the path from file extension to
+fully-powered editing session.
+
+Chapter~\ref{ch:tree-sitter} opens with the two mode-dispatch
+mechanisms---\texttt{auto-mode-alist} and
+\texttt{major-mode-remap-alist}---that select between legacy and
+tree-sitter grammars.
+Chapter~\ref{ch:major-minor-modes} steps back to explain the
+major/minor-mode infrastructure that those dispatchers target.
+Chapters~\ref{ch:eglot-lsp} and~\ref{ch:eglot-server-programs}
+cover the LSP integration layer: how Eglot maps protocol capabilities
+to Emacs interfaces, and how to register custom server contacts
+without falling into the \texttt{mapcan} circular-list trap.
+Chapter~\ref{ch:find-file-visit-truename} addresses a subtle
+symlink-resolution issue that can break LSP buffer identity.
+Chapter~\ref{ch:dape} adds the runtime counterpart to LSP: the
+Debug Adapter Protocol.  Chapter~\ref{ch:fringe-bitmaps} explains
+the fringe display model that git-gutter to fold-indicators rely on.
+The part closes with Chapter~\ref{ch:testing}, which explains how
+ERT and Buttercup guard the configuration against regressions---
+ensuring that performance changes from Part~\ref{part:startup} do
+not silently break functionality.
+
+\chapter{Tree-sitter mode selection}
+\label{ch:tree-sitter}
+\minitoc\label{tree-sitter-mode-selection}
+\index{tree-sitter}\index{auto-mode-alist}\index{major-mode-remap-alist}\index{treesit-auto}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Tree-sitter provides incremental parsing for syntax highlighting,
+folding, and structural navigation, but activating it requires
+understanding the difference between \texttt{auto-mode-alist} and
+\texttt{major-mode-remap-alist}.  This chapter explains both dispatch
+mechanisms and why the selective-remap pattern is vastly more
+efficient than \texttt{global-treesit-auto-mode}.  The mode
+infrastructure that these dispatchers target is covered in
+Chapter~\ref{ch:major-minor-modes}.
+
+\section{\texttt{auto-mode-alist} vs \texttt{major-mode-remap-alist}}\label{auto-mode-alist-vs-major-mode-remap-alist}
+
+These are two separate mechanisms and understanding the distinction is key:
+
+\begin{itemize}
+\item \textbf{\texttt{auto-mode-alist}}: Maps filename patterns to major modes. \texttt{".py"} → \texttt{python-mode}. This is the \textbf{original} dispatch.
+\item \textbf{\texttt{major-mode-remap-alist}} (Emacs 29+): After \texttt{auto-mode-alist} selects a mode, this alist can \textbf{remap} it to a different mode. \texttt{python-mode} → \texttt{python-ts-mode}. Zero per-file overhead: it's a simple alist lookup.
+\end{itemize}
+
+\section{Why \texttt{global-treesit-auto-mode} is expensive}\label{why-global-treesit-auto-mode-is-expensive}
+
+\texttt{treesit-auto} provides \texttt{global-treesit-auto-mode}, which automatically remaps modes to their tree-sitter variants. Under the hood, it calls \texttt{treesit-language-available-p} for \textbf{every} language it knows about (\(\sim\)30+) to build the remap list. Each \texttt{treesit-language-available-p} call probes the filesystem for a shared library (\texttt{libtree-sitter-*.so}).
+
+On macOS with \(\sim\)30 languages, this costs \(\sim\)1.8 s per file-open (the probe runs on \texttt{after-change-major-mode-hook}, which fires every time a major mode activates).
+
+\section{The selective-remap pattern (what your config uses)}\label{the-selective-remap-pattern-what-your-config-uses}
+
+Instead of the expensive global mode, explicitly remap only the languages you use:
+
+\begin{minted}{elisp}
+(dolist (pair '((python-mode     . python-ts-mode)
+                (java-mode       . java-ts-mode)
+                (js-json-mode    . json-ts-mode)
+                (css-mode        . css-ts-mode)
+                (html-mode       . html-ts-mode)
+                (mhtml-mode      . html-ts-mode)
+                (dockerfile-mode . dockerfile-ts-mode)))
+  (add-to-list 'major-mode-remap-alist pair))
+\end{minted}
+
+For modes that have \textbf{no} non-ts entry in the default \texttt{auto-mode-alist} (e.g., YAML, Bash), add direct filename associations:
+
+\begin{minted}{elisp}
+(add-to-list 'auto-mode-alist '("\\.ya?ml\\'" . yaml-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.sh\\'"    . bash-ts-mode))
+\end{minted}
+
+Keep \texttt{treesit-auto} around with \texttt{:demand t} \textbf{only} for its grammar installation command (\texttt{treesit-auto-install}), not for its global mode.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+Emacs resolves a buffer's major mode in two stages:
+\texttt{auto-mode-alist} maps filename patterns to modes, and
+\texttt{major-mode-remap-alist} can then redirect the chosen mode to an
+alternative (typically its tree-sitter variant) after the initial
+dispatch.  Enabling \texttt{global-treesit-auto-mode} short-circuits
+this by probing the filesystem for \(\sim\)30 shared grammar libraries
+on every mode activation, which is expensive.  The selective-remap
+pattern avoids that cost entirely: you register only the languages you
+actually use, so each file open incurs zero additional overhead.  For
+modes that lack a non-tree-sitter \texttt{auto-mode-alist} entry (YAML
+and Bash are common examples), you can add direct filename associations
+instead of relying on remapping.  The recommended approach is to keep
+\texttt{treesit-auto} installed solely for its grammar installation
+command and leave its global mode disabled.

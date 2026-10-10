@@ -1,0 +1,99 @@
+\chapter{The completion architecture}
+\label{ch:completion}
+\minitoc\label{the-completion-architecture}
+\index{completion!architecture}\index{completing-read}\index{completion-at-point}\index{vertico}\index{corfu}\index{orderless}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Chapter~\ref{ch:keybindings} showed how keystrokes reach commands;
+this chapter picks up where they arrive.  Emacs has two orthogonal
+completion systems that newcomers often confuse.  This chapter separates minibuffer completion
+(\texttt{completing-read}) from in-buffer completion (CAPF), explains
+the vertico/corfu stack, and clarifies how \texttt{orderless}
+and \texttt{completion-styles} interact.
+
+Emacs has two orthogonal completion systems that are often confused because they share some vocabulary.
+
+\section{The two axes}\label{the-two-axes}
+
+The two completion axes are summarised in Table~\ref{tab:completion-axes}.
+
+\begin{sidewaystable}[p]
+\centering
+\caption{Minibuffer vs.\ in-buffer completion axes}
+\label{tab:completion-axes}
+\begin{tabularx}{\linewidth}{@{}lllX@{}}
+\toprule
+Axis & API & Where & Replaceable by \\
+\midrule
+\textbf{Minibuffer completion} & \texttt{completing-read} & Prompts, \texttt{M-x}, \texttt{C-x b} & vertico, ivy, helm, ido \\
+\textbf{In-buffer completion} & \texttt{completion-at-point} (CAPF) & Inside a buffer (code) & corfu, company \\
+\bottomrule
+\end{tabularx}
+\end{sidewaystable}
+
+These are independent. \texttt{vertico} replaces the minibuffer UI without touching in-buffer completion. \texttt{corfu} replaces the in-buffer popup without touching the minibuffer.
+
+\section{Minibuffer completion: the vertico stack}\label{minibuffer-completion-the-vertico-stack}
+
+The minibuffer stack in this config:
+
+\begin{minted}{text}
+completing-read / read-from-minibuffer
+    → completion-styles: orderless + basic          (HOW candidates match)
+    → completion-category-overrides                 (per-category style)
+    → vertico                                       (VERTICAL UI, replaces default)
+    → marginalia                                    (ANNOTATIONS on each candidate)
+    → consult                                       (ENHANCED COMMANDS feeding the stack)
+    → embark                                        (ACTIONS on any candidate)
+\end{minted}
+
+\texttt{orderless} extends \texttt{completion-styles}: it matches space-separated patterns in any order with fuzzy/regex dispatch. It does \textbf{not} change the UI; that is vertico's job.
+
+\texttt{consult} does not replace \texttt{completing-read}; instead, it provides richer \textbf{sources} to it. \texttt{consult-buffer} passes buffers, recent files, and bookmarks to the same \texttt{completing-read} that vertico renders.
+
+\texttt{embark} adds a transient action layer on top of the minibuffer: while any \texttt{completing-read} is active, \texttt{C-.} opens an action menu for the current candidate. \texttt{embark-export} pushes candidates into a dedicated buffer (e.g., a \texttt{grep} buffer for text matches) where \texttt{wgrep} can make them editable in-place.
+
+\section{In-buffer completion: the CAPF protocol}\label{in-buffer-completion-the-capf-protocol}
+
+\texttt{completion-at-point-functions} (CAPF) is a hook whose members are functions that return completion data when point is inside a completable region. Each function either returns \texttt{nil} (not applicable here) or a list \texttt{(start end collection :props...)}.
+
+The built-in \texttt{completion-at-point} command (\texttt{C-M-i} / \texttt{M-TAB}) iterates the hook until one function returns non-nil, then shows candidates. \texttt{corfu} intercepts at the same point and shows candidates in a popup instead.
+
+\texttt{cape} (Completion At Point Extensions) adds extra CAPF functions: \texttt{cape-dabbrev} (dynamic abbrev from open buffers), \texttt{cape-file} (file paths), \texttt{cape-keyword} (language keywords). These are added to \texttt{completion-at-point-functions} globally or buffer-locally.
+
+\texttt{eglot} registers its own CAPF function when it manages a buffer: that function calls the LSP server's \texttt{textDocument/completion} endpoint and returns server-provided candidates.
+
+\subsection{Why not company?}\label{why-not-company}
+
+Company implements its own backend protocol that is parallel to and incompatible with CAPF. corfu + cape is a lighter, CAPF-native alternative: no parallel protocol, any CAPF-aware package (eglot, elisp, tex, etc.) works without a dedicated company backend.
+
+\section{\texttt{completion-styles} and orderless in depth}\label{completion-styles-and-orderless-in-depth}
+
+Each element of \texttt{completion-styles} is tried in order until one matches. The built-in styles:
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+Style & Matching rule \\
+\midrule
+\texttt{basic} & Prefix match only \\
+\texttt{partial-completion} & Partial prefix match, e.g. \texttt{/u/s/l} matches \texttt{/usr/share/lib} \\
+\texttt{flex} & Fuzzy subsequence match \\
+\texttt{orderless} & Space-separated, each component matched independently \\
+\bottomrule
+\end{longtable}
+
+This config's setting:
+
+\begin{minted}{elisp}
+(setq completion-styles '(orderless basic)
+      completion-category-overrides
+        '((file (styles basic partial-completion))))
+\end{minted}
+
+File completion uses \texttt{basic} + \texttt{partial-completion} (no orderless) because path components are ordered. \texttt{partial-completion} handles \texttt{$\sim$/D/P/s} → \texttt{$\sim$/Documents/Projects/src} expansion correctly, while \texttt{orderless} would match path segments in arbitrary order, producing surprising results for file name completion.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+Emacs completion divides into two independent axes: minibuffer completion, where \texttt{completing-read} feeds candidates through vertico, and in-buffer completion, where CAPF functions feed candidates through corfu.  The minibuffer stack layers several cooperating packages---\texttt{orderless} handles flexible matching, vertico provides the vertical UI, marginalia adds annotations, consult supplies rich candidate sources, and embark offers contextual actions on any candidate.  The \texttt{completion-styles} list is tried in order; \texttt{orderless} covers most scenarios, but file-name completion specifically needs \texttt{partial-completion} to expand path prefixes correctly.
+
+On the in-buffer side, CAPF functions return \texttt{(start end collection)} or \texttt{nil}, and corfu renders their output as a popup.  Corfu together with cape is fully CAPF-native, unlike company which uses a parallel, incompatible backend protocol.  Eglot (Chapter~\ref{ch:eglot-lsp}) registers its own CAPF backend so that LSP completions flow into this architecture transparently.  Meanwhile, \texttt{embark-export} can push any set of candidates into a dedicated buffer where \texttt{wgrep} makes them editable, bridging the gap between selection and bulk editing.

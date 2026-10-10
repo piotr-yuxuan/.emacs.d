@@ -1,0 +1,156 @@
+#+TITLE: A first day with this configuration
+#+OPTIONS: toc:nil num:nil
+#+KEYMAPS: minibuffer-local-map wgrep-mode-map org-capture-mode-map with-editor-mode-map org-mode-map
+
+This tutorial walks through the moves of an ordinary working day on a
+small practice project: opening, searching, editing many files at
+once, arranging windows, committing, and capturing a task.  Most steps
+are daily journeys that the tests of plan 094 replay, so what you see
+should match what this page says.  It assumes [[file:getting-started.org][Getting started]] is
+done.
+
+How to read the keys: =C-x= means hold Control and press =x=, =M-x=
+means hold Alt (Meta) and press =x=, and =C-x C-f= is two such presses
+in a row.  =s-= is the Super key: the Windows key on Linux, where the
+Menu key followed by the key also works, and fn on macOS.
+
+* Prepare a practice project
+
+In a shell:
+
+#+BEGIN_SRC zsh
+mkdir -p ~/tmp/first-day/docs && cd ~/tmp/first-day
+printf 'Widgets\n\nTo release, frobnicate the widget.\n' > README.txt
+printf 'Release checklist\n\n- frobnicate twice\n' > docs/release-checklist.txt
+git init -q && git add -A && git commit -q -m Initial
+#+END_SRC
+
+The tasks of the last section go to =~/org/todo.org=, unless
+=local.el= names another file in =my/gtd-file= (see [[file:../reference/local-el.org][the local.el
+reference]]).  Create that file if it does not exist yet; it stays
+yours after this tutorial:
+
+#+BEGIN_SRC zsh
+mkdir -p ~/org
+[ -e ~/org/todo.org ] || printf '* Inbox\n' > ~/org/todo.org
+#+END_SRC
+
+Then open Emacs, or a frame of the daemon.  The agenda reads only the
+task files that existed when Emacs started: if Emacs was already
+running, restart it.
+
+* When you are lost
+
+- =C-g= cancels whatever is going on: a half-typed key, a question, a
+  long command.
+- =C-h k= then any key says what that key does here.
+- Press =C-c= and wait a second: a panel at the bottom lists every key
+  that can follow, with a short description.  =C-g= closes it.
+- [[file:../reference/keys.org][The key reference]] lists every key this configuration adds.
+
+* Open, edit and save a file
+
+1. Press =C-x C-f=, type =~/tmp/first-day/README.txt= and press =RET=.
+   The minibuffer at the bottom completes the path as you type.
+2. Go to the end of the buffer with =M->= and type a new line, such
+   as /Ship it./, followed by a few spaces.
+3. Press =M-<= to go to the top, then =C-x C-s= to save.  The spaces at
+   the end of your line are gone; any line you did not touch keeps its
+   own, so a diff of your save shows only your edit.
+4. Changed your mind?  =C-/= opens the undo tree beside the buffer:
+   =b= steps back, =f= forward, =RET= keeps the state you see, and =q=
+   leaves it as it was.
+
+* Move between files
+
+1. Press =s-p f=, type =check= and press =RET=: the checklist opens.
+   =s-p= is the project prefix: every key after it acts on the
+   project of the current file, a git repository here.
+2. Press =C-x k=, then =RET= to confirm the buffer it proposes: the
+   checklist closes.
+3. Press =C-x b= and type =check rel=: the words match in any order,
+   and the list shows open buffers and recent files alike.  Press =RET=:
+   the checklist is back, though you closed it.
+
+=C-x f= lists the recent files alone.  To open another project, press
+=s-p p=, pick it, then =f= for a file.
+
+* Search
+
+1. In the checklist, press =C-s= and type =frob=.  The minibuffer lists
+   every matching line, and the buffer follows the selected one.
+   Press =RET= to stay there.
+2. Press =C-c s r= and type =frobnicate=: the matches of the whole
+   project appear, file by file.  Move with =C-n= and =C-p=, and press
+   =RET= to open one.
+
+* Edit every match at once
+
+1. Press =C-c s r= and type =frobnicate= again.
+2. Press =C-c e=: the matches move to a buffer of their own.
+3. Press =C-c C-p= to make that buffer editable, then change the
+   matches as ordinary text, for example =frobnicate= to =defrobnicate=.
+4. Press =C-c C-c=: the edits are written to the files, which are
+   saved.
+
+* Arrange windows
+
+1. Press =C-x 3= to split the frame side by side, then =C-x 2= to split
+   the left window again.  You now have three windows.
+2. Press =M-o=: each window shows a letter in its corner.  Press the
+   letter of the window you want; it is selected.
+3. Press =C-x 1= to keep the selected window alone.
+
+With only two windows, =M-o= goes to the other one without asking.
+
+* Commit
+
+1. Open =README.txt= again and change a word.  Save with =C-x C-s=.
+   The fringe on the right of the window marks the changed line.
+2. Press =M-<= to go to the top, then =C-c g n=: the cursor jumps to
+   the next change.
+3. Press =C-x g=: Magit shows the repository's status, with the files
+   you changed under /Unstaged changes/.  Press =n= to move to a file,
+   =TAB= to show its changes, then =s= to stage them.
+4. Press =c c= to commit.  Type a message in the buffer that opens,
+   then press =C-c C-c= to commit, or =C-c C-k= to give up.
+5. Press =q= to leave Magit.
+
+* Capture a task, then see the day
+
+The tasks go to the task file you prepared at the start.
+
+1. From any buffer, press =C-c i=, type =Buy milk= and press =C-c C-c=.
+   The task is filed under the /Inbox/ heading of that file, with a
+   link to the file you were in, and you are back where you were.
+2. A new task is =TODO=; the agenda of the day shows it once you mark
+   it =NEXT=.  Open the task file with =C-x C-f=, put the cursor on
+   the task's heading, press =C-c C-t= then =n=, and save with =C-x C-s=.
+3. Press =C-c a g=: the agenda of the day shows the tasks with a date
+   today, the =NEXT= tasks you chose, such as /Buy milk/, those you
+   wait on, and those you closed today.
+
+[[file:../how-to/org-tasks.org][Working with Org tasks]] describes the whole routine.
+
+* Let Emacs complete code
+
+1. Press =C-x C-f= and open =~/tmp/first-day/sample.el=, a new file.
+2. Type =(with-current-buf= and stop typing.  After a moment, a popup
+   lists the possible completions.
+3. Press =RET= to insert the first one, or keep typing to narrow the
+   list.
+
+In a project of a language this configuration supports, =M-.= then
+goes to the definition of the symbol at point and =M-,= comes back.
+
+* Where to go next
+
+- The how-to guides cover the tasks of a longer day: [[file:../how-to/files-with-dirvish.org][files]], [[file:../how-to/terminals.org][terminals]],
+  [[file:../how-to/python.org][Python]], [[file:../how-to/clojure.org][Clojure]], [[file:../how-to/wide-tables.org][wide tables]].
+- [[file:../README.org][The documentation index]] lists everything else.
+
+When you are done, delete the practice project:
+
+#+BEGIN_SRC zsh
+rm -rf ~/tmp/first-day
+#+END_SRC

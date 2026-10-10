@@ -1,0 +1,80 @@
+\chapter{\texttt{setq}, \texttt{setq-default}, and \texttt{customize-set-variable}}
+\label{ch:setq}
+\minitoc\label{setq-setq-default-and-customize-set-variable}
+\index{setq}\index{setq-default}\index{customize-set-variable}\index{buffer-local variables}\index{defcustom}
+
+% ── Opening signpost ──────────────────────────────────────────────
+The \texttt{:custom} keyword in \texttt{use-package}
+(Chapter~\ref{ch:use-package}) expands to
+\texttt{customize-set-variable}---but most Elisp code uses plain
+\texttt{setq}.  Choosing the wrong setter is a silent source of bugs: the
+value appears to be set but has no effect because the buffer-local
+default was missed or a \texttt{:set} callback was bypassed.  This
+chapter explains \texttt{setq}, \texttt{setq-default}, and
+\texttt{customize-set-variable} so you can pick the right one every
+time.
+
+Understanding which of these to use is essential: the wrong choice silently fails or loses its effect after a mode activates.
+
+\section{\texttt{setq} vs \texttt{setq-default}}\label{setq-vs-setq-default}
+
+Many Emacs variables are \textbf{buffer-local by default}: their value is independent per buffer once set with \texttt{setq} in any buffer context. The global default (used for new buffers) is a separate slot.
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule
+Variable type & What \texttt{setq} does & What \texttt{setq-default} does \\
+\midrule
+Global (not local) & Sets the global value & Sets the global value (same) \\
+Buffer-local default & Sets value in current buffer ONLY & Sets the default for new buffers \\
+\bottomrule
+\end{longtable}
+
+The archetypal example:
+
+\begin{minted}{elisp}
+;; WRONG: only affects the current buffer at init time
+(setq indent-tabs-mode nil)
+
+;; CORRECT: sets the default for every new buffer
+(setq-default indent-tabs-mode nil)
+\end{minted}
+
+\texttt{indent-tabs-mode} is declared with \texttt{make-variable-buffer-local}, so it is always buffer-local. Using \texttt{setq} at top-level in \texttt{init.el} only affects the buffer \texttt{init.el} itself happens to be evaluating in.
+
+\section{\texttt{customize-set-variable} vs \texttt{setq}}\label{customize-set-variable-vs-setq}
+
+Many packages declare their customisation variables with \texttt{defcustom}. A \texttt{defcustom} variable may have a \texttt{:set} function, a callback that is run whenever the variable is changed via the Customize interface. This callback often performs side-effects (activating a mode, updating a face, registering a timer).
+
+\texttt{setq} bypasses the \texttt{:set} callback entirely. \texttt{customize-set-variable} (or its alias \texttt{setopt} in Emacs 29+) calls the \texttt{:set} function:
+
+\begin{minted}{elisp}
+;; Bypasses :set, safe only if the variable has no :set callback
+(setq exec-path-from-shell-arguments
+      (remove "-i" exec-path-from-shell-arguments))
+
+;; Calls :set, always correct for defcustom variables
+(customize-set-variable 'exec-path-from-shell-arguments
+                        (remove "-i" exec-path-from-shell-arguments))
+\end{minted}
+
+\texttt{use-package}'s \texttt{:custom} keyword calls \texttt{customize-set-variable} internally, which is why it is preferred over bare \texttt{setq} inside \texttt{use-package} blocks.
+
+\section{Choosing the right setter}\label{choosing-the-right-setter}
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+Scenario & Use \\
+\midrule
+Simple global variable, no :set callback & \texttt{setq} \\
+Buffer-local default for new buffers & \texttt{setq-default} \\
+\texttt{defcustom} variable with a \texttt{:set} callback & \texttt{customize-set-variable} / \texttt{setopt} \\
+Inside \texttt{use-package} & \texttt{:custom} (calls customize) \\
+Face attributes & \texttt{set-face-attribute} \\
+\bottomrule
+\end{longtable}
+
+% ── Mental model summary ────────────────────────────────────────────
+\section{Mental model}
+The most important distinction is scope: \texttt{setq} on a buffer-local variable affects only the current buffer, while \texttt{setq-default} sets the default value that new buffers inherit.  A second distinction concerns \texttt{defcustom} variables, which may carry a \texttt{:set} callback that performs side effects (e.g.\ updating a cache or re-enabling a mode).  Plain \texttt{setq} bypasses this callback silently, whereas \texttt{customize-set-variable} honours it.
+
+Inside \texttt{use-package} blocks, the \texttt{:custom} keyword calls \texttt{customize-set-variable} internally, so it is the safer default for any \texttt{defcustom} option.  Outside \texttt{use-package}, \texttt{setopt} (available since Emacs 29) provides the same callback-aware behaviour in a concise form.  When in doubt about which setter to use, check whether the variable was declared with \texttt{defcustom} and whether it is buffer-local; those two facts determine the correct choice.

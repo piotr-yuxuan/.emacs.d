@@ -1,0 +1,5 @@
+root = true
+
+[*.el]
+max_line_length = 77
+indent_style = tab

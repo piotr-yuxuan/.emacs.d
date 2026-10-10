@@ -1,0 +1,70 @@
+\chapter{\texttt{with-eval-after-load} vs \texttt{:after}}
+\label{ch:with-eval-after-load}
+\minitoc\label{with-eval-after-load-vs-after}
+\index{with-eval-after-load}\index{after-load-alist}\index{feature!provide}\index{load ordering}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Chapter~\ref{ch:use-package} introduced the \texttt{:after} keyword;
+Emacs also provides a lower-level mechanism,
+\texttt{with-eval-after-load}, for running code after a package loads.
+This chapter compares the two approaches and shows when to prefer
+each one.
+
+\texttt{(info "(elisp) Hooks for Loading")}
+
+The config calls \texttt{(with-eval-after-load 'eglot …)}, \texttt{(with-eval-after-load 'which-key …)}, and \texttt{(with-eval-after-load 'cc-mode …)} at top-level outside any \texttt{use-package} block. These look similar to \texttt{:after} but have fundamentally different semantics.
+
+\section{How \texttt{with-eval-after-load} works}\label{how-with-eval-after-load-works}
+
+\texttt{with-eval-after-load} queues a form in the internal alist \texttt{after-load-alist} under a feature key. When any file is loaded and calls \texttt{(provide 'FEATURE)}, Emacs drains the queue for that feature and evaluates every accumulated form.
+
+\begin{minted}{elisp}
+;; Queues the lambda under the key 'eglot:
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+               '(web-mode . ("typescript-language-server" "--stdio"))))
+\end{minted}
+
+If the feature has \textbf{already been loaded} when \texttt{with-eval-after-load} is called, the form is evaluated \textbf{immediately}. If not, it waits.
+
+The internal structure of \texttt{after-load-alist} (simplified):
+
+\begin{minted}{elisp}
+;; ((eglot  . ((lambda () (add-to-list 'eglot-server-programs …))))
+;;  (which-key . ((lambda () (which-key-add-key-based-replacements …)))))
+\end{minted}
+
+\section{How \texttt{:after} in \texttt{use-package} works}\label{how-after-in-use-package-works}
+
+\texttt{:after pkg} is a \textbf{load-order gate}: it prevents the enclosing \texttt{use-package} body from being processed until \texttt{pkg} has been loaded. Under the hood it wraps the body in \texttt{with-eval-after-load}. Combined with \texttt{:demand t} it means "load this package immediately once its dependency loads".
+
+\section{When to use each}\label{when-to-use-each}
+
+Table~\ref{tab:eval-after-load-situations} compares common situations where
+you would reach for one mechanism or the other.
+
+\begin{sidewaystable}[p]
+\centering
+\caption{When to use \texttt{with-eval-after-load} vs.\ \texttt{:after}}
+\label{tab:eval-after-load-situations}
+\begin{tabularx}{\linewidth}{@{}Xl@{}}
+\toprule
+Situation & Mechanism \\
+\midrule
+Registering a server in \texttt{eglot-server-programs} from a top-level form & \texttt{with-eval-after-load 'eglot} \\
+Defining keybindings in a mode-map provided by package A, declared inside \texttt{use-package} for B & \texttt{:after A} in B's declaration \\
+Configuration that must run after \textbf{two} packages both load & \texttt{:after (A B)} \\
+Keymap setup for a built-in package outside any \texttt{use-package} & \texttt{with-eval-after-load 'package} \\
+\bottomrule
+\end{tabularx}
+\end{sidewaystable}
+
+\section{\texttt{with-eval-after-load} does not trigger loading}\label{with-eval-after-load-does-not-trigger-loading}
+
+Unlike \texttt{:hook}, \texttt{:bind}, or \texttt{:commands}, \texttt{with-eval-after-load} does \textbf{not} cause a package to load. If nothing else triggers \texttt{eglot} to load, the queued form never runs. The pattern works here because \texttt{eglot-ensure} is on \texttt{prog-mode-hook}, guaranteeing \texttt{eglot} is always loaded before using its server-programs alist.
+
+% ── Mental model summary ────────────────────────────────────────────
+\section{Mental model}
+\texttt{with-eval-after-load} queues a form in the internal \texttt{after-load-alist}; when the named feature's \texttt{provide} eventually executes, the queued form runs.  If the feature is already loaded at the time the \texttt{with-eval-after-load} is evaluated, the form runs immediately instead of being deferred.  Inside \texttt{use-package}, the \texttt{:after} keyword provides the same mechanism: it wraps the entire body in \texttt{with-eval-after-load}, acting as a load-order gate that ensures the body only runs once its dependencies are present.
+
+Crucially, neither \texttt{with-eval-after-load} nor \texttt{:after} \emph{triggers} loading; something else, such as a hook, a keybinding, or an explicit \texttt{require}, must cause the feature to load before the queued form will fire.  In practice, use \texttt{with-eval-after-load} for top-level configuration outside \texttt{use-package} blocks, and use \texttt{:after} inside \texttt{use-package} for expressing load-order dependencies between packages.

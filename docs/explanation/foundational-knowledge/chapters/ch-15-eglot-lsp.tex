@@ -1,0 +1,81 @@
+\chapter{Eglot, LSP, and the diagnostic chain}
+\label{ch:eglot-lsp}
+\minitoc\label{eglot-lsp-and-the-diagnostic-chain}
+\index{Eglot}\index{LSP}\index{Language Server Protocol|see{LSP}}\index{flymake}\index{xref}\index{eglot-ensure}
+
+% ── Opening signpost ──────────────────────────────────────────────
+The Language Server Protocol gives Emacs deep language intelligence
+through external server processes.  This chapter explains how Eglot
+maps LSP capabilities to Emacs interfaces, how \texttt{eglot-ensure}
+activates servers on \texttt{prog-mode-hook}, and how the
+\texttt{flycheck-eglot} bridge unifies diagnostics across LSP and
+non-LSP buffers.
+This chapter assumes familiarity with
+Chapter~\ref{ch:major-minor-modes}.
+Chapter~\ref{ch:eglot-server-programs} continues with advanced server
+registration; Chapter~\ref{ch:dape} adds the debugger counterpart.
+
+\section{What LSP does}\label{what-lsp-does}
+
+The Language Server Protocol (LSP) defines a JSON-RPC protocol between an editor client and a language server process. The server understands one language deeply (compiles it on the fly, reads \texttt{package.json} / \texttt{pyproject.toml} / \texttt{Cargo.toml}) and exposes language intelligence over a standard wire format. The editor client maps server responses to its own infrastructure.
+
+Eglot is Emacs' built-in (Emacs 29+) LSP client. For each capability in the LSP spec, eglot maps to a corresponding Emacs interface (see Table~\ref{tab:lsp-capabilities}).
+
+\begin{sidewaystable}[p]
+\centering
+\caption{LSP capability mapping}
+\label{tab:lsp-capabilities}
+\begin{tabularx}{\linewidth}{@{}XlX@{}}
+\toprule
+LSP capability & Emacs interface & User command \\
+\midrule
+\texttt{textDocument/completion} & \texttt{completion-at-point} & \texttt{C-M-i} / corfu auto \\
+\texttt{textDocument/hover} & \texttt{eldoc} & echo area / eldoc-box \\
+\texttt{textDocument/publishDiagnostics} & \texttt{flymake} (or flycheck via flycheck-eglot) & Fringe indicators \\
+\texttt{textDocument/definition} & \texttt{xref} & \texttt{M-.} \\
+\texttt{textDocument/references} & \texttt{xref} & \texttt{M-?} \\
+\texttt{textDocument/rename} & \texttt{eglot-rename} & \texttt{C-c e r} \\
+\texttt{textDocument/codeAction} & \texttt{eglot-code-actions} & \texttt{C-c e a} \\
+\texttt{textDocument/documentSymbol} & \texttt{imenu} & \texttt{M-g i} / imenu-list \\
+\texttt{textDocument/formatting} & \texttt{eglot-format} & \texttt{C-c e f} / apheleia \\
+\bottomrule
+\end{tabularx}
+\end{sidewaystable}
+
+\section{\texttt{eglot-ensure} and the hook pattern}\label{eglot-ensure-and-the-hook-pattern}
+
+\texttt{eglot-ensure} is the function that starts (or reuses) a server for the current buffer. Adding it to \texttt{prog-mode-hook} means every programming buffer automatically gets an LSP connection:
+
+\begin{minted}{elisp}
+(add-hook 'prog-mode-hook #'eglot-ensure)
+\end{minted}
+
+This is the idiomatic pattern. Eglot will only start a server if one is registered for the current \texttt{major-mode} in \texttt{eglot-server-programs}. For unregistered modes it signals a user-friendly error.
+
+\texttt{eglot-sync-connect nil} (set in \texttt{:custom}) means the server starts asynchronously; Emacs does not block waiting for the server to initialise. Completions and diagnostics arrive once the server is ready.
+
+\section{The flycheck-eglot bridge}\label{the-flycheck-eglot-bridge}
+
+Eglot's native diagnostic backend is \textbf{flymake}. Flymake is built-in and good, but this config uses \textbf{flycheck} as the unified diagnostic frontend (because flycheck has richer integrations for grammalecte, shellcheck, etc.).
+
+\texttt{flycheck-eglot} wraps eglot's flymake backend and makes it available as a flycheck checker. With \texttt{flycheck-eglot-exclusive t}, the raw flymake indicators are hidden in eglot-managed buffers so only flycheck overlays appear. The diagnostic display is then consistent across all buffers regardless of whether an LSP server is active.
+
+\begin{minted}{text}
+eglot  ──wire──>  flymake backend  (eglot internal)
+                       │
+               flycheck-eglot  (re-exposes as flycheck checker)
+                       │
+                  flycheck UI  (fringe icons, doom-modeline counts)
+\end{minted}
+
+\section{xref: cross-reference infrastructure}\label{xref-cross-reference-infrastructure}
+
+\texttt{xref} is the built-in cross-reference layer that decouples "find definition" from its implementation. \texttt{M-.} (\texttt{xref-find-definitions}) and \texttt{M-?} (\texttt{xref-find-references}) work the same regardless of whether the backend is eglot (LSP), Emacs Lisp introspection, etags, or grep. Eglot registers itself as an xref backend when it manages a buffer.
+
+\texttt{consult-xref} (from the \texttt{consult} package) replaces the default xref UI with a live-filtered consult buffer, giving the same orderless matching and preview available in \texttt{consult-buffer}.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+Eglot's design philosophy is to map each LSP capability onto a standard Emacs interface rather than invent new ones: completions flow through CAPF, hover information through eldoc, diagnostics through flymake, and definitions through xref.  Placing \texttt{eglot-ensure} on \texttt{prog-mode-hook} starts a language server automatically, but only when an entry exists in \texttt{eglot-server-programs} for the buffer's mode.  Setting \texttt{eglot-sync-connect} to \texttt{nil} makes server startup asynchronous, so Emacs never blocks while a server initialises.
+
+Because this configuration uses flycheck rather than flymake for diagnostics, \texttt{flycheck-eglot} bridges the two: it re-exposes flymake diagnostics as flycheck checkers, giving a single consistent diagnostic UI across all buffers.  On the navigation side, \texttt{xref} decouples ``find definition'' from its backend (Eglot, etags, and grep all feed the same \texttt{M-.} interface, and \texttt{consult-xref} layers live filtering on top.  \(\rightarrow\) See Appendix~\ref{app:lsp-protocol} for the JSON-RPC wire protocol details.

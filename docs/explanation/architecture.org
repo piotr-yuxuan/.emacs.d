@@ -1,0 +1,96 @@
+#+TITLE: How the configuration is built and loaded
+#+OPTIONS: toc:nil num:nil
+
+* One literate source
+
+=README.org= is the configuration.  Its Emacs Lisp blocks are tangled
+into the two files Emacs reads: a block goes to =init.el= by default,
+to =early-init.el= when it says =:tangle ./early-init.el=, and nowhere
+when it says =:tangle no=, as the shell snippets do.  =init.el= and
+=early-init.el= are generated and committed, so that a fresh checkout
+starts without Org; an edit made to them directly is lost at the next
+tangle.
+
+The prose around each block is the reference and the explanation of
+that block: why a package is there, which key it binds, which upstream
+bug a patch works around.  Keeping it next to the code is the point of
+the literate form, decided with the user (D3 of the programme of
+plans 085 to 098): a change to a block and the sentence that explains
+it land in the same commit.  The documents under =docs/= hold what
+does not belong to a single block: tutorials, task guides, references
+that span the configuration, and explanations such as this one.
+
+* What runs when
+
+Emacs reads the files in this order, and the configuration places
+each piece of work as late as it can.
+
+1. =early-init.el=, before the package system and the first frame.
+   It turns off =package.el=, which straight.el replaces, raises the
+   garbage collection threshold and empties =file-name-handler-alist=
+   for the duration of startup, prefers compiled files, and sets the
+   size of the first frame.
+2. =init.el=, in the order of =README.org=.  It first bootstraps
+   straight.el and use-package.  Every package is then deferred by
+   default (=use-package-always-defer=): a =use-package= form only
+   registers autoloads, keys and hooks, unless it says =:demand=.
+   Sections run in the order they appear, which is why the order of
+   =README.org= changes only where load order allows it.
+3. =local.el=, at the very end of =init.el=: the host's values win
+   over everything before them.  See [[file:../reference/local-el.org][the local.el reference]].
+4. =after-init-hook=: values computed from =local.el=, such as the
+   agenda files, and two global modes, flycheck and editorconfig.
+5. =emacs-startup-hook=: the garbage collection threshold and the file
+   name handlers come back, and the global modes turn on: completion
+   (vertico, marginalia, corfu), which-key, spell checking (jinx),
+   folding, winner, the light or dark theme (auto-dark).
+6. =window-setup-hook=: the mode line.
+7. Once Emacs has been idle for one second, the Emacs server starts,
+   unless one runs already; at two seconds of idle time, the MCP
+   server starts, unless one runs already, and its tools load Org.
+8. First use: lsp-mode, magit, CIDER, dape, Treemacs, the terminals
+   and the other large packages load when their key or their file
+   type first needs them.  The integrity checks of plan 086 fail if
+   one of them loads at startup.
+
+A daemon session, as the tests start one, runs the same steps;
+frame-specific settings, such as the default font, run again for each
+new frame from =after-make-frame-functions=.  Theme changes rerun
+=enable-theme-functions=, which keeps comments italic in both themes.
+
+* Packages and versions
+
+straight.el clones each package's git repository under
+=~/.emacs.d/straight/repos/= and builds it under
+=~/.emacs.d/straight/build/=.  The lockfile,
+=straight/versions/default.el=, records the commit of each package and
+is versioned with the configuration, so a checkout gets the same
+packages on every machine.  [[file:../how-to/update-packages.org][Update the packages safely]] moves the
+lockfile forward only when the tests pass.
+
+Packages that Emacs ships are used as shipped where they are recent
+enough (use-package, which-key, editorconfig); the others, such as
+transient or eldoc, are built by straight.el because their dependents
+need newer versions than older Emacs releases ship.
+
+* Platforms
+
+The configuration runs on GNU/Linux and macOS (decision D16).  Code
+specific to one platform tests one of two constants, =my/linux-p= and
+=my/macos-p=, and nothing else, so that a reader can find every
+platform difference by searching for them.  Paths and names specific
+to one machine go to =local.el=, never to =README.org=.
+
+* Generated documents
+
+Some documents are produced from the configuration instead of written
+by hand, because a hand-written copy drifts:
+- [[file:../reference/keys.org][the key reference]] is written from the live keymaps of a session in
+  which every package is loaded, by
+  =tests/integrity/session/run cheatsheet=;
+- the scenario vocabulary of the tests is printed from the outcome
+  definitions themselves (see [[file:../reference/tests.org][the test reference]]).
+
+For the internals of Emacs that these choices rely on (startup, garbage
+collection, use-package, straight.el, hooks), see the LaTeX book
+[[file:foundational-knowledge/Foundational knowledge.tex][Foundational knowledge]].

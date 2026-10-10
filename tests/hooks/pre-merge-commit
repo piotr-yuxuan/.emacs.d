@@ -1,0 +1,13 @@
+#!/bin/sh
+# Run the fast tier of the tests before every merge commit, such as the
+# `git merge --no-ff' that lands a plan branch.  On macOS, export
+# EMACS_TEST_GUI=0: the NS Emacs cannot draw on a private display, and
+# without it the run stops with a usage error.
+#
+# Not installed by default.  To use the hooks of each worktree's own
+# tests/hooks directory in every worktree of this repository, run once:
+#
+#   git config core.hooksPath tests/hooks
+#
+# and undo it with: git config --unset core.hooksPath
+exec "$(git rev-parse --show-toplevel)/tests/run" fast

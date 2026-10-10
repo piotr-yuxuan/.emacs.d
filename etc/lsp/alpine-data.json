@@ -1,0 +1,132 @@
+{
+  "$comment": "Alpine.JS HTML custom data, fed to vscode-html-language-server via lsp-html-custom-data. Authored 2026-05-03 from the Alpine.JS v3 directives reference at https://alpinejs.dev/directives. Format documented at https://github.com/microsoft/vscode-html-languageservice/blob/main/docs/customData.md",
+  "version": 1.1,
+  "globalAttributes": [
+    {
+      "name": "x-data",
+      "description": "Declare a new Alpine component and its data for a block of markup.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/data"}
+      ]
+    },
+    {
+      "name": "x-init",
+      "description": "Run an expression when an element is initialised.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/init"}
+      ]
+    },
+    {
+      "name": "x-show",
+      "description": "Toggle the visibility of an element via display: none.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/show"}
+      ]
+    },
+    {
+      "name": "x-bind",
+      "description": "Dynamically bind an attribute to a JavaScript expression. Can be shortened to `:attribute`.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/bind"}
+      ]
+    },
+    {
+      "name": "x-on",
+      "description": "Listen for browser events on an element. Can be shortened to `@event`.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/on"}
+      ]
+    },
+    {
+      "name": "x-text",
+      "description": "Set the text content of an element to the result of a JavaScript expression.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/text"}
+      ]
+    },
+    {
+      "name": "x-html",
+      "description": "Set the inner HTML of an element to the result of a JavaScript expression.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/html"}
+      ]
+    },
+    {
+      "name": "x-model",
+      "description": "Two-way bind a form input to a piece of Alpine state.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/model"}
+      ]
+    },
+    {
+      "name": "x-modelable",
+      "description": "Allow a property to be exposed as the target of x-model on a parent component.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/modelable"}
+      ]
+    },
+    {
+      "name": "x-for",
+      "description": "Repeat a block of HTML based on a data set, like a JavaScript for loop.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/for"}
+      ]
+    },
+    {
+      "name": "x-transition",
+      "description": "Transition an element in and out using CSS classes or inline declarations.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/transition"}
+      ]
+    },
+    {
+      "name": "x-effect",
+      "description": "Re-run a JavaScript expression whenever any of its dependencies change.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/effect"}
+      ]
+    },
+    {
+      "name": "x-ignore",
+      "description": "Tell Alpine to skip initialising the element and its children.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/ignore"}
+      ]
+    },
+    {
+      "name": "x-ref",
+      "description": "Mark an element so it can be referenced in expressions via $refs.<name>.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/ref"}
+      ]
+    },
+    {
+      "name": "x-cloak",
+      "description": "Hide an element while Alpine is initialising; remove with the `[x-cloak] { display: none !important }` CSS rule.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/cloak"}
+      ]
+    },
+    {
+      "name": "x-teleport",
+      "description": "Move an element to another location in the DOM at runtime.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/teleport"}
+      ]
+    },
+    {
+      "name": "x-if",
+      "description": "Conditionally render a <template> element. The block is added/removed from the DOM as the expression flips.",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/if"}
+      ]
+    },
+    {
+      "name": "x-id",
+      "description": "Generate a stable, deterministic id for use with $id().",
+      "references": [
+        {"name": "Alpine.JS docs", "url": "https://alpinejs.dev/directives/id"}
+      ]
+    }
+  ]
+}

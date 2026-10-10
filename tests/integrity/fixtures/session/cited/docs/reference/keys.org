@@ -1,0 +1,3 @@
+#+TITLE: Fixture of the generated key cheatsheet
+
+| =C-c Z Z= | t1fx-command | not bound in the self-test |

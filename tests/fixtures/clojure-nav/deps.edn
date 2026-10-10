@@ -1,0 +1,4 @@
+{:paths ["src"]
+ :deps {org.clojure/clojure              {:mvn/version "1.11.1"}
+        metosin/malli                    {:mvn/version "0.13.0"}
+        org.apache.commons/commons-lang3 {:mvn/version "3.14.0"}}}

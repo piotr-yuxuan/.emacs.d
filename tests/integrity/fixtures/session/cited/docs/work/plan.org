@@ -1,0 +1,3 @@
+#+TITLE: Fixture plan, which cites keys to discuss them
+
+Bind =C-c Z Z= later.

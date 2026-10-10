@@ -1,0 +1,197 @@
+#+TITLE: Work with files in Dirvish
+#+OPTIONS: toc:nil num:nil
+#+KEYMAPS: dirvish-mode-map dired-mode-map wdired-mode-map minibuffer-local-map
+
+Dirvish draws every Dired buffer of this configuration: =C-x d=,
+=C-x C-j= and =C-x C-f= on a directory all open it.  Each section
+below is one task: the keys to press, in order, and what you then
+see.  A key is pressed in a Dirvish buffer unless the step says
+otherwise.  =docs/reference/keys.org= lists every key, and the /File
+manager/ section of =README.org= explains the configuration.
+
+* Open a directory
+
+1. Press =C-x d=, type or complete a directory, and press =RET=.  The
+   window shows its listing, one line per entry: an icon and the
+   name, then the date and the size on the right.  In a git
+   repository, a line also shows the file's last commit message, and
+   on a graphical display a colour in the left fringe gives its git
+   state.  Directories come first; dotfiles are listed, =.= and =..=
+   are not.
+2. From a file, press =C-x C-j= instead: you see the file's directory,
+   with the cursor on that file.
+3. Press =M-t= for the full-frame layout: the parent directory on the
+   left, the listing in the middle, a preview of the entry at point
+   on the right.  =M-t= again goes back to a single window.  In the
+   full-frame layout, =M-T= drops the parent pane, and brings it back
+   when pressed again.
+4. Press =q= to close Dirvish.  From the full-frame layout, the
+   windows come back as they were.
+
+* Walk down a tree
+
+A line can stand for a chain of directories that each hold a single
+visible entry (dotfiles do not count), as IntelliJ shows Java
+packages: =src > main > java > com > example > App.java=, with
+chevrons between the names.
+
+- =<tab>= on a directory lists its entries below its line, indented.
+  On a chain, it opens every level at once: you see the contents of
+  the chain's last directory.  =<tab>= again folds it.
+- =<backtab>= (Shift and Tab) on a directory opens it and all its
+  subdirectories.  Press it again to fold them.
+- =RET= opens the file at point, or enters the directory.  On a
+  chain, it visits the chain's last entry: on the example line,
+  =App.java= opens.
+- =^= or =b= goes up to the parent directory.
+
+Only =<tab>= and =RET= follow a chain.  Every other key (=D=, =R=, =C=,
+=m=, editing the listing) acts on the chain's first directory, =src=
+in the example: press =<tab>= first to put a file on its own line.
+
+To keep a project's whole tree beside your code instead, press =<f8>=
+for Treemacs.
+
+* Jump to a place quickly
+
+** A place you go often
+
+1. Press =a=.  A menu lists the quick-access places: =h= for your home
+   directory, =e= for the Emacs configuration.
+2. Press the place's key.  Its listing replaces the current one.
+
+To add places, set =dirvish-quick-access-entries= in
+=~/.emacs.d/local.el=; each entry is a key, a directory and a label:
+
+#+BEGIN_SRC elisp
+(setopt dirvish-quick-access-entries
+        '(("h" "~/" "Home")
+          ("e" "~/.emacs.d/" "Emacs configuration")
+          ("t" "~/.local/share/Trash/files/" "Trash")))
+#+END_SRC
+
+** A directory you just left
+
+- =M-b= goes back to the previous directory of this Dirvish session,
+  and =M-f= forward again, as in a web browser.
+- =H= lists the directories whose Dirvish buffers are still open, most
+  recent first: type part of a name and press =RET=.
+
+** A file somewhere below
+
+1. Press =C-c f= (anywhere, not only in Dirvish).  fd lists every file
+   under the current directory, recursively, as a Dirvish listing,
+   apart from hidden and git-ignored ones; the header line shows the
+   search and how long it took.  Press =C-u= before =C-c f= to choose
+   the directory first.
+2. Press =N=.  The prompt starts with =#=: what you type right after
+   it is the pattern fd searches for, as in =#App=, and the listing
+   follows as you type.
+3. Press =RET= to keep the result, and =RET= again on a line to open
+   it.
+
+** A file in the current listing
+
+1. Press =N= and type part of a name.  Only the matching entries
+   stay, as you type.
+2. Press =RET= to keep that view, or =C-g= to get the whole listing
+   back.  After =RET=, =g= shows every entry again.
+
+* Peek at a file without opening it
+
+- In the full-frame layout (=M-t=), move with =n= and =p=: the right
+  pane shows the entry at point.  Text files appear with their syntax
+  colours, images as images, directories as listings.  Other types,
+  such as PDFs or videos, need an external program.
+- In a single window, =C-o= shows the file at point in another window
+  while the cursor stays in Dirvish; =o= opens it there and moves
+  the cursor to it.
+- =f= opens the file information menu, for the entry at point or the
+  marked ones: =n= copies the name, =p= the full path, =d= the
+  directory, =s= shows the total size, =t= the file type.
+
+* Create a file or a directory
+
+- Directory: press =+=, type a name and press =RET=.  A path such as
+  =docs/drafts= creates the missing parents too.  With the cursor
+  inside an opened subdirectory (=<tab>=), the prompt starts there.
+- File: press =C-x C-f=, type the new name and press =RET=; the prompt
+  starts in the listed directory.  Write, then save with =C-x C-s=.
+  Back in the listing, =g= shows the new file.
+- Empty file: =M-x dired-create-empty-file=, then a name; it creates
+  missing parents too, and the file appears in the listing.
+
+* Copy, move or rename
+
+** One file
+
+1. Put the cursor on the file, on its own line: on a chain line, =C=
+   and =R= act on the first directory (see [[*Walk down a tree]]).
+2. Press =C= to copy it, or =R= to rename or move it.  The prompt
+   starts in the listed directory.
+3. Type a new name to rename it, or a directory to move or copy it
+   there, and press =RET=.
+
+With a second Dirvish window open, for instance after =C-x 3= then
+=C-x d= in the new window, =M-n= at that prompt steps through the
+listed directory, then the directories of the other Dirvish windows.
+
+** Several files at once
+
+1. Mark them: =m= marks the line (a =*= at its start) and moves down,
+   =u= unmarks, =U= unmarks all, =t= swaps marked and unmarked, and
+   =% m= marks the names matching a regular expression.  =M-m= opens
+   a menu of more ways to mark: by extension, directories, symlinks.
+2. Press =C= or =R=: the prompt now asks for a target directory.
+
+** By pasting, the visual way
+
+1. Mark the files in their directory, as above.
+2. Go to the destination with any of the moves above: =RET=, =^=, =a=,
+   =H=.
+3. Press =y=, then =y= to paste copies here, =m= to move the files
+   here, or =s= to make symbolic links here.
+
+The marked files of every Dirvish buffer are pasted.  The copy runs in
+the background, the mode line shows its progress, and the marks go
+away when it is done.
+
+* Rename and nest by editing the listing
+
+1. Press =C-x C-q=.  The file names become editable text; the rest of
+   each line stays read-only, and chains show their first directory
+   only.
+2. Edit the names as any text, with search and replace, rectangles or
+   keyboard macros.  To nest a file, put a directory before its name,
+   as in =archive/2025/notes.txt=: missing directories are created.
+3. Press =C-x C-s= to apply every change at once.  To leave without
+   them, press =C-x C-q= again and answer =n= to its question.
+
+* Delete a file, and get it back
+
+1. Put the cursor on the file, or mark several.  On a chain line, =D=
+   trashes the first directory: press =<tab>= first.
+2. Press =D=.  The prompt asks =Trash notes.txt (y or n)=; press =y=.
+   The files go to the trash, never deleted for good.
+3. To pick files while browsing instead, press =d= on each (a =D= at
+   the line's start), then =x= to trash all of them after the same
+   question.
+
+The trash is =~/.local/share/Trash/files/= (under =$XDG_DATA_HOME= when
+it is set), on Linux and on macOS alike: this configuration sets no
+=trash-directory=, so Emacs uses the freedesktop trash, not the
+Finder's.  To restore a file, open that directory with =C-x d
+~/.local/share/Trash/files/ RET= (or =a t=, if you added the =t= place
+of the example above), put the cursor on the file and move it back
+with =R=.
+
+* Drag files with the mouse
+
+- Into Emacs: drop files from another program onto a Dirvish window.
+  Emacs copies them into the listed directory, or moves or links them
+  when the other program asks for it.
+- Out of Emacs: drag a name, or the marked files, onto another
+  program, which copies them; hold Shift to move them instead, Meta to
+  link them.  This works where Emacs can start a drag, on macOS and
+  X11 builds.  The pgtk build used on Linux under Wayland cannot:
+  paste with =y= instead.

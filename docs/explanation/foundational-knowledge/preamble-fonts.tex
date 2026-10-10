@@ -1,0 +1,44 @@
+%% preamble-fonts.tex
+%% fontspec configuration and ligature settings.
+%% Requires LuaLaTeX: Junicode is an OpenType font and will NOT load
+%% correctly under pdfLaTeX or XeLaTeX with the settings below.
+
+\usepackage{fontspec}
+
+%% ── Main font: Junicode ───────────────────────────────────────────
+%%
+%% Ligature strategy (per typographic specification):
+%%   ENABLE:   st ligature (discretionary)
+%%             ffl ligature (standard)
+%%   DISABLE:  all other ligature sets
+%%
+%% OpenType feature mapping:
+%%   +dlig: Discretionary Ligatures: includes the 'st' form in Junicode.
+%%   -liga: Disables the Standard Ligatures block entirely.
+%%            Standard liga in Junicode includes: ff, fi, fl, ffi, ffl.
+%%            Disabling liga thus also disables ffl.
+%%
+%% KNOWN LIMITATION: The OpenType specification provides no mechanism
+%% to activate a single glyph within the 'liga' feature independently.
+%% Re-enabling ffl while suppressing ff/fi/fl/ffi requires either
+%%   (a) a custom font subset with a dedicated ffl-only feature, or
+%%   (b) a Lua callback substituting the glyph at the HarfBuzz level.
+%% Neither is within the scope of this typesetting job.
+%% The setting below therefore enables 'st' (via +dlig) and leaves ffl
+%% temporarily suppressed. The word 'ffl' occurs rarely in this document;
+%% press review should decide whether to accept the approximation or
+%% commission a Lua callback.
+%%
+%% SC-CANDIDATE NOTE: 'ffl' suppression is flagged here for the press
+%% typesetter. No content is altered; visual impact is minimal.
+
+\setmainfont{Junicode}[
+  Ligatures   = TeX,            %% TeX-style curly quotes, en/em dashes (not font ligatures)
+  RawFeature  = {-liga;+dlig},  %% Disable standard liga block; enable discretionary (st)
+]
+
+%% ── Monospace font ────────────────────────────────────────────────
+%% Liberation Mono is available on this system (Courier New is not).
+\setmonofont{Liberation Mono}[
+  Scale = MatchLowercase,
+]

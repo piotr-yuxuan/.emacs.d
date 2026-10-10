@@ -1,0 +1,73 @@
+\chapter{\texttt{eglot-server-programs}: typed contacts and the \texttt{mapcan} hazard}
+\label{ch:eglot-server-programs}
+\minitoc\label{eglot-server-programs-typed-contacts-and-the-mapcan-hazard}
+\index{eglot-server-programs}\index{JDTLS}\index{mapcan}\index{nconc}\index{typed contact}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Registering a language server in \texttt{eglot-server-programs}
+requires understanding the difference between generic and typed
+contacts.  This chapter explains the alist format, shows why JDTLS
+needs a typed class, and documents the \texttt{mapcan}/\texttt{nconc}
+circular-list hazard that can hang Eglot silently.
+This chapter assumes familiarity with Chapter~\ref{ch:eglot-lsp}.
+
+\section{The alist format}\label{the-alist-format}
+
+\texttt{eglot-server-programs} is an alist of \texttt{(MODES . CONTACT)} entries where \texttt{MODES} is either a single mode symbol or a list of mode symbols, and \texttt{CONTACT} specifies how to start the server.
+
+The contact can be:
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+Contact form & Effect \\
+\midrule
+\texttt{(\textbackslash{}"server\textbackslash{}" \textbackslash{}"-\/-arg\textbackslash{}")} & Creates a generic \texttt{eglot-lsp-server} instance \\
+\texttt{(CLASS \textbackslash{}"server\textbackslash{}" \textbackslash{}"-\/-arg\textbackslash{}")} & Creates an instance of subclass \texttt{CLASS} \\
+A function & Called with the buffer; must return one of the above \\
+\bottomrule
+\end{longtable}
+
+The distinction matters: a generic process contact cannot override the \texttt{:notification-dispatcher}, \texttt{:request-dispatcher}, or custom request methods like \texttt{:java/classFileContents}. The typed form with a class symbol creates the right subclass instance.
+
+\section{Typed contact for JDTLS}\label{typed-contact-for-jdtls}
+
+\begin{minted}{elisp}
+;; WRONG: creates a generic eglot-lsp-server; M-. fails on .class files:
+(add-to-list 'eglot-server-programs
+             '((java-mode java-ts-mode) . ("jdtls")))
+
+;; CORRECT: creates eglot-java-eclipse-jdt which handles jdt: URIs:
+(add-to-list 'eglot-server-programs
+             '((java-mode java-ts-mode) eglot-java-eclipse-jdt "jdtls"))
+\end{minted}
+
+Without the typed class, \texttt{M-.} on a library class (e.g. \texttt{ArrayList}) fails with \texttt{xref-\/-not-found-error: No definitions found} because eglot cannot dispatch the \texttt{:java/classFileContents} request that decompiles the class file.
+
+\section{The \texttt{mapcan} / \texttt{nconc} circular-list hazard}\label{the-mapcan-nconc-circular-list-hazard}
+
+\texttt{eglot-java}'s default registration logic uses \texttt{mapcan} to merge server arguments into matching alist entries. \texttt{mapcan} calls \texttt{nconc} internally, and \texttt{nconc} is \textbf{destructive}: it modifies the last cons cell of its first argument to point at the next list. With a key like \texttt{(java-mode java-ts-mode)} shared by multiple alist entries, repeated \texttt{eglot-java-mode} activations eventually make the key list circular:
+
+\begin{minted}{text}
+Before: (java-mode java-ts-mode)  [proper list, length 2]
+After n activations: (java-mode java-ts-mode java-mode java-ts-mode …)
+                     [infinite loop: eglot--lookup-mode hangs]
+\end{minted}
+
+Setting \texttt{eglot-java-eglot-server-programs-manual-updates t} skips \texttt{eglot-java}'s entire internal \texttt{mapcan} block; the explicit \texttt{add-to-list} in \texttt{:config} becomes the sole authoritative registration:
+
+\begin{minted}{elisp}
+(use-package eglot-java
+  :custom
+  (eglot-java-eglot-server-programs-manual-updates t)  ; skip mapcan
+  :config
+  (add-to-list 'eglot-server-programs
+               '((java-mode java-ts-mode) eglot-java-eclipse-jdt "jdtls")))
+\end{minted}
+
+Diagnosis: if \texttt{eglot-\/-lookup-mode} hangs or signals "List contains a loop", inspect \texttt{(assq 'java-mode eglot-server-programs)}: if the car list does not terminate with \texttt{nil}, the mutation has occurred.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+Each entry in \texttt{eglot-server-programs} pairs a list of modes with a contact specification, and the shape of that contact determines the EIEIO class Eglot instantiates for the server.  A typed contact such as \texttt{(CLASS ``server'' ``--arg'')} creates the correct subclass with custom request dispatchers, which is essential for servers like JDTLS: the \texttt{eglot-java-eclipse-jdt} class handles the non-standard \texttt{:java/classFileContents} request, and without it \texttt{M-.} silently fails on library classes.
+
+A subtle hazard lurks in how \texttt{eglot-java} registers its entry.  Internally it uses \texttt{mapcan}, which is destructive (it joins lists with \texttt{nconc}).  Repeated calls on a shared key list mutate it into a circular structure, causing \texttt{eglot--lookup-mode} to hang in an infinite loop.  Setting \texttt{eglot-java-eglot-server-programs-manual-updates} to \texttt{t} disables this dangerous internal block and lets you register the entry yourself with a safe \texttt{add-to-list} call.

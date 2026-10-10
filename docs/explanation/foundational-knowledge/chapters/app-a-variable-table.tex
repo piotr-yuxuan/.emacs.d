@@ -1,0 +1,27 @@
+\chapter{Quick-reference variable table}
+\label{app:variable-table}
+\index{variable reference}\index{gc-cons-threshold}\index{file-name-handler-alist}\index{native-comp-jit-compilation}
+
+\noindent
+Table~\ref{tab:variable-reference} lists the key variables, their recommended values during startup and steady-state, and the corresponding Info nodes.
+
+\begin{sidewaystable}[p]
+\centering
+\caption{Variable reference table}
+\label{tab:variable-reference}
+\begin{tabularx}{\linewidth}{@{}llX@{}}
+\toprule
+Variable & Good value (startup / steady) & Info node \\
+\midrule
+\texttt{gc-cons-threshold} & \texttt{most-positive-fixnum}\,/\,512\,MB & \texttt{(info "(elisp) Garbage Collection")} \\
+\texttt{gc-cons-percentage} & 1.0\,/\,0.1 & \texttt{(info "(elisp) Garbage Collection")} \\
+\texttt{file-name-handler-alist} & \texttt{nil}\,/\,(restore default) & \texttt{(info "(elisp) Magic File Names")} \\
+\texttt{load-prefer-newer} & \texttt{noninteractive}\,/\,same & \texttt{(info "(elisp) How Programs Do Loading")} \\
+\texttt{read-process-output-max} & ---\,/\,2\,MB & \texttt{(info "(elisp) Process Buffers")} \\
+\texttt{jit-lock-defer-time} & ---\,/\,0.05 & \texttt{(info "(elisp) Font Lock Basics")} \\
+\texttt{org-fold-core-style} & \texttt{'text-properties}\,/\,same & Org manual \\
+\texttt{bidi-inhibit-bpa} & \texttt{t}\,/\,same & \texttt{(info "(elisp) Bidirectional Display")} \\
+\texttt{native-comp-jit-compilation} & \texttt{t}\,/\,same & \texttt{(info "(elisp) Native Compilation")} \\
+\bottomrule
+\end{tabularx}
+\end{sidewaystable}

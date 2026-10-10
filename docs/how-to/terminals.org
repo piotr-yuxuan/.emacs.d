@@ -1,0 +1,117 @@
+#+TITLE: Use a terminal inside Emacs
+#+OPTIONS: toc:nil num:nil
+#+KEYMAPS: eat-mode-map eat-semi-char-mode-map mistty-mode-map mistty-prompt-map gterm-mode-map
+
+Three terminals run your shell in an Emacs buffer.  They share the
+shell keys below; the /Shell terminals/ section of =README.org=
+explains the differences, and the parity matrix of plan 091
+(=tests/scenarios/l3-pty-*.el=) checks them.
+
+* Pick a terminal
+
+| Terminal | Open it           | Best for                                          | Known gaps                                                                         |
+|----------+-------------------+---------------------------------------------------+------------------------------------------------------------------------------------|
+| eat      | =M-x eat-project= | daily work, full-screen programs                  | Emacs stalls under bulk output                                                     |
+| mistty   | =C-c t=           | editing the command line with Emacs keys and undo | slow under bulk output; opens in a second window; starts in the buffer's directory |
+| gterm    | =M-x gterm=       | bulk output, Unicode, full-screen programs        | experimental; no mouse; no search; starts in the buffer's directory                |
+
+* Prepare the shell, once
+
+The terminals expect zsh with a few hooks.  Add this block to
+=~/.zshrc=, after =source $ZSH/oh-my-zsh.sh= if you use oh-my-zsh:
+
+#+BEGIN_SRC zsh
+# eat's prompt marks, for jumping between prompts.
+[[ -n $EAT_SHELL_INTEGRATION_DIR ]] && source "$EAT_SHELL_INTEGRATION_DIR/zsh"
+
+# Prompt marks and directory tracking for every terminal.
+autoload -Uz add-zsh-hook
+_emt_precmd()  { printf '\e]133;A\e\\'; }
+_emt_preexec() { printf '\e]133;C\e\\'; }
+_emt_chpwd()   { printf '\e]7;file://%s%s\e\\' "${HOST:-$(hostname -s)}" "$PWD"; }
+add-zsh-hook precmd  _emt_precmd
+add-zsh-hook preexec _emt_preexec
+add-zsh-hook chpwd   _emt_chpwd
+_emt_chpwd
+
+# fzf's keys: C-r history, C-t files, M-c directories.
+source <(fzf --zsh)
+
+# C-x C-e edits the command line in Emacs.
+if [[ -n "$MISTTY" ]]; then
+    export VISUAL='emacsclient --reuse-frame'
+else
+    export VISUAL='emacsclient --create-frame'
+fi
+autoload -Uz edit-command-line
+zle -N edit-command-line
+bindkey '^X^E' edit-command-line
+#+END_SRC
+
+With Home Manager, =programs.fzf.enable = true;= sets up fzf's keys
+instead of the =source= line.  For a readable prompt, see [[file:shell-prompt.org][Set up a
+shell prompt]].
+
+* Open a terminal
+
+- At the project's root: =M-x eat-project=, or =s-p p=, pick the
+  project, then =e=.
+- In the current buffer's directory: =C-c t= opens mistty in a second
+  window (=C-x 1= then gives it the frame), or goes to the next mistty
+  buffer if one is open; =C-c T= does the same, always in another
+  window.  =M-x eat= opens eat there.
+- gterm: =M-x gterm=, once its module is built (see the last section).
+
+* Use the shell's keys
+
+These work the same in the three terminals:
+
+- =C-r= picks a command from the history, =C-t= inserts a file path,
+  and =M-c= changes to a directory, each with fzf.
+- =M-<left>= and =M-<right>= move by words; =M-<backspace>= and
+  =C-<backspace>= delete the word before the cursor.
+- =C-x C-e= opens the command line in an Emacs buffer, in a new frame
+  (in the same frame from mistty, as =VISUAL= says).  Edit it, save
+  with =C-x C-s=, then press =C-x #=: the edited line comes back to
+  the prompt.  Press =RET= to run it.
+
+To run a command over several lines, type it as in any shell: =RET=
+after =for w in a b; do= asks for the next line.  In mistty, =C-j=
+also inserts a newline without running the command, and the whole
+command line can be edited with Emacs keys and undo.
+
+* Find and copy earlier output
+
+- mistty: the output is ordinary buffer text.  Press =C-s=, type, press
+  =RET=, then select and copy with =C-SPC= and =M-w=.
+- eat: press =C-c C-e= first to switch to Emacs mode, then search and
+  copy as above.  =C-c C-j= returns to the terminal.  =C-c C-p= and
+  =C-c C-n= jump to the previous and next prompt in either mode, and
+  =M-p= and =M-n= in Emacs mode.
+- gterm: the buffer holds the visible screen only.  Page back with
+  Shift and Page Up.
+
+* Run a full-screen program
+
+Give it room first with =C-x 1=, then run it: =btop=, =htop= or a
+text editor draws on the whole window, and =q= (or its own quit key)
+brings the prompt back.  =M-x my/btop= opens btop in a gterm buffer
+of its own.
+
+* Build gterm's module
+
+gterm needs Zig 0.15.2 or later, and a module built once per machine.
+
+1. Run =M-x my/gterm-compile-module=.  It clones Ghostty if needed,
+   builds a debug module and loads gterm.
+2. The debug module can crash Emacs, so rebuild it at once, in a shell:
+   #+BEGIN_SRC zsh
+   cd ~/.emacs.d/straight/repos/emacs-libgterm
+   zig build -Doptimize=ReleaseSafe
+   #+END_SRC
+3. Restart Emacs: a loaded module cannot be replaced.  =M-x gterm= then
+   opens a terminal.
+
+On macOS 26, Zig must use a macOS 15 SDK.  The configuration arranges
+that for step 1 only; for step 2, see the /gterm/ section of
+=README.org=.

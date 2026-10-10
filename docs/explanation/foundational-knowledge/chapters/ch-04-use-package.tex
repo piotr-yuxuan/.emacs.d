@@ -1,0 +1,146 @@
+\part{Package Management \& the Loading Model}
+\label{part:packages}
+
+Part~\ref{part:startup} showed you how to measure startup cost.
+Most of that cost originates here: in the way packages are declared,
+fetched, byte-compiled, and wired into the Emacs session.
+
+This part explains the full pipeline.
+Chapter~\ref{ch:use-package} begins with the \texttt{use-package}
+macro, the surface syntax of nearly every declaration, and the
+subtle interaction between its keywords and the
+\texttt{use-package-always-defer} flag that turns ``configures a
+package'' into ``silently disables it.''
+Chapter~\ref{ch:straight} describes the \texttt{straight.el} layer
+underneath: cloning, building, locking, and the modification-detection
+strategies that decide whether a rebuild is needed.
+Chapter~\ref{ch:compile-angel} covers asynchronous byte- and
+native-compilation after startup.
+The remaining chapters address the lower-level mechanisms that
+underpin these tools: \texttt{load-path} shadowing
+(Chapter~\ref{ch:load-path}), the stale-bytecode trap
+(Chapter~\ref{ch:load-prefer-newer}), \texttt{with-eval-after-load}
+vs \texttt{:after} (Chapter~\ref{ch:with-eval-after-load}), the
+\texttt{setq}/\texttt{customize} split
+(Chapter~\ref{ch:setq}), and the \texttt{fboundp}/\texttt{boundp}
+feature-detection idiom (Chapter~\ref{ch:fboundp}).
+
+By the end of this part you will be able to read any
+\texttt{use-package} declaration and predict exactly when, and
+whether, its body will execute.
+
+\chapter{\texttt{use-package} loading semantics}
+\label{ch:use-package}
+\minitoc\label{use-package-loading-semantics}
+\index{use-package}\index{use-package-always-defer}\index{autoload}\index{deferred loading}
+
+% ── Opening signpost ──────────────────────────────────────────────
+\texttt{use-package} is the macro through which nearly every package
+in this configuration is declared.  This chapter explains what each
+keyword actually does under the hood, why \texttt{:config} blocks can
+silently fail to run, and how to choose between \texttt{:init},
+\texttt{:hook}, \texttt{:bind}, and \texttt{:demand~t} to guarantee
+correct activation.  After reading it you will be able to look at any
+\texttt{use-package} form and predict exactly when, and whether, its
+body will execute.  Chapter~\ref{ch:straight} continues with the
+build layer underneath; Chapter~\ref{ch:configuration-idioms}
+later synthesises these ideas into a concise set of everyday patterns.
+
+\texttt{(info "(use-package) Top")}, though the best reference is the \href{https://github.com/jwiegley/use-package}{use-package README on GitHub}.
+
+\section{The \texttt{use-package-always-defer} trap}\label{the-use-package-always-defer-trap}
+
+When \texttt{use-package-always-defer} is \texttt{t} (as in your config), \textbf{every} \texttt{use-package} declaration defaults to deferred loading. This means:
+
+\begin{itemize}
+\item \texttt{:config} blocks \textbf{never execute} until the package is actually loaded by something else.
+\item If nothing triggers the autoload, the package is silently disabled.
+\end{itemize}
+
+This is the root cause of the "dead code" bugs we found with \texttt{editorconfig-mode} and \texttt{dashboard}: both had their activation in \texttt{:config} blocks that never ran.
+
+\section{\texttt{:init} vs \texttt{:config}}\label{init-vs-config}
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule
+Keyword & When it runs & Runs under \texttt{always-defer}? \\
+\midrule
+\texttt{:init} & Always, during \texttt{use-package} expansion & \textbf{Yes}, always runs \\
+\texttt{:config} & After the package is loaded & \textbf{Only if something loads it} \\
+\bottomrule
+\end{longtable}
+
+\textbf{Rule of thumb:} Under \texttt{use-package-always-defer t}, anything that \textbf{must} run to activate a feature goes in \texttt{:init}, not \texttt{:config}.
+
+\section{\texttt{:demand t}: force immediate loading}\label{demand-t-force-immediate-loading}
+
+\texttt{:demand t} overrides defer and loads the package immediately during init. Use sparingly: every \texttt{:demand t} adds its load time directly to \texttt{emacs-init-time}. Reserve it for packages that must be fully loaded before anything else runs (e.g., \texttt{no-littering} which sets paths other packages depend on).
+
+\section{\texttt{:hook}: the safe middle ground}\label{hook-the-safe-middle-ground}
+
+\texttt{:hook} adds a function to a mode hook, which implicitly creates an autoload. The package loads only when the hook fires:
+
+\begin{minted}{elisp}
+;; This works even with use-package-always-defer t:
+(use-package vertico
+  :hook (emacs-startup . vertico-mode))
+\end{minted}
+
+When \texttt{emacs-startup-hook} fires, \texttt{use-package} autoloads \texttt{vertico}, then calls \texttt{vertico-mode}. The load time is paid at hook time, not at init time.
+
+\section{\texttt{:commands}: explicit autoloads}\label{commands-explicit-autoloads}
+
+\texttt{:commands} registers the listed symbols as autoloads. The package loads when any of those commands is first called:
+
+\begin{minted}{elisp}
+(use-package compile-angel
+  :commands (compile-angel-on-save-local-mode))
+\end{minted}
+
+\section{\texttt{:bind}: implicit autoloads}\label{bind-implicit-autoloads}
+
+\texttt{:bind} creates both a keybinding and an autoload for the bound command. The package loads on first keypress.
+
+\section{\texttt{:after}: load ordering}\label{after-load-ordering}
+
+\texttt{:after pkg} means "load this package after \texttt{pkg} is loaded". With \texttt{use-package-always-defer t}, if \texttt{pkg} never loads, this package never loads either. This is correct for genuine dependencies (e.g., \texttt{treemacs-magit} needs both \texttt{treemacs} and \texttt{magit}).
+
+\section{The idle-timer pattern for "eventually needed" packages}\label{the-idle-timer-pattern-for-eventually-needed-packages}
+
+For packages that must be active but whose startup cost you want off the init path:
+
+\begin{minted}{elisp}
+(use-package git-gutter
+  :init
+  (run-with-idle-timer 1 nil (lambda ()
+                               (require 'git-gutter nil t)
+                               (when (fboundp 'global-git-gutter-mode)
+                                 (global-git-gutter-mode 1)))))
+\end{minted}
+
+The \texttt{nil} second argument means "fire once, not repeatedly". The \texttt{nil t} arguments to \texttt{require} mean "don't error if the feature isn't found". This pattern moves the entire package load to 1 second after the user stops typing.
+
+% ── Mental model summary ────────────────────────────────────────────
+\section{Mental model}
+With \texttt{use-package-always-defer t} in effect, \texttt{:config}
+blocks execute only when the package is actually loaded, never at init
+time.  The \texttt{:init} keyword, by contrast, always runs immediately,
+making it the right place for anything that \emph{must} execute to
+activate a feature.  Two keywords create autoloads automatically:
+\texttt{:hook} ties loading to a mode hook so the package arrives when
+that mode activates, and \texttt{:bind} creates both a keybinding and an
+autoload so the package loads on the first keypress.  When a package
+truly cannot be deferred, \texttt{:demand t} forces immediate
+loading, but use it sparingly, because every demanded package adds
+directly to \texttt{emacs-init-time}.  The \texttt{:after pkg} keyword
+gates loading on another package; if that dependency never loads,
+neither does the current declaration.
+
+For packages that can wait even longer, the idle-timer pattern, placing
+a \texttt{run-with-idle-timer} call inside \texttt{:init}---moves the
+entire load off the startup path.  Most ``dead code'' bugs in
+\texttt{use-package} configurations trace back to putting activation
+logic in \texttt{:config} instead of \texttt{:init} or \texttt{:hook},
+where it would actually run at the right time.
+Chapter~\ref{ch:configuration-idioms} collects the recurring
+declaration patterns into a single reference.

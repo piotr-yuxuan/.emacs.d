@@ -1,0 +1,4 @@
+#+TITLE: Fixture GTD file of the T1 session
+
+* Inbox
+** TODO A task only this fixture file holds

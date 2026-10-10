@@ -1,0 +1,113 @@
+\chapter{Floating org-mode tables}
+\label{app:floating-org-tables}
+\index{org-mode!floating tables}\index{sidewaystable}\index{org-export-filter-table-functions}
+
+When you export an Org document to \LaTeX, tables sometimes overflow
+the text width, especially wide comparison tables with many columns.
+The function below hooks into \texttt{org-export-filter-table-functions}
+and rewrites \emph{every} table as a full-width, landscape
+\texttt{sidewaystable} that floats on its own page.  It handles both
+captioned tables (which Org exports as
+\texttt{\textbackslash begin\{table\}\dots\textbackslash begin\{tabular\}})
+and uncaptioned ones (exported as \texttt{longtable}), converting both
+to \texttt{tabularx} with the \texttt{X} column type for automatic
+width distribution.
+
+\medskip
+\noindent
+Three \LaTeX{} packages are required in the Org preamble:
+
+\begin{minted}{elisp}
+;; Add to your org file's preamble:
+;; #+LATEX_HEADER: \usepackage{rotating}
+;; #+LATEX_HEADER: \usepackage{tabularx}
+;; #+LATEX_HEADER: \usepackage{pdflscape}
+\end{minted}
+
+\section{The export filter function}
+
+\begin{minted}{elisp}
+(defun my/org-latex-landscape-tables (text backend info)
+  "Float tables as full-width sidewaystables on their own landscape pages."
+  (when (org-export-derived-backend-p backend 'latex)
+    (cond
+     ;; Captioned tables: Org exports as \begin{table}...\begin{tabular}
+     ((string-match "\\\\begin{table}" text)
+      (let ((result text))
+        (when (string-match "\\\\begin{tabular}{\\([^}]*\\)}" result)
+          (let* ((cols (match-string 1 result))
+                 (new-cols (replace-regexp-in-string "[lrc]" "X" cols)))
+            (setq result
+                  (replace-regexp-in-string
+                   "\\\\begin{tabular}{[^}]*}"
+                   (format "\\\\begin{tabularx}{\\\\linewidth}{%s}" new-cols)
+                   result))
+            (setq result
+                  (replace-regexp-in-string
+                   "\\\\end{tabular}" "\\\\end{tabularx}" result))))
+        ;; table -> sidewaystable[p] (p = own page only, never inline)
+        (setq result
+              (replace-regexp-in-string
+               "\\\\begin{table}\\[?[^]]*\\]?"
+               "\\\\begin{sidewaystable}[p]" result))
+        (setq result
+              (replace-regexp-in-string
+               "\\\\end{table}" "\\\\end{sidewaystable}" result))
+        result))
+
+     ;; Uncaptioned tables: Org exports as longtable -- wrap in landscape
+     ((string-match "\\\\begin{longtable}{\\([^}]*\\)}" text)
+      (let* ((cols (match-string 1 text))
+             (new-cols (replace-regexp-in-string "[lrc]" "X" cols))
+             (result text))
+        (setq result
+              (replace-regexp-in-string
+               "\\\\begin{longtable}{[^}]*}"
+               (format "\\\\begin{tabularx}{\\\\linewidth}{%s}" new-cols)
+               result))
+        (setq result
+              (replace-regexp-in-string
+               "\\\\end{longtable}" "\\\\end{tabularx}" result))
+        (setq result
+              (replace-regexp-in-string
+               "\\\\endhead\\|\\\\endfoot\\|\\\\endfirsthead\\|\\\\endlastfoot"
+               "" result))
+        (concat "\\begin{landscape}\n" result "\n\\end{landscape}")))
+
+     ;; Fallback: return unchanged
+     (t text))))
+\end{minted}
+
+\section{Registering the filter}
+
+Register the function so it runs automatically on every Org-to-\LaTeX{}
+export:
+
+\begin{minted}{elisp}
+(add-to-list 'org-export-filter-table-functions
+             #'my/org-latex-landscape-tables)
+\end{minted}
+
+\noindent
+With this filter active, every table in your Org file is typeset in
+landscape orientation.  Captioned tables become numbered
+\texttt{sidewaystable} floats; uncaptioned ones are wrapped in a
+\texttt{landscape} environment.  In both cases, \texttt{tabularx} with
+\texttt{X} columns distributes the available width evenly across all
+columns, eliminating horizontal overflow.
+
+\begin{expertdepth}
+The \texttt{[p]} placement specifier on \texttt{sidewaystable} forces
+the float to a dedicated page.  Without it, \LaTeX{} may attempt to
+place the rotated table inline, which almost never works for
+full-width tables.  If you want rotated tables to appear closer to
+their source text, try \texttt{[htp]} instead, but expect the
+occasional misplaced float.
+
+Note that this filter rewrites \emph{every} table unconditionally.
+If you have small tables that fit within the text block, you may
+prefer a more selective filter that only rotates tables above a
+certain column count.  In that case, count the column separators
+(\texttt{\&}) in the first row and skip the rewrite when the count is
+below your threshold.
+\end{expertdepth}

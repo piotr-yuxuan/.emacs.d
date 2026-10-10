@@ -1,0 +1,4 @@
+$lualatex = 'lualatex --shell-escape %O %S';
+$pdf_mode = 4;          # 4 = use $lualatex
+$clean_ext = 'aux bbl blg fls fdb_latexmk synctex.gz mtc* mlt* mlf* ptc*';
+@default_files = ('Foundational knowledge.tex');

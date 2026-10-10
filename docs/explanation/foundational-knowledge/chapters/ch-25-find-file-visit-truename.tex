@@ -1,0 +1,42 @@
+\chapter{\texttt{find-file-visit-truename}: symlink resolution for LSP buffer identity}
+\label{ch:find-file-visit-truename}
+\minitoc\label{find-file-visit-truename-symlink-resolution-for-lsp-buffer-identity}
+\index{find-file-visit-truename}\index{symlink resolution}\index{buffer-file-name}\index{LSP!buffer identity}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Eglot (Chapter~\ref{ch:eglot-lsp}) identifies buffers by their
+file URI.  When Emacs opens a file through a symlink, the buffer's file name
+differs from the canonical path reported by LSP servers.  This short
+chapter explains the resulting duplicate-buffer problem and its
+one-line fix.
+
+\section{The problem}\label{the-problem}
+
+When an LSP server sends a cross-reference response, it contains a canonical file URI (e.g. \texttt{file:///real/path/Foo.java}). If Emacs has opened the same file via a symlink, \texttt{buffer-file-name} contains the symlinked path (\texttt{/symlink/path/Foo.java}). Eglot cannot match the LSP URI to the existing buffer, and opens a \textbf{second} buffer for the same physical file. With JDTLS this triggers a second server launch for what it sees as a file in a new workspace.
+
+\section{The fix}\label{the-fix}
+
+\begin{minted}{elisp}
+;; On every find-file, set buffer-file-name to file-truename
+;; (resolving all symlinks in the path).
+(setq find-file-visit-truename t)
+\end{minted}
+
+\texttt{(info "(emacs) File Aliases")}
+
+With \texttt{find-file-visit-truename t}, \texttt{buffer-file-name} always contains the canonical real path. Eglot's URI matching finds the existing buffer and reuses it rather than creating a duplicate.
+
+\section{Side effects}\label{side-effects}
+
+\texttt{abbreviate-file-name} (used in the modeline) shortens absolute paths by replacing home-directory prefixes with \texttt{$\sim$}. With symlink resolution, paths that were previously short (\texttt{$\sim$/project/Foo.java}) may expand to their real location under \texttt{/home/user/dotfiles/emacs.d/…} if the project directory is a symlink target. This affects the modeline display but not functionality.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+LSP servers report canonical file URIs, so when a buffer's
+\texttt{buffer-file-name} is a symlink rather than the resolved path, Eglot
+cannot match the server's URI to the existing buffer and opens a duplicate
+instead.  Setting \texttt{find-file-visit-truename} to \texttt{t} resolves
+all symlinks at visit time, ensuring that buffer paths and server URIs agree.
+The trade-off is that modeline paths may appear longer when the project
+directory itself is a symlink target, since the resolved location is shown
+instead of the short symlinked form.

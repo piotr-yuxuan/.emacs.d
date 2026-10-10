@@ -1,0 +1,4 @@
+#!/bin/sh
+# Run the T1 integrity checks, or regenerate docs/reference/keys.org:
+# tests/integrity/session/run [check|cheatsheet].  See driver.py.
+cd "$(dirname "$0")/../.." && exec python3 -m integrity.session.driver "$@"

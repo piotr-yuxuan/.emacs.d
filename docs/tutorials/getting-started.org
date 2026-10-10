@@ -1,0 +1,137 @@
+#+TITLE: Getting started
+#+OPTIONS: toc:nil num:nil
+
+This tutorial installs the configuration on a new machine, NixOS or
+macOS, starts it for the first time and runs its tests.  It takes
+about an hour, most of it spent waiting for packages to download.
+When you are done, continue with [[file:first-day.org][A first day with this configuration]].
+
+* 1. Install Emacs
+
+You need GNU Emacs 29.1 or later, with native compilation and
+tree-sitter.  Take 30.1 or later if you can: the tests need it.  The
+configuration is tested with Emacs 31.1.
+
+- On NixOS, add Emacs to your Home Manager configuration.  The pgtk
+  build draws natively on Wayland:
+  #+BEGIN_SRC nix
+  home.packages = [ pkgs.emacs-pgtk ];
+  #+END_SRC
+- On macOS, install with Homebrew the build that the Brewfile of the
+  [[https://github.com/piotr-yuxuan/hardware.nix][Nix configuration]] declares:
+  #+BEGIN_SRC zsh
+  brew install --cask jimeh/emacs-builds/emacs-app
+  #+END_SRC
+
+Check the version in a new shell.  Below 30.1 the configuration runs,
+but its tests do not:
+
+#+BEGIN_SRC zsh
+emacs --version
+#+END_SRC
+
+* 2. Install the programs it calls
+
+[[file:../reference/dependencies.org][The dependency list]] names every program, what uses it and its nixpkgs
+attribute.  Start with the core ones and the fonts; add the language
+servers of the languages you work in.
+
+- On NixOS, with Home Manager:
+  #+BEGIN_SRC nix
+  fonts.fontconfig.enable = true;
+  home.packages = with pkgs; [
+    git ripgrep fd delta difftastic python3 gcc gnumake pkg-config gnupg zsh fzf
+    enchant hunspell hunspellDicts.en_GB-ise hunspellDicts.fr-any
+    nerd-fonts.iosevka nerd-fonts.symbols-only noto-fonts-cjk-sans
+    xorg.xvfb
+  ];
+  # jinx, the spell checker, compiles against enchant's headers.
+  home.sessionVariables.PKG_CONFIG_PATH = "${pkgs.enchant.dev}/lib/pkgconfig";
+  #+END_SRC
+- On macOS:
+  #+BEGIN_SRC zsh
+  brew install git ripgrep fd git-delta difftastic python enchant hunspell pkgconf fzf
+  #+END_SRC
+  Install the Iosevka Nerd Font from [[https://www.nerdfonts.com/][Nerd Fonts]].  The configuration
+  reads =PATH= from your login shell, so a graphical Emacs finds what
+  Homebrew installed.
+
+* 3. Get the configuration
+
+If =~/.emacs.d= or =~/.emacs= exists, move it aside first.  Then clone
+the repository and create your machine's settings:
+
+#+BEGIN_SRC zsh
+git clone https://github.com/piotr-yuxuan/.emacs.d.git ~/.emacs.d
+cp ~/.emacs.d/local.el.example ~/.emacs.d/local.el
+#+END_SRC
+
+Open =~/.emacs.d/local.el= in any editor and set at least your name
+and email address.  [[file:../reference/local-el.org][The local.el reference]] lists the other settings;
+leave them commented for now.
+
+* 4. Start Emacs for the first time
+
+#+BEGIN_SRC zsh
+emacs
+#+END_SRC
+
+The first start downloads straight.el, then clones every package at
+the version of the lockfile, =~/.emacs.d/straight/versions/default.el=,
+and builds it.  This takes many minutes; the echo area at the bottom
+names each package.  When it is done you see the dashboard: the Emacs
+logo and "Welcome to Emacs", in a dark or light theme that follows
+your system's.
+
+Quit with =C-x C-c=, and start Emacs again: the second start takes a
+second or two.
+
+Then, in Emacs, install the tree-sitter grammars once:
+
+1. Press =M-x=, type =treesit-auto-install-all= and press =RET=.
+2. A buffer lists the missing grammars.  Answer =y= to /Install missing
+   grammars?/.  Each grammar is downloaded and compiled into
+   =~/.emacs.d/tree-sitter/=.
+
+* 5. Run Emacs as a daemon
+
+A new Emacs takes about a second to be ready; a new frame of a running
+Emacs server takes about a tenth of that.  So start the server once
+per session, and open frames from it:
+
+#+BEGIN_SRC zsh
+emacs --daemon
+emacsclient --create-frame
+#+END_SRC
+
+The frame shows the dashboard.  Close it with =C-x 5 0=: the server
+keeps running, with your buffers.  To stop the server, run
+=M-x kill-emacs= in a frame.
+
+* 6. Run the tests
+
+The tests check that the configuration works on this machine.  They
+run in private Emacs sessions and never touch the one you use.
+
+#+BEGIN_SRC zsh
+cd ~/.emacs.d
+tests/run static
+tests/run fast
+#+END_SRC
+
+On macOS, run the second command without graphical frames, which the
+macOS build cannot draw on a private display:
+
+#+BEGIN_SRC zsh
+EMACS_TEST_GUI=0 tests/run fast
+#+END_SRC
+
+Each command prints one line per test file and ends with a summary.
+Everything should pass.  When a file fails, the runner keeps its
+session directory and prints its path: =messages.txt= there says what
+went wrong.  A missing program is the usual cause; install it and run
+the command again.
+[[file:../reference/tests.org][The test reference]] explains the other commands.
+
+You now have a working configuration.  Continue with [[file:first-day.org][A first day with
+this configuration]].

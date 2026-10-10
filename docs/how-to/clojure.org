@@ -1,0 +1,76 @@
+#+TITLE: Work on a Clojure project
+#+OPTIONS: toc:nil num:nil
+#+KEYMAPS: clojure-mode-map paredit-mode-map cider-mode-map clj-refactor-map
+
+Each section is one task.  Keys are pressed in a Clojure buffer
+(=.clj=, =.cljs=, =.cljc=, =.edn= or a babashka =.bb= script) unless
+the step says otherwise.  The /Clojure/ section of =README.org=
+explains the configuration, and [[file:../reference/keys.org][the key reference]] lists every key.
+
+* Open a project
+
+1. Open a file of the project with =C-x C-f=.  Paredit and rainbow
+   parentheses turn on at once, and clojure-lsp starts.
+2. The first time in a project, lsp-mode asks for the project's root:
+   press =i= to import the directory it proposes, usually the one with
+   =deps.edn= or =project.clj=.
+
+* Find your way in the code
+
+- =M-.= goes to the definition of the symbol at point, and =M-,= comes
+  back.  On a symbol of a Java or Clojure library, it opens the
+  source inside the jar, or a decompiled class when no sources jar is
+  in =~/.m2=.
+- =C-c l g r= lists the references of the symbol at point in the
+  =*xref*= buffer; =RET= on one goes there.  =M-?= does not: in
+  Clojure buffers it is paredit's convolute.
+- =M-g j n= jumps to a definition of the current namespace, and
+  =M-g j p= to one in any open Clojure buffer, by typing part of its
+  name.
+- ~C-c l = =~ formats the buffer with clojure-lsp.
+
+* Edit structure with paredit
+
+Paredit keeps the parentheses balanced: typing =(= inserts =()=, and
+deleting a delimiter only works on an empty pair.
+
+- =C-<right>= pulls the next form into the list around point;
+  =C-<left>= pushes the list's last form out.
+- =C-s-<left>= pulls the previous form in at the front, and
+  =C-s-<right>= pushes the first form out.
+- =M-s= (or =C-s-s=) removes the list around point, keeping its
+  contents.
+- =C-s-<up>= and =C-s-<down>= remove the list and the forms before or
+  after point.
+
+* Evaluate code in a REPL
+
+1. Press =C-c M-j= to start a REPL for the project.  A JVM takes 20 to
+   40 seconds; the REPL then shows in a window at the bottom, and the
+   cursor stays in your file.
+2. Press =C-c C-k= to load the whole file into the REPL.
+3. Put point after a form and press =C-x C-e=: the result appears at
+   the end of the line.  =C-c C-p= pretty-prints it in a buffer
+   instead.
+4. =C-c C-z= goes to the REPL and back.  =C-c C-d= opens CIDER's
+   documentation menu: =d= shows the documentation of the symbol at
+   point.
+
+A babashka REPL does not work yet: this CIDER stops connecting before
+it turns on in your files, because babashka does not run cider-nrepl
+(see the notes of plan 094).
+
+* Run the tests
+
+- With kaocha in the project: =C-c k t= runs the test at point,
+  =C-c k f= the namespace, =C-c k a= every test; =C-c k s= shows the
+  warnings of the last run, and =C-c k h= hides kaocha's windows.
+- With CIDER's own runner, after =C-c M-j=: =C-c C-t= opens its test
+  menu, where =t= runs the test at point, =n= the namespace and =p=
+  the project.
+
+* Refactor
+
+Press =C-c C-m= and wait: which-key lists clj-refactor's commands,
+each under two letters.  =C-c l r r= renames the symbol at point in
+the whole project, and =C-c l a a= offers clojure-lsp's code actions.

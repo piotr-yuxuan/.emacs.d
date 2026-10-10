@@ -1,0 +1,67 @@
+\chapter{GC internals deep dive}
+\label{app:gc-internals}
+\index{garbage collection!internals}\index{mark-sweep algorithm}\index{heap accounting}\index{most-positive-fixnum}
+
+This appendix supplements Chapter~\ref{ch:gc-tuning} with a deeper
+look at how Emacs decides when to trigger garbage collection and what
+happens during a collection cycle.
+
+\section{The dual-trigger mechanism}
+
+Emacs maintains an internal counter of bytes allocated since the last
+GC.  A collection is triggered when \emph{either} of two conditions
+is met:
+
+\begin{enumerate}
+  \item \textbf{Absolute threshold}: bytes allocated since last GC $\geq$ \texttt{gc-cons-threshold}.
+  \item \textbf{Proportional threshold}: bytes allocated since last GC $\geq$ \texttt{gc-cons-percentage} $\times$ current heap size.
+\end{enumerate}
+
+Both thresholds are checked at every safe-point (function entry,
+backward branch, \texttt{QUIT} poll).  The check is a pair of integer
+comparisons and is essentially free.
+
+\section{Heap accounting}
+
+The Emacs heap comprises several typed pools: conses, symbols,
+strings, vectors, floats, and miscellaneous objects.  Each pool
+grows independently.  The ``current heap size'' used in the
+proportional trigger is the sum of all pool sizes after the last
+collection.
+
+At startup, the heap is typically 40--60\,MB.  After loading a
+large configuration with straight.el and dozens of packages,
+the heap grows to 300--600\,MB.  The proportional trigger at
+0.1 therefore fires after 30--60\,MB of allocation, which can
+happen in under a second during heavy org-mode processing.
+
+\section{The mark--sweep algorithm}
+
+Emacs uses a conservative mark--sweep collector:
+
+\begin{enumerate}
+  \item \textbf{Mark phase}: starting from root objects (obarray,
+    specpdl stack, all buffer-local variables, the C stack), recursively
+    mark every reachable object.
+  \item \textbf{Sweep phase}: iterate all pool blocks; reclaim every
+    unmarked object.
+\end{enumerate}
+
+The collector is \emph{stop-the-world}: Emacs freezes completely
+during collection.  With a 500\,MB heap, a single GC pause can
+last 50--200\,ms, imperceptible at idle, but disruptive during
+rapid keystrokes.
+
+\section{Why \texttt{most-positive-fixnum} is safe at startup}
+
+Setting \texttt{gc-cons-threshold} to \texttt{most-positive-fixnum}
+(typically $2^{61}-1$ on 64-bit systems) effectively disables the
+absolute trigger.  Combined with \texttt{gc-cons-percentage} at 1.0,
+a collection requires allocating 100\% of the current heap size---
+hundreds of megabytes.  During a typical Emacs init that allocates
+80--150\,MB, no GC fires at all, saving 0.5--2\,s.
+
+After startup, restoring the threshold to a finite value (512\,MB in
+the recommended config) ensures that runaway allocation in a single
+command does eventually trigger a collection, preventing unbounded
+memory growth.

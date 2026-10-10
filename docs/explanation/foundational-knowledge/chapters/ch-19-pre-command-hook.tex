@@ -1,0 +1,65 @@
+\chapter{\texttt{pre-command-hook} for deferred initialization}
+\label{ch:pre-command-hook}
+\minitoc\label{pre-command-hook-for-deferred-initialization}
+\index{pre-command-hook}\index{deferred initialization}\index{emacs-startup-hook}\index{run-with-idle-timer}
+
+% ── Opening signpost ──────────────────────────────────────────────
+The hook chain described in Chapter~\ref{ch:startup-lifecycle} ends
+with \texttt{window-setup-hook}---but sometimes a feature must be
+active before the very first interactive command without inflating
+\texttt{emacs-init-time}.  This chapter
+explains the self-removing \texttt{pre-command-hook} pattern and
+compares it with the other deferral strategies available in Emacs.
+
+\texttt{(info "(elisp) Command Overview")}
+
+The config activates \texttt{recentf} via a self-removing \texttt{pre-command-hook} function rather than at startup or on an idle timer:
+
+\begin{minted}{elisp}
+(defun my/recentf-enable-once ()
+  "Enable `recentf-mode' before the first interactive command, then
+remove self from pre-command-hook."
+  (remove-hook 'pre-command-hook #'my/recentf-enable-once)
+  (recentf-mode 1))
+
+(add-hook 'pre-command-hook #'my/recentf-enable-once)
+\end{minted}
+
+\section{What \texttt{pre-command-hook} is}\label{what-pre-command-hook-is}
+
+\texttt{pre-command-hook} runs before every interactive command invocation: after the key is read but before the command function executes. It fires on the very first key the user presses after startup, earlier than any idle timer (which requires the user to \textbf{stop} pressing keys for N seconds).
+
+\section{The self-removal pattern}\label{the-self-removal-pattern}
+
+The \texttt{remove-hook} call inside the function itself removes the function from the hook on its first invocation. Subsequent commands pay zero overhead. This pattern is used whenever:
+
+\begin{itemize}
+\item A one-shot initialisation must complete before the first user command.
+\item The cost of that initialisation (here: reading \texttt{recentf-save-file} from disk) is acceptable on first keypress but not on every keypress.
+\end{itemize}
+
+\section{Comparison of deferral strategies}\label{comparison-of-deferral-strategies}
+
+Table~\ref{tab:deferral-strategies} compares the four main deferral strategies available in Emacs.
+
+\begin{sidewaystable}[p]
+\centering
+\caption{Deferral strategies comparison}
+\label{tab:deferral-strategies}
+\begin{tabularx}{\linewidth}{@{}lXlX@{}}
+\toprule
+Strategy & Fires & Guaranteed timing & Use for \\
+\midrule
+\texttt{emacs-startup-hook} & After \texttt{init.el} finishes & Before first frame shown & Anything needing early setup \\
+\texttt{run-with-idle-timer} & After N idle seconds & Non-deterministic & Non-critical background setup \\
+\texttt{pre-command-hook} (self-removing) & Before first user command & Before first interaction & Must-have-before-first-use features \\
+\texttt{:hook (some-mode . fn)} & When mode activates & Per buffer & Mode-specific setup \\
+\bottomrule
+\end{tabularx}
+\end{sidewaystable}
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+\texttt{pre-command-hook} fires before every interactive command, including the very first keypress after startup.  By placing an initialisation function on this hook and having it remove itself in its own body, you get a one-shot trigger: the setup runs exactly once, just before the user's first action, and the hook carries zero overhead from that point onward.
+
+This pattern is ideal when initialisation must complete before any user interaction but its cost should not appear in \texttt{emacs-init-time}.  By comparison, \texttt{run-with-idle-timer} fires only after N seconds of inactivity, making its timing non-deterministic, while \texttt{emacs-startup-hook} runs earlier (before the first frame is displayed) but counts toward \texttt{emacs-init-time} (see the hook table in Chapter~\ref{ch:startup-lifecycle}).  The self-removing \texttt{pre-command-hook} occupies the sweet spot between these two: guaranteed to fire before first use, yet invisible to the startup clock.

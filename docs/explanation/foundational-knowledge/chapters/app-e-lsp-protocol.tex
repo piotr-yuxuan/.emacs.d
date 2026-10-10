@@ -1,0 +1,65 @@
+\chapter{LSP protocol internals}
+\label{app:lsp-protocol}
+\index{LSP!protocol internals}\index{JSON-RPC}\index{capability negotiation}\index{LSP!wire format}
+
+This appendix supplements Chapter~\ref{ch:eglot-lsp} with details
+of the Language Server Protocol's wire format and capability
+negotiation.
+
+\section{JSON-RPC wire format}
+
+LSP communication uses JSON-RPC 2.0 over stdin/stdout.  Each message
+has an HTTP-style header followed by a JSON body:
+
+\begin{minted}{text}
+Content-Length: 84\r\n
+\r\n
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{...}}
+\end{minted}
+
+Messages fall into three categories:
+
+\begin{description}
+  \item[Request] Client → server (or vice versa); has \texttt{id} and \texttt{method}.  Expects a response.
+  \item[Response] Matches a request by \texttt{id}; contains either \texttt{result} or \texttt{error}.
+  \item[Notification] Has \texttt{method} but no \texttt{id}.  No response expected.
+\end{description}
+
+Eglot serialises and deserialises JSON using the built-in
+\texttt{jsonrpc.el} library, which dispatches incoming messages to
+handler functions registered per method name.
+
+\section{Capability negotiation}
+
+The \texttt{initialize} request is the first message sent by the
+client.  It advertises the client's capabilities (what the editor
+supports) and receives the server's capabilities (what intelligence
+the server can provide):
+
+\begin{minted}{text}
+Client → Server:  initialize { capabilities: { ... } }
+Server → Client:  { capabilities: { completionProvider: ..., ... } }
+Client → Server:  initialized {}   (notification)
+\end{minted}
+
+Eglot reads the server's response and enables only the Emacs
+features backed by a declared server capability.  For example, if
+the server omits \texttt{renameProvider}, \texttt{eglot-rename}
+signals an error immediately rather than sending an unsupported
+request.
+
+\section{\texttt{read-process-output-max} and throughput}
+
+The default \texttt{read-process-output-max} (4\,KB on most systems)
+limits how much data Emacs reads from a subprocess pipe in a single
+\texttt{read} syscall.  LSP servers that return large completion lists
+(hundreds of items) can saturate this limit, causing multiple read
+cycles per response.  Setting the variable to 1--2\,MB lets Emacs
+consume an entire LSP response in one call, reducing completion
+latency significantly.
+
+\begin{minted}{elisp}
+(setq read-process-output-max (* 2 1024 1024))  ; 2 MB
+\end{minted}
+
+This variable affects \emph{all} subprocesses, not just LSP servers.

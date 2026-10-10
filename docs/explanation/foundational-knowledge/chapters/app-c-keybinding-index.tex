@@ -1,0 +1,26 @@
+\chapter{Keybinding quick reference}
+\label{app:keybinding-index}
+\index{keybinding!reference}\index{xref-find-definitions}\index{ace-window}\index{project-prefix-map}
+
+This appendix collects the most commonly used keybindings mentioned
+in this book.  Bindings marked with \textdagger{} are custom (not
+Emacs defaults).
+
+\begin{longtable}{@{}lll@{}}
+\toprule
+Key & Command & Context \\
+\midrule
+\texttt{M-.} & \texttt{xref-find-definitions} & Any xref-enabled buffer \\
+\texttt{M-?} & \texttt{xref-find-references} & Any xref-enabled buffer \\
+\texttt{M-o}\textdagger & \texttt{ace-window} & Global (\texttt{:bind*}) \\
+\texttt{s-p} & \texttt{project-prefix-map} & Global (\texttt{:bind-keymap}) \\
+\texttt{C-c e r}\textdagger & \texttt{eglot-rename} & \texttt{prog-mode-map} \\
+\texttt{C-c e a}\textdagger & \texttt{eglot-code-actions} & \texttt{prog-mode-map} \\
+\texttt{C-c e f}\textdagger & \texttt{eglot-format} & \texttt{prog-mode-map} \\
+\texttt{M-g i} & \texttt{imenu} / \texttt{consult-imenu} & Global \\
+\texttt{C-c C-z} & \texttt{org-babel-switch-to-session} & Org buffers \\
+\texttt{C-c left} & \texttt{winner-undo} & Global \\
+\texttt{C-c right} & \texttt{winner-redo} & Global \\
+\texttt{C-M-i} & \texttt{completion-at-point} & General completion \\
+\bottomrule
+\end{longtable}

@@ -1,0 +1,1 @@
+A fixture for the dirvish and Treemacs scenarios of plan 089.

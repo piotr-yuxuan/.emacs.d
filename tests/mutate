@@ -1,0 +1,5 @@
+#!/bin/sh
+# Mutation-test the suite against plausible regressions of init.el:
+# tests/mutate [PREFIX...].  Slow; tests/run never runs it.  See
+# tests/mutation/__main__.py, or run tests/mutate --help.
+cd "$(dirname "$0")" && exec python3 -m mutation "$@"

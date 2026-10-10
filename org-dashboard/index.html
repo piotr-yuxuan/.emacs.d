@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:"
+    >
+    <title>Org focus board</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">Org portfolio</p>
+        <h1>Focus board</h1>
+        <p class="subtitle">One calm view of what is next, pending, and waiting.</p>
+      </div>
+      <button class="primary-action" id="refresh" type="button">
+        <span aria-hidden="true">↻</span>
+        Refresh from Org
+      </button>
+    </header>
+
+    <main>
+      <section class="controls" aria-label="Task filters">
+        <label class="search-control">
+          <span class="sr-only">Search tasks</span>
+          <span aria-hidden="true">⌕</span>
+          <input id="search" type="search" placeholder="Search tasks and projects" autocomplete="off">
+        </label>
+
+        <div class="filter-block">
+          <span class="filter-label">Sources</span>
+          <div class="filter-pills" id="source-filters"></div>
+        </div>
+
+        <div class="filter-block">
+          <span class="filter-label">States</span>
+          <div class="filter-pills" id="state-filters"></div>
+        </div>
+
+        <div class="view-switch" aria-label="View">
+          <button type="button" class="view-button is-active" data-view="board">Board</button>
+          <button type="button" class="view-button" data-view="list">List</button>
+        </div>
+      </section>
+
+      <section class="summary" id="summary" aria-live="polite"></section>
+      <p class="error" id="error" role="alert" hidden></p>
+      <section id="task-view" aria-label="Tasks"></section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  </body>
+</html>

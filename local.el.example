@@ -1,0 +1,62 @@
+;;; local.el --- Machine-local overrides  -*- lexical-binding: t -*-
+
+;; This file is gitignored; copy it to local.el and fill in your values.
+;; Settings here are loaded after init.el completes, so they override
+;; anything set in the main config.
+
+;;; Identity ────────────────────────────────────────────────────────
+
+(setq user-mail-address "you@example.com"
+      user-full-name    "Your Name")
+
+;; Hide the "For information about GNU Emacs" message after startup.
+;; Emacs honours this only when Customize sets it to your login name.
+;; (custom-set-variables '(inhibit-startup-echo-area-message "your-login-name"))
+
+;;; GTD agenda file ─────────────────────────────────────────────────
+
+;; my/gtd-file controls which file becomes the org agenda spine and
+;; the capture target for `C-c i' and `C-c c'.  The default is
+;; ~/org/todo.org.  Override here when the same machine fleet
+;; has a different layout (e.g. work laptop vs. personal box).
+;; (setq my/gtd-file (expand-file-name "~/Documents/work/todo.org"))
+
+;;; Agenda sources
+
+;; The task files of the repositories this machine checks out, after
+;; my/gtd-file, in display order.  Missing files are ignored.  The
+;; default lists only this configuration's own todo.org.
+;; (setq my/org-agenda-source-files
+;;       (list (expand-file-name "~/src/example/project/todo.org")
+;;             (expand-file-name "todo.org" user-emacs-directory)))
+
+;; The label the agenda and the dashboard show for a task file, keyed
+;; by the name of its repository's directory; without an entry, the
+;; label is that name.  The default labels ~/org and this
+;; configuration.
+;; (setq my/org-source-label-alist
+;;       '(("org" . "Personal")
+;;         (".emacs.d" . "Emacs")
+;;         ("project" . "Project")))
+
+;;; vellum LaTeX class
+
+;; The directory of the vellum class and its Org exporter, when it is
+;; installed on this machine.
+;; (setq my/vellum-directory "~/texmf/tex/latex/vellum")
+
+;;; Java debugging
+
+;; The java-debug bundle, which dape's Java debugging needs, when it is
+;; installed on this machine.
+;; (setq lsp-java-bundles
+;;       '("/path/to/com.microsoft.java.debug.plugin.jar"))
+
+;;; nixd
+
+;; The NixOS flake whose options nixd completes in Nix buffers.  The
+;; flake's nixosConfigurations entry defaults to the host name.
+;; (setq my/nixd-flake "~/src/example/nixos-configuration"
+;;       my/nixd-flake-host "my-host")
+
+;;; local.el ends here

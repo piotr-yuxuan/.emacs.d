@@ -1,0 +1,38 @@
+%% preamble-macros.tex
+%% Utility commands and environments for Emacs: Foundational Knowledge.
+
+%% ══════════════════════════════════════════════════════════════════
+%% UTILITY COMMANDS
+%% ══════════════════════════════════════════════════════════════════
+%% Monospace inline code (org-mode =...= and ~...~ markup)
+%% Uses mintinline so inline code gets the same Pygments font as block code.
+\newcommand{\code}[1]{\mintinline{emacs-lisp}{#1}}
+
+%% Legacy alias: kept so any remaining \boldlabel in prose compiles;
+%% prefer \paragraph{} for new definition-list sections.
+\newcommand{\boldlabel}[1]{\noindent\textbf{#1}}
+
+%% ── Expert-depth callout box ──────────────────────────────────────
+%% Wraps internal-mechanism deep-dives that can be skipped on first reading.
+\newtcolorbox{expertdepth}{
+  enhanced,
+  breakable,
+  colback   = blue!4,
+  colframe  = blue!40!black,
+  fonttitle = \bfseries\small,
+  title     = {Expert depth: skip on first reading},
+  left      = 6pt, right = 6pt, top = 4pt, bottom = 4pt,
+}
+
+%% ── pandoc compatibility stubs ────────────────────────────────────
+%% pandoc emits \tightlist inside itemize/enumerate environments.
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+%% pandoc emits \passthrough{} for inline \texttt spans in some modes.
+\providecommand{\passthrough}[1]{#1}
+
+%% ── LuaLaTeX + minitoc compatibility ─────────────────────────────
+%% minitoc internally references \cmrsideswitch (a Computer Modern
+%% font-switch command) that does not exist under fontspec/LuaLaTeX
+%% with non-CM fonts.  Define it as a no-op.
+\providecommand{\cmrsideswitch}{}

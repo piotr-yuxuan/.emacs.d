@@ -1,0 +1,13 @@
+;; Plan 062 / 054 fixture: minimal Clojure project for paredit-under-LSP
+;; and kaocha L3-batch scenarios.  Pinned dependencies so the symbols
+;; the scenarios reference do not move under the user's feet:
+;;
+;;   org.clojure/clojure 1.11.1   for `clojure.core/map' and friends
+;;
+;; Sized so a cold `clojure-lsp' attach completes under five seconds on
+;; a quiet laptop.
+{:paths ["src" "test"]
+ :deps  {org.clojure/clojure {:mvn/version "1.11.1"}}
+ :aliases
+ {:test {:extra-paths ["test"]
+         :extra-deps  {lambdaisland/kaocha {:mvn/version "1.91.1392"}}}}}

@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>plan 049 web-stack fixture</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body x-data="{ open: false }">
+    <button class="p-4 bg-blue-500" hx-get="/api/v1/ping" x-on:click="open = !open">
+      Toggle
+    </button>
+  </body>
+</html>

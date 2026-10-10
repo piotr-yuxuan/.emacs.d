@@ -1,0 +1,224 @@
+\chapter{General performance heuristics}
+\label{ch:general-performance}
+\minitoc\label{general-performance-heuristics}
+\index{performance!heuristics}\index{lexical-binding}\index{jit-lock-defer-time}\index{bidi-inhibit-bpa}\index{read-process-output-max}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Chapters~\ref{ch:startup-lifecycle} and~\ref{ch:gc-tuning} addressed
+the two biggest performance levers.  Beyond those, several
+independent settings each shave measurable time from everyday editing.  This chapter
+collects the most impactful general-purpose performance knobs, from
+\texttt{jit-lock} fontification deferral to bidirectional-text
+suppression, and explains the mechanism behind each one so you can
+evaluate whether it applies to your workflow.
+
+\section{\texttt{lexical-binding} cookies}\label{lexical-binding-cookies}
+
+Every \texttt{.el} file should start with:
+
+\begin{minted}{elisp}
+;;; filename.el --- Description  -*- lexical-binding: t; -*-
+\end{minted}
+
+Without this, the file is compiled with dynamic binding, which is both slower (the byte-compiler can't optimise variable lookups) and more error-prone. \texttt{(info "(elisp) Lexical Binding")}
+
+\section{\texttt{jit-lock-defer-time}}\label{jit-lock-defer-time}
+
+Controls how long \texttt{jit-lock} waits after a change before re-fontifying. Default: \texttt{nil} (immediate). Setting it to 0.05 means fontification happens 50 ms after you stop typing, eliminating keystroke-by-keystroke refontification in large buffers:
+
+\begin{minted}{elisp}
+(setq jit-lock-defer-time 0.05)
+\end{minted}
+
+Complement with stealth fontification for idle-time catch-up:
+
+\begin{minted}{elisp}
+(setq jit-lock-stealth-time 0.2
+      jit-lock-stealth-nice 0.1)
+\end{minted}
+
+\texttt{(info "(elisp) Font Lock Basics")}
+
+\section{\texttt{org-fold-core-style}}\label{org-fold-core-style}
+
+Controls how org-mode hides folded sections:
+
+\begin{itemize}
+\item \texttt{'overlays} (default): Uses overlay objects. Each fold/unfold creates and destroys overlay objects. In a 35,000-line org file with hundreds of headings, this means thousands of overlays, each requiring memory and slowing down redisplay.
+\item \texttt{'text-properties}: Uses text properties instead. Significantly faster for large files: text properties are part of the buffer's interval tree and don't create separate objects.
+\end{itemize}
+
+\textbf{Must} be set in \texttt{early-init.el} before org loads:
+
+\begin{minted}{elisp}
+;; early-init.el
+(setq org-fold-core-style 'text-properties)
+\end{minted}
+
+\subsection{Measuring the difference}\label{measuring-the-difference}
+
+To verify the improvement on your specific file, compare the two styles in a \texttt{-\/-batch} run. Nil all mode hooks first to isolate the fold-style cost from hook overhead:
+
+\begin{minted}{bash}
+# Baseline, text-properties (your early-init.el setting):
+timeout 60 /Applications/Emacs.app/Contents/MacOS/Emacs --batch \
+  -l ~/.emacs.d/early-init.el -l ~/.emacs.d/init.el --eval '
+(progn
+  (setq org-mode-hook nil text-mode-hook nil
+        outline-mode-hook nil after-change-major-mode-hook nil
+        find-file-hook nil)
+  (message "start: %s" (float-time))
+  (find-file-noselect "~/Documents/todo/todo.org")
+  (message "end: %s" (float-time)))' 2>&1 | grep -E '(start:|end:)'
+
+# Comparison, force overlays style:
+timeout 60 /Applications/Emacs.app/Contents/MacOS/Emacs --batch \
+  -l ~/.emacs.d/early-init.el -l ~/.emacs.d/init.el --eval '
+(progn
+  (setq org-mode-hook nil text-mode-hook nil
+        outline-mode-hook nil after-change-major-mode-hook nil
+        find-file-hook nil)
+  (setq org-fold-core-style (quote overlays))
+  (global-font-lock-mode -1)
+  (message "start: %s" (float-time))
+  (find-file-noselect "~/Documents/todo/todo.org")
+  (message "end: %s" (float-time)))' 2>&1 | grep -E '(start:|end:)'
+\end{minted}
+
+Forcing \texttt{overlays} \textbf{after} init.el loads works because \texttt{org-fold-core-style} is read when \texttt{org-mode} activates, not when it is first defined. The difference between runs is the pure fold-style cost, independent of any hook overhead. On a 35,000-line file this was \(\sim\)0.6 s.
+
+\subsection{The Org 9.6 regression and why this config uses \texttt{'overlays}}\label{the-org-9.6-regression-and-why-this-config-uses-overlays}
+
+The recommendation above (\texttt{'text-properties} is faster) is correct in principle. Org 9.6 switched the \textbf{default} value of \texttt{org-fold-core-style} from \texttt{'overlays} to \texttt{'text-properties}. However, the switch introduced a regression: \texttt{org-back-to-heading} signals "Before first headline" when called inside a folded subtree. This breaks several commands that call it internally, including \texttt{org-hide-block}, \texttt{treesit-fold-toggle} in org buffers, and some folding keybindings.
+
+This config therefore keeps:
+
+\begin{minted}{elisp}
+;; early-init.el: must be set before org.el loads
+(setq org-fold-core-style 'overlays)
+\end{minted}
+
+The critical constraint: \texttt{org-fold-core-style} must be set \textbf{before the first \texttt{require 'org}}. Once org has initialised its fold infrastructure the variable has no effect at runtime. The only safe location is \texttt{early-init.el}, because \texttt{init.el} may transitively load org (via \texttt{toc-org} or \texttt{org-modern} autoloads) before the explicit \texttt{use-package org} declaration is reached.
+
+To verify that a newer Org release has fixed the regression and \texttt{'text-properties} is safe to use:
+
+\begin{minted}{bash}
+emacs --batch -l ~/.emacs.d/early-init.el -l ~/.emacs.d/init.el --eval '
+(with-current-buffer
+    (find-file-noselect "~/path/to/file-with-headings.org")
+  (goto-char (point-max))
+  (org-back-to-heading t)
+  (message "OK: %d" (point))
+  (kill-emacs))' 2>&1
+\end{minted}
+
+If the output contains \texttt{OK: …} rather than an error backtrace, the regression is fixed and the \texttt{org-fold-core-style} line in \texttt{early-init.el} can be removed.
+
+\section{Terminal scrollback sizes}\label{terminal-scrollback-sizes}
+
+\texttt{eat-term-scrollback-size} defaults to 1 GB (\texttt{1073741824} bytes). This allocates an enormous buffer for terminal scrollback. Unless you're tailing multi-gigabyte logs, 10 MB is more than enough:
+
+\begin{minted}{elisp}
+(setq eat-term-scrollback-size (* 10 1024 1024))  ;; 10 MB
+\end{minted}
+
+\section{\texttt{git-gutter:update-interval}}\label{git-gutterupdate-interval}
+
+Controls how often git-gutter refreshes diff indicators. Default: 0.0 (every change). Setting it to 0.3 means indicators update at most \(\sim\)3 times per second:
+
+\begin{minted}{elisp}
+(setq git-gutter:update-interval 0.3)
+\end{minted}
+
+\section{\texttt{read-process-output-max}}\label{read-process-output-max}
+
+Controls the maximum bytes read from a subprocess in one chunk. Default: 4096 bytes. For LSP servers that send large JSON responses, this causes excessive read syscalls:
+
+\begin{minted}{elisp}
+(setq read-process-output-max (* 2 1024 1024))  ;; 2 MB
+\end{minted}
+
+\texttt{(info "(elisp) Process Buffers")}
+
+\section{\texttt{bidi-inhibit-bpa} and \texttt{bidi-paragraph-direction}}\label{bidi-inhibit-bpa-and-bidi-paragraph-direction}
+
+Emacs's bidirectional text support runs a parenthetical matching algorithm on every line. If you don't edit right-to-left text:
+
+\begin{minted}{elisp}
+(setq bidi-inhibit-bpa t)
+(setq-default bidi-paragraph-direction 'left-to-right)
+\end{minted}
+
+\section{\texttt{inhibit-compacting-font-caches}}\label{inhibit-compacting-font-caches}
+
+Font cache compaction runs during GC and can cause visible pauses with large Unicode ranges (CJK, emoji). Disabling it trades memory for smoothness:
+
+\begin{minted}{elisp}
+(setq inhibit-compacting-font-caches t)
+\end{minted}
+
+\section{\texttt{auto-window-vscroll}}\label{auto-window-vscroll}
+
+Computes smooth-scroll margins on every scroll event. Disabling it removes a per-scroll computation:
+
+\begin{minted}{elisp}
+(setq auto-window-vscroll nil)
+\end{minted}
+
+\section{\texttt{global-so-long-mode}}\label{global-so-long-mode}
+
+\texttt{(info "(emacs) Long Lines")}
+
+Minified JavaScript bundles, machine-generated protobuf definitions, and dense JSON manifests contain very long lines. Emacs processes lines individually for font-lock, bidi rendering, and minor modes. A single 500,000-character line can hang Emacs for multiple seconds on file open.
+
+\texttt{global-so-long-mode} (Emacs 27.1+, built-in) detects affected buffers during \texttt{find-file-hook} by scanning the first \texttt{so-long-threshold-line-count} lines (default: 5) for lines exceeding \texttt{so-long-threshold} characters (default: 250). When triggered, it executes \texttt{so-long-action} (default: \texttt{so-long-mode}), which:
+
+\begin{enumerate}
+\item Records the buffer's original major mode in \texttt{so-long-original-mode}.
+\item Activates \texttt{so-long-mode} as the new major mode.
+\item Disables every mode listed in \texttt{so-long-minor-modes} (\texttt{font-lock-mode}, \texttt{display-line-numbers-mode}, \texttt{flycheck-mode}, \texttt{rainbow-delimiters-mode}, \texttt{hl-line-mode}, eglot hooks, and others).
+\end{enumerate}
+
+\begin{minted}{elisp}
+;; Activated in emacs-startup-hook so all minor modes declared by
+;; use-package blocks are already present in so-long-minor-modes
+;; before the first file is opened.
+(add-hook 'emacs-startup-hook
+          (lambda () (global-so-long-mode 1)))
+\end{minted}
+
+\subsection{Why activation order matters}\label{why-activation-order-matters}
+
+\texttt{so-long-minor-modes} is populated when each minor mode is defined and registered. If \texttt{global-so-long-mode} is activated \textbf{before} all \texttt{use-package} declarations have evaluated, later-declared modes (\texttt{flycheck-mode}, \texttt{corfu-mode}, \texttt{dtrt-indent-mode}) are absent from the kill list and will not be disabled in long-line buffers. \texttt{emacs-startup-hook} fires after all top-level forms in \texttt{init.el} have been evaluated, guaranteeing a complete kill list.
+
+\subsection{Restoring full processing}\label{restoring-full-processing}
+
+\texttt{M-x so-long-revert} restores the original major mode and re-enables all killed minor modes. Use it when full fontification is necessary and the wait is acceptable.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+Every \texttt{.el} file should begin with the
+\texttt{-*- lexical-binding: t -*-} cookie so the byte-compiler can
+generate tight, closure-aware code.  On the display side,
+\texttt{jit-lock-defer-time} prevents keystroke-by-keystroke
+refontification (50\,ms is a sensible default), while
+\texttt{org-fold-core-style} must be set in \texttt{early-init.el}
+before Org loads, because the choice between overlays and text
+properties cannot be reversed at runtime.
+
+Process communication benefits from raising
+\texttt{read-process-output-max} to 2\,MB, which eliminates the
+excessive read syscalls that LSP JSON traffic would otherwise generate.
+For Latin-only text, setting \texttt{bidi-inhibit-bpa} and forcing a
+left-to-right paragraph direction removes per-line parenthetical scans
+that the bidirectional algorithm normally performs.
+\texttt{global-so-long-mode} should be activated on
+\texttt{emacs-startup-hook} rather than earlier, so that its minor-mode
+kill list is fully populated by every \texttt{use-package} declaration.
+\texttt{inhibit-compacting-font-caches} trades a little extra memory for
+smoother GC behaviour when large Unicode ranges are in play, and
+terminal scrollback defaults---\texttt{eat-term-scrollback-size} ships at
+1\,GB, are almost always excessive; 10\,MB is more than enough.  Each
+of these settings targets a specific internal mechanism, so always
+measure before and after (Chapter~\ref{ch:profiling}) to confirm the
+real impact.

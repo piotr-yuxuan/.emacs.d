@@ -1,0 +1,45 @@
+\chapter{\texttt{load-prefer-newer} and the \texttt{noninteractive} idiom}
+\label{ch:load-prefer-newer}
+\minitoc\label{load-prefer-newer-and-the-noninteractive-idiom}
+\index{load-prefer-newer}\index{noninteractive}\index{batch mode}\index{stale bytecode}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Byte-compilation (touched on in Chapter~\ref{ch:compile-angel})
+produces \texttt{.elc} files that load faster, but stale ones
+silently mask source changes.  This short
+chapter explains \texttt{load-prefer-newer} and the
+\texttt{noninteractive} idiom that enables mtime-awareness in batch
+mode (tests) while preserving compiled-file speed in interactive
+sessions.
+
+\texttt{(info "(elisp) How Programs Do Loading")}
+
+The config sets:
+
+\begin{minted}{elisp}
+;; early-init.el
+(setq load-prefer-newer noninteractive)
+\end{minted}
+
+\section{What \texttt{load-prefer-newer} does}\label{what-load-prefer-newer-does}
+
+When Emacs loads a file and both \texttt{foo.el} and \texttt{foo.elc} exist, \texttt{load-prefer-newer t} causes Emacs to compare their mtimes and load \texttt{foo.el} if it is newer than \texttt{foo.elc}. With the default \texttt{nil}, the compiled \texttt{.elc} is always preferred regardless of mtimes.
+
+\section{What \texttt{noninteractive} is}\label{what-noninteractive-is}
+
+\texttt{noninteractive} is a built-in C variable that Emacs sets to \texttt{t} when running in \texttt{-\/-batch} or \texttt{-\/-script} mode, and \texttt{nil} in interactive sessions. It is a boolean \textbf{value}, not a function, so assigning it to another variable captures the current mode at load time.
+
+\section{The dual-mode assignment}\label{the-dual-mode-assignment}
+
+\begin{minted}{elisp}
+(setq load-prefer-newer noninteractive)
+;; Expands to:
+;;   (setq load-prefer-newer t)   ;; in --batch / tests
+;;   (setq load-prefer-newer nil) ;; in interactive Emacs
+\end{minted}
+
+Effect: in the test suite (\texttt{./tests/run.sh} runs \texttt{emacs -\/-batch}), stale \texttt{.elc} files are bypassed, and tests always see fresh source. In an interactive session, compiled files are preferred for speed. The same \texttt{early-init.el} handles both without conditional logic.
+
+% ── Mental model summary ────────────────────────────────────────────
+\section{Mental model}
+When \texttt{load-prefer-newer} is \texttt{t}, Emacs compares the modification times of the \texttt{.el} source and the \texttt{.elc} byte-compiled file and loads whichever is newer, ensuring that a stale compiled file never shadows recent source changes.  The variable \texttt{noninteractive} is \texttt{t} when Emacs runs in \texttt{--batch} or \texttt{--script} mode and \texttt{nil} during an interactive session.  By writing \texttt{(setq load-prefer-newer noninteractive)}, a single line gives fresh-source semantics to the test suite (where correctness matters most) while preserving compiled-file speed for daily interactive use, no conditional logic required.

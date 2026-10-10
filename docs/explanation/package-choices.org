@@ -1,0 +1,124 @@
+#+TITLE: Why these packages
+#+OPTIONS: toc:nil num:nil
+#+KEYMAPS: python-base-mode-map
+
+Each section names a choice, what it was chosen over, and why.  The
+decisions marked D1 to D17 were taken with the user on 2026-10-08 and
+are recorded in the programme index, =docs/work/README.org=; the plans
+named here record the rest, under =docs/work/changelog/=.
+
+* Packages: straight.el and use-package
+
+straight.el installs each package from its git repository and records
+the commit in a lockfile versioned with the configuration.  Every
+machine then runs the same code, a bad update can be undone by
+checking out the lockfile, and a package can be patched or pinned to a
+fork.  =package.el= installs released archives and records no version,
+so it offers none of that.  use-package declares each package in one
+form, deferred by default, which keeps startup short.
+
+* Language servers: lsp-mode
+
+Plan 049b replaced eglot with lsp-mode for every language.  Navigation
+into libraries was the deciding need: lsp-mode follows the =jar:=,
+=zipfile:= and =jdt:= locations that clojure-lsp and jdtls return, and
+shows the symbols of a file as a tree and as a breadcrumb, which with
+eglot took several local patches.  lsp-mode also passes its
+diagnostics to flycheck directly.
+
+* Diagnostics: flycheck
+
+flycheck is the one diagnostic front end (D13, plan 090): language
+servers, linters and grammar checkers report through it, with the
+same keys and the same list everywhere.  The modes that used flymake
+moved only after scenarios independent of the backend were green, so
+the switch could not lose a diagnostic silently.
+
+* Completion: vertico, consult, embark, corfu
+
+The minibuffer stack (vertico to display, orderless to match,
+marginalia to annotate, consult for commands, embark for actions)
+builds on Emacs's own completion functions instead of replacing them.
+Every command that reads from the minibuffer benefits, built-in ones
+included, and each piece can be swapped alone.  corfu and cape do the
+same for completion in the buffer, on top of
+=completion-at-point=, which is where lsp-mode and the major modes
+offer their candidates.
+
+* Files: Dirvish and Treemacs
+
+Dirvish is drawn over Dired (D7, plan 089), so every Dired key and
+command, and editing a listing to rename files, keep working, with
+icons, previews and layouts on top.  Treemacs shows a project as a
+tree beside the code; dirvish-side, which did both, was retired.  See
+[[file:../how-to/files-with-dirvish.org][Work with files in Dirvish]].
+
+* Terminals: eat, mistty and gterm
+
+No terminal does everything well (D14, plan 091): eat is fast and
+complete, mistty lets Emacs keys edit the command line, gterm uses
+Ghostty's engine and stays responsive under bulk output.  All three
+stay, with the same shell keys, and the parity matrix of plan 091
+tests each capability in each of them.  See [[file:../how-to/terminals.org][Use a terminal inside
+Emacs]].
+
+The prompt inside them is Starship's, configured outside Emacs.  The
+oh-my-zsh theme bullet-train it replaced is no longer maintained, and
+its fixed colours were unreadable in the dark theme.  Powerlevel10k,
+its usual successor, is in maintenance only, by its author's account.
+Starship is maintained, fast, works in zsh, bash and fish on Linux and
+macOS, and its Gruvbox Rainbow preset reads well in both themes.  See
+[[file:../how-to/shell-prompt.org][Set up a shell prompt]].
+
+* Formatting and whitespace
+
+Formatting runs in layers, so that a project's declared style wins
+over guesses: editorconfig applies the project's settings, dtrt-indent
+guesses the indentation of a file without them from its existing
+lines, and apheleia runs the
+language's formatter on save, asynchronously and keeping point where
+it was.  ws-butler strips trailing whitespace only on the lines you
+touched, so that saving a file never adds unrelated changes to a diff.
+
+* Git: magit and diff-hl
+
+magit is the git interface.  diff-hl marks changed lines in the
+fringe; it replaced git-gutter, which created one overlay per changed
+line and slowed redisplay on large hunks (plan 027).  delta and
+difftastic make magit's diffs easier to read.
+
+* Spelling and grammar: jinx, LTeX+ and Grammalecte
+
+jinx checks several languages at once, English, French, Polish,
+Spanish and Latin, and only the visible text, which replaced flyspell
+and its language-guessing helpers.  LTeX+ adds LanguageTool's grammar
+rules in prose buffers.  Grammalecte is added for French, where it
+catches more agreement and typography errors than LanguageTool.
+
+* Appearance
+
+One light and one dark theme, sanityinc's Tomorrow Day and Night,
+follow the system's appearance through auto-dark: exactly one theme is
+enabled at a time.  Comments are italic in both, set again after
+every theme change (D10).
+
+* Keys
+
+One scheme (D4, plan 093).  New keys take, where they can, what Emacs
+reserves for users: =C-c= and a letter, or F5 to F9.  =C-c d= is the
+debugger and =C-c k= the test runner in every language that has one,
+=C-c t= the terminal, =C-c D= docker.  Vanilla keys that packages had
+taken, such as =C--= and the =C-x t= tab keys, are back, and paredit's
+keys apply only in paredit buffers.  =C-s= is =consult-line=, with no
+separate isearch key (D11).  [[file:../reference/keys.org][The key reference]] is generated from the
+keymaps, and regenerated after each merge.
+
+* What was left out
+
+- Emacs-side GPG prompts (D12): pinentry inside Emacs was removed;
+  gpg-agent's own dialog asks for passphrases.
+- Email (D8, D9): mu4e and its companions were removed and the work
+  parked in plan 096, until it can be done well.
+- Packages used only through =M-x= (D17), such as =svg-clock=,
+  =writeroom-mode= or =restclient=, stay: they cost nothing until
+  called.

@@ -1,0 +1,4 @@
+#!/bin/sh
+# The one entry point of the test harness: tests/run [static|fast|full [FILTER]].
+# See tests/runner/__main__.py, or run tests/run --help.
+cd "$(dirname "$0")" && exec python3 -m runner "$@"

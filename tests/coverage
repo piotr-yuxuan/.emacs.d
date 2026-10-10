@@ -1,0 +1,5 @@
+#!/bin/sh
+# Report which key bindings the tests exercise: tests/coverage [fast|full [FILTER]].
+# Informational; tests/run never runs it.  See tests/keycoverage/__main__.py,
+# or run tests/coverage --help.
+cd "$(dirname "$0")" && exec python3 -m keycoverage "$@"

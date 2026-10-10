@@ -1,0 +1,89 @@
+#+TITLE: Why the tests look the way they do
+#+OPTIONS: toc:nil num:nil
+
+An Emacs configuration breaks in ways a unit test rarely sees: a
+package update changes a key, a hook runs in a different order, a
+mode turns on in one buffer and not another.  The tests of this
+configuration are built to catch what a user would notice, and to
+mean what they say when they pass.  Plans 053 to 061 set the
+direction; plans 085, 086 and 094 built the present harness.  For the
+commands, see [[file:../reference/tests.org][the test reference]].
+
+* Test what the user does, not what the code says
+
+A test that reads back a =:custom= value only repeats the
+configuration: it passes as long as the line is there, even when the
+value no longer has any effect.  So the main tests are scenarios: open
+a file, press keys, check what the user then sees, such as the buffer
+text, the region, the window layout or a face.
+
+The keys go through Emacs's own key lookup, never through a direct
+call of the command.  A binding that a package update removes, or that
+another mode's keymap shadows, then fails the test at the key, as it
+fails the user.
+
+* Start Emacs as the user does
+
+Each scenario file runs in a fresh =emacs --fg-daemon=, with a client
+frame, loading the real =init.el=.  Startup order, deferred loading
+and hooks are the real ones, and no file sees the state another one
+left.  The full profile checks this isolation: it reruns some specs
+alone and expects the same result.
+
+Each session gets a private Xvfb display.  Frames can then be real,
+so that faces, header lines and windows are tested as drawn, without
+ever reaching the user's screen or taking the focus.  One switch,
+~EMACS_TEST_GUI=0~, turns every graphical frame off (decision D5),
+which macOS needs.
+
+The packages come read-only from the installed configuration, with
+straight.el in safe mode: a test never downloads, builds or modifies
+a package, so a run cannot damage the editor the user is working in.
+
+* Two speeds
+
+The L1 scenarios need nothing outside Emacs; they run in the fast
+profile, the one to run after every change.  The L3 scenarios start real programs, such as
+language servers or a shell in a terminal, because faking them would
+test the fake; they are slower and run in the full profile.
+
+A skip is accepted only for a reason the session can check, such as a
+missing program, and only when the plan that owns the scenario
+declares it.  Any other skip fails the run, as does a declared skip
+that no longer happens.  A green run therefore means that everything
+ran, not that everything that could run passed.
+
+* Decisions without behaviour
+
+Some defects have no behaviour to drive: a key bound to a command that
+does not exist, a variable that a package renamed, two themes on at
+once.  The integrity checks of plan 086 find them by reading
+=init.el= (static, T0) and by inspecting a session where every package
+is loaded (T1).  They also check that every key the documents of
+=docs/= cite is bound.
+
+A defect found before its fix is recorded in a ledger,
+=tests/integrity/known-defects/=, owned by the plan that will fix it.
+A listed defect is tolerated; an unlisted one fails; a listed one that
+is gone fails too, so the ledger only shrinks.
+
+* Logic tests
+
+Functions that only decide, such as parsing a table or choosing a
+test command, are tested directly in one batch session.  Their stubs
+stand only at system boundaries: the clock, processes, =PATH=, the
+file system.  Nothing mocks or advises the production code itself: if
+a behaviour cannot be tested without that, it belongs in a scenario.
+
+* Tests of the tests
+
+- *Golden records* (plan 094) keep the face of every token and the
+  indentation of sample files in seven languages.  Package updates
+  are the usual cause of a change there, and [[file:../how-to/update-packages.org][the update command]] runs
+  them before it keeps an update.
+- *Mutation tests* (=tests/mutate=) break =init.el= on purpose, in
+  plausible ways, and check that the suite fails.  A test that cannot
+  fail protects nothing; each daily journey of plan 094 has its own
+  mutant.
+- *The coverage report* (=tests/coverage=) lists the key bindings no
+  test presses.

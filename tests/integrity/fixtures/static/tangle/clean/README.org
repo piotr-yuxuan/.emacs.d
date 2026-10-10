@@ -1,0 +1,16 @@
+#+TITLE: Tangle fixture
+#+PROPERTY: header-args :tangle ./init.el
+
+A literate configuration in miniature, for the tangle check of T0.
+
+#+begin_src emacs-lisp :tangle ./early-init.el
+(setq package-enable-at-startup nil)
+#+end_src
+
+#+begin_src emacs-lisp
+(setq-default fill-column 120)
+#+end_src
+
+#+begin_src emacs-lisp :tangle no
+(message "not tangled")
+#+end_src

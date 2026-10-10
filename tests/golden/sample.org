@@ -1,0 +1,37 @@
+#+TITLE: A golden fixture of Org
+#+STARTUP: showall
+
+* NEXT Review the inventory module :work:code:
+SCHEDULED: <2026-10-12 Mon>
+:PROPERTIES:
+:EFFORT:   0:30
+:END:
+
+Read =load= and its tests, then write *short* notes with /emphasis/
+where it helps.  See [[https://orgmode.org][the Org manual]] and
+[[file:sample.py][the module]].
+
+- [X] Read the parser
+- [ ] Check the limit of ~16~ items
+  1. on one shelf
+  2. on two shelves
+
+** TODO Measure the load time
+| File      | Items | Seconds |
+|-----------+-------+---------|
+| items.csv |    12 |    0.04 |
+| empty.csv |     0 |    0.01 |
+
+#+BEGIN_SRC elisp
+(defun sample-double (n)
+  "Return twice N."
+  (* 2 n))
+#+END_SRC
+
+** DONE Archive the old notes
+CLOSED: [2026-10-01 Thu 09:15]
+
+# A comment line.
+#+BEGIN_QUOTE
+Simple things should be simple.
+#+END_QUOTE

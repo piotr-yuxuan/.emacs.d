@@ -1,0 +1,32 @@
+\chapter*{Conclusion}
+\addcontentsline{toc}{chapter}{Conclusion}
+\label{ch:conclusion}
+\index{revision checklist}
+
+You now have a map of the terrain.  Part~\ref{part:startup} gave you
+the startup lifecycle, GC tuning, and a diagnostic playbook.
+Part~\ref{part:packages} explained the package-management and loading
+model, the layer where most configuration bugs hide.
+Part~\ref{part:lang} traced the path from file extension to
+fully-powered editing via tree-sitter, Eglot, and DAP.
+Part~\ref{part:ui} covered the keymap stack, the two completion axes,
+and the buffer/window/frame display model.
+Part~\ref{part:org} addressed org-mode's loading cost, async export,
+babel registration, and the credential infrastructure underneath.
+Part~\ref{part:idioms} distilled everything into the five recurring
+patterns that account for most real-world configuration code.
+
+No single reading can internalise all of it.  The \textbf{Mental
+model} summaries at the end of each chapter are designed as revision
+checklists; skim them periodically when you return to a topic.  The
+appendices (variable table, hook timing, keybinding index, and the
+deep-dive supplements on GC, LSP, and straight.el) serve as
+quick-reference material you can consult without re-reading full
+chapters.
+
+Emacs rewards curiosity.  When something surprises you (a
+mysterious pause, an unexpected keybinding, a package that refuses to
+load), reach for the diagnostic tools described in
+Chapter~\ref{ch:profiling} and the playbook in
+Chapter~\ref{ch:diagnostic-playbook}.  The answer is always in the
+source; this book has shown you where to look.

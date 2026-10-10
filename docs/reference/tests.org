@@ -1,0 +1,93 @@
+#+TITLE: Tests: tiers, commands and files
+#+OPTIONS: toc:nil num:nil
+
+Run every command from the root of a checkout.  [[file:../explanation/test-strategy.org][The test strategy]]
+explains the design, and [[file:../how-to/add-a-scenario-test.org][Add a scenario test]] shows how to write one.
+
+* Commands
+
+| Command                                         | Runs                                                                 |
+|-------------------------------------------------+----------------------------------------------------------------------|
+| =tests/run static=                              | static integrity checks (T0), no session, in one =emacs --batch -Q=  |
+| =tests/run= or =tests/run fast=                 | harness self-tests, logic tests, every scenario file but L3          |
+| =tests/run full=                                | fast, the L3 scenario files, then the isolation check                |
+| =tests/run fast FILTER=                         | only the files whose path under =tests/= contains =FILTER=           |
+| =tests/integrity/session/run=                   | session integrity checks (T1), including the keys the docs cite      |
+| =tests/integrity/session/run cheatsheet=        | regenerates [[file:keys.org][the key reference]]                                        |
+| =tests/coverage [fast or full] [FILTER]=        | report of the key bindings the tests press                           |
+| =tests/mutate [PREFIX...]=                      | mutation tests: runs the suite on broken copies of =init.el=         |
+| =python3 tests/performance/run.py --output DIR= | startup measurements on a private display; see [[file:../explanation/startup-performance.org::*Measuring it yourself][Measuring it yourself]] |
+
+The profile comes before the filter: =tests/run l1-expreg= alone is a
+usage error.  =tests/run.sh= and =tests/test-integration.sh= are old
+names of =tests/run fast= and =tests/run full=.
+
+* Exit status
+
+| Status | Meaning                                                                                       |
+|--------+-----------------------------------------------------------------------------------------------|
+|      0 | everything passed                                                                             |
+|      1 | a failure, a load error, an unexpected skip, a stale expected-skip entry or a missed deadline |
+|      2 | a usage error, such as no Xvfb without ~EMACS_TEST_GUI=0~                                     |
+
+* Tiers
+
+| Tier                | Where                                                 | Profile           |
+|---------------------+-------------------------------------------------------+-------------------|
+| Static checks (T0)  | =tests/integrity/static/=                             | static            |
+| Logic tests         | =tests/**/*-test.el= outside =tests/scenarios/=       | fast, full        |
+| L1 scenarios        | =tests/scenarios/l1-*.el=                             | fast, full        |
+| L3 scenarios        | =tests/scenarios/l3-*.el= with =;; scenario-tier: l3= | full              |
+| Session checks (T1) | =tests/integrity/session/=                            | their own command |
+| Golden tests        | =tests/scenarios/l1-golden-gui.el=, =tests/golden/=   | fast, full        |
+
+Each scenario file runs in its own fresh =emacs --fg-daemon=, in a
+client frame on a private Xvfb display: test frames never reach your
+screen.  The logic tests share one batch session.  Files run in
+parallel, L3 files in a smaller pool.
+
+* Scenario file headers
+
+| Header line                               | Effect                                                            |
+|-------------------------------------------+-------------------------------------------------------------------|
+| =;; scenario-tier: l3=                    | runs only in =full=: the file uses real external programs         |
+| =;; scenario-display: graphic=            | needs a graphical frame; an expected skip with ~EMACS_TEST_GUI=0~ |
+| =;; scenario-startup: first-file FIXTURE= | the session opens =tests/fixtures/FIXTURE= right after startup    |
+
+* Environment variables
+
+| Variable              | Effect                                                                                |
+|-----------------------+---------------------------------------------------------------------------------------|
+| ~EMACS_TEST_GUI=0~    | no graphical frame; graphic-only files become expected skips.  Needed on macOS        |
+| =EMACS_LIVE_DIR=      | where packages, native code and grammars are read, read-only; =~/.emacs.d= by default |
+| ~UPDATE_GOLDEN=1~     | the golden tests approve what they see, rewriting =tests/golden/=                     |
+| ~PTY_MATRIX_GAPS=1~   | also runs the terminal scenarios of known gaps                                        |
+| ~PTY_MATRIX_TIMING=1~ | also runs the terminal throughput timings; for an idle machine                        |
+
+* Files
+
+| Path                                   | Holds                                                                     |
+|----------------------------------------+---------------------------------------------------------------------------|
+| =tests/scenarios/=                     | the scenario files                                                        |
+| =tests/fixtures/=                      | projects a scenario row copies with =(:project FIXTURE :entry PATH)=      |
+| =tests/helpers/scenario.el=            | the scenario language                                                     |
+| =tests/helpers/outcomes/=              | the outcomes, one file per area or plan                                   |
+| =tests/expected-skips/NNN.el=          | skips a plan expects: =(SPEC-REGEXP REASON)=                              |
+| =tests/integrity/known-defects/NNN.el= | defects the integrity checks tolerate until a plan fixes them             |
+| =tests/golden/=                        | golden sample files and their approved faces                              |
+| =tests/mutation/mutants.py=            | the mutants of =tests/mutate=                                             |
+| =tests/hooks/=                         | optional git hooks: =git config core.hooksPath tests/hooks= turns them on |
+
+A session's directory is under =$TMPDIR/emacs-test-*/=.  The runner
+removes it when the session is green; otherwise it keeps it and prints
+its path, with =messages.txt=, =results.jsonl= and =emacs.log= inside.
+
+* Requirements
+
+- Emacs 30 or later: the scenario language uses =handler-bind=.
+- Python 3.
+- Xvfb on Linux, unless ~EMACS_TEST_GUI=0~.
+- The packages already built in =EMACS_LIVE_DIR=: the tests never
+  download or build them.
+- git and ripgrep; the L3 files also use the language servers of
+  [[file:dependencies.org][the dependencies]], and skip when one is missing.

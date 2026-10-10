@@ -1,0 +1,68 @@
+#+TITLE: Set up a shell prompt readable in every terminal
+#+OPTIONS: toc:nil num:nil
+
+The terminals of this configuration (eat, mistty, gterm) show the
+shell's own prompt.  These steps install Starship with its Gruvbox
+Rainbow preset, which stays readable in the light and the dark theme.
+They change the shell's files, not Emacs; [[file:../explanation/package-choices.org][the package choices]] say why
+Starship.  To set up the rest of the shell for the terminals, see
+[[file:terminals.org][Use a terminal inside Emacs]].
+
+* Install Starship
+
+- NixOS with Home Manager: enable it in your Home Manager
+  configuration, which also adds the zsh hook of the next section:
+  #+BEGIN_SRC nix
+  programs.starship.enable = true;
+  #+END_SRC
+- macOS: =brew install starship=.
+- Arch Linux: =sudo pacman -S starship=.
+
+Check with =starship --version= in a new shell.
+
+* Hand the prompt over to Starship
+
+Skip this section with Home Manager: =programs.starship= writes the
+hook for you.
+
+1. In =~/.zshrc=, where oh-my-zsh's theme is chosen, empty the theme
+   and remove any =BULLETTRAIN_*= variable.  Keep the line: an empty
+   string disables theme loading.
+   #+BEGIN_SRC zsh
+   ZSH_THEME=""
+   #+END_SRC
+2. At the very end of =~/.zshrc=, add:
+   #+BEGIN_SRC zsh
+   eval "$(starship init zsh)"
+   #+END_SRC
+3. Open a new shell: the two-line Starship prompt appears.
+
+* Apply the Gruvbox Rainbow preset
+
+Without Home Manager, write the preset once; this overwrites any
+existing =~/.config/starship.toml=:
+
+#+BEGIN_SRC zsh
+starship preset gruvbox-rainbow -o ~/.config/starship.toml
+#+END_SRC
+
+With Home Manager, =~/.config/starship.toml= is a link into the Nix
+store, so the command above fails.  Write the preset next to your Home
+Manager configuration instead, then read it from there:
+
+#+BEGIN_SRC zsh
+starship preset gruvbox-rainbow -o starship.toml
+#+END_SRC
+
+#+BEGIN_SRC nix
+programs.starship.settings = builtins.fromTOML (builtins.readFile ./starship.toml);
+#+END_SRC
+
+Edit the TOML file to taste: the [[https://starship.rs/config/][configuration reference]] lists every
+module, and =starship explain= in a prompt says which modules are
+shown and why.
+
+* macOS
+
+Starship switches to true colour when the terminal sets =COLORTERM=;
+nothing else is needed once the binary is on =PATH=.

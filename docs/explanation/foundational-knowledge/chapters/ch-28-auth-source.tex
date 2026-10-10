@@ -1,0 +1,79 @@
+\chapter{\texttt{auth-source}, \texttt{$\sim$/.authinfo.gpg}, and \texttt{epg-pinentry-mode}}
+\label{ch:auth-source}
+\minitoc\label{auth-source-.authinfo.gpg-and-epg-pinentry-mode}
+\index{auth-source}\index{credentials}\index{GPG}\index{epg-pinentry-mode}\index{.authinfo.gpg}
+
+% ── Opening signpost ──────────────────────────────────────────────
+The org-mode chapters above dealt with document \emph{content};
+this one deals with the \emph{credentials} that many Emacs
+subsystems (email, forge, remote files) require.  This chapter explains the \texttt{auth-source} lookup
+protocol, transparent GPG decryption of \texttt{\~{}/.authinfo.gpg},
+and why \texttt{epg-pinentry-mode 'loopback} is required for daemon
+and terminal sessions.
+
+\section{The \texttt{auth-source} protocol}\label{the-auth-source-protocol}
+
+\texttt{auth-source} is Emacs' credential lookup library. It searches a configurable set of backends (files, Secret Service, macOS Keychain) for entries matching \texttt{(machine HOST login USER)}. The default backend reads \texttt{$\sim$/.authinfo} or, if it exists, the GPG-encrypted \texttt{$\sim$/.authinfo.gpg}.
+
+\texttt{(info "(auth) Top")}
+
+\begin{minted}{elisp}
+# ~/.authinfo format (one credential per line):
+machine imap.example.com login alice@example.com password s3cr3t
+machine smtp.example.com login alice@example.com password s3cr3t port 587
+\end{minted}
+
+Querying from Emacs Lisp:
+
+\begin{minted}{elisp}
+(auth-source-search :host "imap.example.com"
+                    :user "alice@example.com"
+                    :require '(:secret))
+;; Returns a plist: (:host "imap.example.com" :user "…" :secret #<fn>)
+;; :secret is a closure; call it with (funcall (plist-get result :secret))
+\end{minted}
+
+\section{Transparent GPG decryption}\label{transparent-gpg-decryption}
+
+\texttt{$\sim$/.authinfo.gpg} is transparently decrypted by EasyPG (\texttt{epg}, built into Emacs) when \texttt{auth-source} reads it. No explicit decryption call is needed: \texttt{auth-source} recognises the \texttt{.gpg} extension and invokes \texttt{epa-file-find-file-hook}.
+
+\section{\texttt{epg-pinentry-mode 'loopback}}\label{epg-pinentry-mode-loopback}
+
+EasyPG requires a pinentry program to ask for the GPG passphrase. Three modes:
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule
+Mode & Passphrase prompt location & Required \\
+\midrule
+\texttt{default} & External pinentry GUI (pinentry-gtk, pinentry-qt, \ldots) & GTK/Qt display \\
+\texttt{loopback} & Emacs minibuffer (EasyPG emulates the pinentry protocol) & Nothing external \\
+\texttt{error} & Signals an error instead of prompting & (none) \\
+\bottomrule
+\end{longtable}
+
+\texttt{loopback} is required when Emacs runs as a daemon (no display for an external dialog) or on a terminal Wayland session where no GTK pinentry is available:
+
+\begin{minted}{elisp}
+(use-package pinentry
+  :commands magit               ; load when magit loads
+  :config (pinentry-start)      ; start an in-process GPG agent
+  :custom (epg-pinentry-mode 'loopback))
+\end{minted}
+
+\texttt{pinentry-start} from the \texttt{pinentry} package registers Emacs as a GPG pinentry agent via a socket, complementing \texttt{loopback} mode.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+The \texttt{auth-source} library searches a list of backends (files, Secret
+Service, macOS Keychain) for credentials matching a given
+\texttt{(machine HOST login USER)} tuple.  When the backend is
+\texttt{\~{}/.authinfo.gpg}, EasyPG decrypts the file transparently so no
+explicit decryption call is needed in consuming code.  Search results return
+the password as a closure stored under the \texttt{:secret} key; calling it
+with \texttt{funcall} yields the actual password string, keeping it out of
+memory until the moment it is needed.  Setting \texttt{epg-pinentry-mode} to
+\texttt{'loopback} routes the GPG passphrase prompt into the Emacs
+minibuffer, which is required when no GUI pinentry program is available.
+\texttt{pinentry-start} complements this by registering Emacs as a GPG agent
+via a socket, so external GPG operations can also route their prompts through
+Emacs.

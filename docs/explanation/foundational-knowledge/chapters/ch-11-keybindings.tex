@@ -1,0 +1,151 @@
+\part{UI, Completion \& Interaction}
+\label{part:ui}
+
+Parts~\ref{part:startup}--\ref{part:lang} dealt with what happens
+\emph{before} you press a key: startup, package loading, mode
+selection, LSP wiring.  This part turns to what happens
+\emph{after}---the user-facing machinery that translates keystrokes
+into actions and arranges their results on screen.
+
+Chapter~\ref{ch:keybindings} maps the keymap priority stack and the
+old/new binding APIs.  Chapter~\ref{ch:completion} untangles the two
+orthogonal completion systems (minibuffer and in-buffer) and the
+vertico/corfu stacks that implement them.
+Chapter~\ref{ch:buffer-window-frame} explains the three-tier display
+model (buffers, windows, frames) and the
+\texttt{display-buffer-alist} rules that control where things appear.
+Chapter~\ref{ch:face-remap} covers buffer-local face overrides, and
+Chapter~\ref{ch:wayland-clipboard} solves a platform-specific pain
+point: clipboard access from terminal Emacs under Wayland.
+
+\chapter{The Emacs keybinding system}
+\label{ch:keybindings}
+\minitoc\label{the-emacs-keybinding-system}
+\index{keybinding}\index{keymap}\index{define-key}\index{keymap-set}\index{minor-mode-map-alist}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Keybindings are the primary interface between you and Emacs.  This
+chapter explains the keymap priority stack, the old and new binding
+APIs, \texttt{use-package} binding keywords, prefix maps, and the
+distinction between key translation and command remapping.  After reading it you will understand exactly why a particular key
+does what it does, and how to change it.  The binding keywords of
+\texttt{use-package} (Chapter~\ref{ch:use-package}) reappear
+throughout; the completion layer in Chapter~\ref{ch:completion}
+depends directly on these concepts.
+
+\section{The keymap model}\label{the-keymap-model}
+
+Every Emacs buffer has a stack of active keymaps. At any moment, a key press is looked up in this order:
+
+\begin{minted}{elisp}
+1. overriding-terminal-local-map  (highest priority, rarely used)
+2. overriding-local-map           (set by some modes to grab all input)
+3. Keymap text properties at point (active region, overlays)
+4. emulation-mode-map-alists      (e.g., remap tables)
+5. minor-mode-map-alist           (one entry per active minor mode)
+6. local-map  (current-local-map) (the major mode's keymap)
+7. global-map                     (lowest, always active)
+\end{minted}
+
+A key found at a higher-priority keymap shadows the same key in all lower keymaps. This is why a minor-mode binding can override a major-mode binding, and why \texttt{overriding-local-map} (used by e.g. \texttt{isearch}) can suppress all other bindings entirely.
+
+\section{The two binding APIs}\label{the-two-binding-apis}
+
+Emacs 29 introduced a cleaner API alongside the historical one.
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+Old API (still works) & New API (Emacs 29+) \\
+\midrule
+\texttt{(define-key map (kbd "C-x b") 'cmd)} & \texttt{(keymap-set map "C-x b" \#'cmd)} \\
+\texttt{(global-set-key (kbd "M-o") 'cmd)} & \texttt{(keymap-global-set "M-o" \#'cmd)} \\
+\texttt{(local-set-key (kbd "RET") 'cmd)} & \texttt{(keymap-local-set "RET" \#'cmd)} \\
+\texttt{(lookup-key map (kbd "C-c e"))} & \texttt{(keymap-lookup map "C-c e")} \\
+\bottomrule
+\end{longtable}
+
+The new API accepts key sequences as strings directly (no \texttt{kbd} macro needed), normalises them, and signals errors for invalid sequences rather than silently silenting them. The existing config uses both idioms; the new form is preferred in new code.
+
+\texttt{kbd} is still meaningful as a reader macro for human-readable key sequences in non-keymap contexts (e.g., \texttt{(kbd "C-c C-z")} in a \texttt{:bind} list).
+
+\section{\texttt{use-package} binding forms}\label{use-package-binding-forms}
+
+\texttt{use-package} exposes four binding keywords:
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+Keyword & Behaviour \\
+\midrule
+\texttt{:bind} & Bind in \texttt{global-map} by default; creates autoloads for the command \\
+\texttt{:bind*} & Like \texttt{:bind} but overrides minor-mode maps with higher priority \\
+\texttt{:bind-keymap} & Bind a full keymap (prefix key → sub-keymap) \\
+\texttt{:map} & Inside \texttt{:bind}, scope subsequent bindings to a specific keymap \\
+\bottomrule
+\end{longtable}
+
+Example from the config:
+
+\begin{minted}{elisp}
+(use-package eglot
+  :bind (:map prog-mode-map
+              ("C-c e r" . eglot-rename)
+              ("C-c e a" . eglot-code-actions)))
+
+(use-package ace-window
+  :bind* ("M-o" . ace-window))   ; :bind* → overrides minor modes
+
+(use-package project
+  :bind-keymap ("s-p" . project-prefix-map))
+\end{minted}
+
+A critical subtlety: \texttt{:bind} registers an \textbf{autoload} for each named command so that the package loads on first invocation. With \texttt{use-package-always-defer t} this is the primary mechanism for lazy loading: the package is not loaded until one of its bound keys is pressed.
+
+\section{Prefix maps and \texttt{which-key}}\label{prefix-maps-and-which-key}
+
+A prefix key (e.g., \texttt{C-c e}) is itself a keymap stored under that binding. \texttt{define-prefix-command} creates both a command and a variable for the sub-keymap:
+
+\begin{minted}{elisp}
+(define-prefix-command 'my/eglot-map)
+(keymap-set global-map "C-c e" 'my/eglot-map)
+\end{minted}
+
+\texttt{which-key} (or the newer built-in \texttt{which-key-mode} in Emacs 30) intercepts any prefix that is not completed after a short delay and shows a pop-up of available completions. \texttt{which-key-add-key-based-replacements} renames individual entries in the which-key display without touching the actual keymap:
+
+\begin{minted}{elisp}
+(with-eval-after-load 'which-key
+  (which-key-add-key-based-replacements "C-c e" "eglot"))
+\end{minted}
+
+\section{Key translation vs remapping}\label{key-translation-vs-remapping}
+
+\texttt{key-translation-map} intercepts keys \textbf{before} keymap lookup and rewrites the physical key sequence. It is hardware-level, useful for mapping modifier keys or remapping the Menu key:
+
+\begin{minted}{elisp}
+;; Treat Menu key as Super on GNU/Linux
+(define-key key-translation-map (kbd "<menu>") 'event-apply-super-modifier)
+\end{minted}
+
+\texttt{command-remapping} is different: it rewrites a \textbf{command} to another command after keymap lookup has identified the original command. Use it to replace an entire command everywhere, regardless of which key invoked it:
+
+\begin{minted}{elisp}
+(keymap-set global-map "<remap> <list-buffers>" #'consult-buffer)
+\end{minted}
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+Keymaps are searched in a strict priority order (overriding, then
+minor-mode, then major-mode, then global), and the first match wins, so
+a higher-priority map shadows any binding in a lower one.  Since
+Emacs~29, \texttt{keymap-set} and \texttt{keymap-lookup} are the
+preferred API; favour them over the older \texttt{define-key} and
+\texttt{lookup-key} in new code.  Within a \texttt{use-package}
+declaration, the \texttt{:bind} keyword creates both a keybinding and an
+autoload so the package loads on the first keypress, while
+\texttt{:bind*} places the binding in \texttt{override-global-map},
+giving it priority over all minor-mode maps.  A prefix key is itself a
+keymap, and \texttt{which-key} displays its contents after a short
+delay, making deep prefix trees discoverable.  At a lower level,
+\texttt{key-translation-map} rewrites key events \emph{before} keymap
+lookup occurs, whereas command remapping rewrites the resolved command
+\emph{after} lookup, two complementary mechanisms that operate at
+different stages of the input pipeline.

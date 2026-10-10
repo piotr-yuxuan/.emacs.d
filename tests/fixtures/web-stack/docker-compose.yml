@@ -1,0 +1,10 @@
+version: "3.9"
+services:
+  web:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+  worker:
+    image: alpine:latest
+    depends_on:
+      - web

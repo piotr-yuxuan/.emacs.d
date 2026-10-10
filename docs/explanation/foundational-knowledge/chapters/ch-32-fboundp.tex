@@ -1,0 +1,81 @@
+\chapter{\texttt{fboundp} / \texttt{boundp}: compile-time feature detection}
+\label{ch:fboundp}
+\minitoc\label{fboundp-boundp-compile-time-feature-detection}
+\index{fboundp}\index{boundp}\index{featurep}\index{feature detection}
+
+% ── Opening signpost ──────────────────────────────────────────────
+The tree-sitter chapter (Chapter~\ref{ch:tree-sitter}) used
+\texttt{treesit-available-p} to guard against missing grammars; the
+same principle generalises.  Emacs Lisp provides three compile-time
+predicates---\texttt{featurep},
+\texttt{fboundp}, and \texttt{boundp}---for probing what is available
+before using it.  This chapter explains when to use each and why
+\texttt{fboundp} is the correct choice for version-gated features.
+
+\section{The three predicates}\label{the-three-predicates}
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule
+Predicate & Tests & Use case \\
+\midrule
+\texttt{(featurep 'X)} & \texttt{provide}'d \texttt{X} after a \texttt{load} & Check if a library was already loaded \\
+\texttt{(fboundp 'X)} & Function slot of symbol \texttt{X} is non-nil & Check if a function/command exists \\
+\texttt{(boundp 'X)} & Value cell of symbol \texttt{X} is non-nil & Check if a variable is defined \\
+\bottomrule
+\end{longtable}
+
+\section{Why \texttt{fboundp} for version-dependent features}\label{why-fboundp-for-version-dependent-features}
+
+When a C primitive or built-in function was added in a specific Emacs version, using \texttt{require} to probe availability is wrong. \texttt{require} loads a file and may succeed even on older Emacs builds that ship the file without the specific function. \texttt{fboundp} tests the function cell directly without any file I/O:
+
+\begin{minted}{elisp}
+;; WRONG: require 'treesit may succeed on Emacs 28 stubs:
+(require 'treesit nil t)
+(treesit-parser-create 'python)  ;; errors if function missing
+
+;; CORRECT: gate the entire block on the function existing:
+(when (fboundp 'treesit-parser-create)
+  ;; safe to call all treesit-* functions here
+  (dolist (pair '((python-mode . python-ts-mode) …))
+    (add-to-list 'major-mode-remap-alist pair)))
+\end{minted}
+
+\section{Why \texttt{boundp} for recently-added variables}\label{why-boundp-for-recently-added-variables}
+
+Some variables are added in specific Emacs versions. Assigning an undefined variable is not an error (\texttt{setq} creates it), but reading an unbound variable is. \texttt{boundp} guards reads:
+
+\begin{minted}{elisp}
+;; read-process-output-max was added in Emacs 26.1:
+(when (boundp 'read-process-output-max)
+  (setq read-process-output-max (* 1024 1024)))
+\end{minted}
+
+\section{\texttt{fboundp} vs \texttt{featurep} for packages}\label{fboundp-vs-featurep-for-packages}
+
+\texttt{featurep} correctly tests whether a package was loaded; \texttt{fboundp} tests whether a specific command exists regardless of how it got there (could be a built-in C function, a compiled package, or a defun in \texttt{init.el}):
+
+\begin{minted}{elisp}
+;; pixel-scroll-precision-mode was added as a C-level built-in in Emacs 29:
+(when (fboundp 'pixel-scroll-precision-mode)
+  (pixel-scroll-precision-mode 1))
+
+;; Use featurep only when you need to know a specific *file* was loaded:
+(when (featurep 'magit)
+  (magit-refresh))
+\end{minted}
+
+% ── Mental model summary ────────────────────────────────────────────
+\section{Mental model}
+\texttt{featurep} tests whether a \texttt{provide} form has been evaluated,
+so it tells you whether a particular library file was loaded.
+\texttt{fboundp}, by contrast, inspects the function cell of a symbol and
+reports whether any callable definition is present, regardless of how it was
+installed: autoload cookie, C primitive, or explicit \texttt{defun}.
+\texttt{boundp} performs the analogous check on the value cell and is the
+right guard for variables that may not exist in older Emacs versions.  For
+version-dependent C primitives such as \texttt{treesit-parser-create},
+prefer \texttt{fboundp} over \texttt{require}: a \texttt{require} may
+succeed because a stub file provides the feature even though the underlying C
+function is absent.  Reserve \texttt{featurep} for cases where you
+specifically need to know that a file was loaded, not merely that a function
+is available.

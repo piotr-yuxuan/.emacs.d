@@ -1,0 +1,89 @@
+#+TITLE: Startup performance
+#+OPTIONS: toc:nil num:nil
+
+* What "fast" means here
+
+Emacs reports an initialization time, =after-init-time= minus
+=before-init-time=, and it is tempting to optimise that number.  It
+stops before the startup hooks, the first frame, the first redisplay
+and the work scheduled on idle timers, so a package moved later makes
+it smaller without making the editor ready sooner.  This configuration
+measures readiness instead: the time until startup hooks and window
+setup have run, a command-loop event has been handled and the frame
+has been redisplayed.  Plan 036 built that measurement under
+=tests/performance/=.
+
+Its measurements of 2026-09-06, Emacs 31.1 pgtk on NixOS, 30 launches
+each, gave these medians:
+
+| Launch                                       | Median       |
+|----------------------------------------------+--------------|
+| a new graphical Emacs, full configuration    | about 1.1 s  |
+| a new graphical Emacs, minimal configuration | about 0.3 s  |
+| a new client frame of a running daemon       | about 0.09 s |
+
+Plan 098 measured again on 2026-10-09, on a private X display shared
+with other work, so these compare with each other only: a new
+graphical Emacs about 1.1 s, the minimal configuration about 0.42 s, a
+daemon booting to readiness about 0.77 s, a client frame about 0.12 s.
+
+The full configuration does not reach 200 ms on a fresh launch; a
+client frame of a daemon does, which is why the daemon is the normal
+way to run this configuration, and why the tests start Emacs that
+way.  The report of plan 036, in the work records, has the exact
+boundaries and the raw data.
+
+* Where the time goes, and what is done about it
+
+- *Garbage collection.*  =early-init.el= raises the collection
+  threshold to the maximum during startup and restores 512 MiB from
+  =emacs-startup-hook=.  Automatic collection needs both the byte
+  threshold and the heap percentage to be exceeded, so a high
+  threshold postpones collection without preventing a package from
+  calling it.  Thresholds of 32 and 64 MiB used less memory but spent
+  about four to seven times longer collecting, without better editing
+  latency, so 512 MiB stayed.
+- *File name handlers.*  =file-name-handler-alist= is empty while
+  startup loads many files, so no handler regexp runs on each path;
+  it comes back from =emacs-startup-hook=.
+- *Deferral.*  Every package is deferred unless it says otherwise;
+  global modes turn on from =emacs-startup-hook=, the Emacs server one
+  second after startup and the MCP server two, and the large packages
+  on first use.  The integrity checks fail if lsp-mode, magit, CIDER
+  or the other large packages load at startup.  See [[file:architecture.org][the load order]].
+- *Packages.*  straight.el caches its autoloads, and looks for
+  modified packages when a file is saved or a check is asked for, not
+  by scanning every repository at each start.  Packages are compiled
+  to native code, asynchronously.
+
+* What did not help
+
+Plan 036 tried and rejected, with measurements:
+- loading the dashboard later, or rendering it once instead of twice:
+  initialization got shorter, full readiness did not;
+- byte-compiling the whole initialization: a gain of about 5 ms on
+  1.46 s, not worth a second artifact that can go stale;
+- smaller collection thresholds, fewer native compilation jobs, and a
+  different subprocess buffering: no better editing latency.
+
+The remaining startup cost is mostly work the user wants at once.
+Plan 098 moved the largest part, the MCP server and the Org libraries
+its tools load (about 240 ms), to an idle timer after startup.  A
+profiled startup now attributes about 80 to 140 ms to the light or
+dark appearance query and theme, about 70 ms to completion, mostly
+the icon tables that the mode line needs anyway, and about 35 ms to
+the global editing modes.  Plan 098's notes list the candidates it
+measured and rejected.
+
+* Measuring it yourself
+
+- ~EMACS_PROFILE=1 emacs~, then =M-x benchmark-init/show-durations-tree=:
+  the time each =require= took.  The package loads only with that
+  variable set, so it costs nothing otherwise.
+- =python3 tests/performance/run.py --output tmp/startup-measured=:
+  30 measured launches in private sessions, on a private display, with
+  the median, the 95th percentile and a manifest of what was measured.
+  The sessions read the installed packages without writing them.
+  [[file:../../README.org::*Reproducible measurements][Reproducible measurements]] in =README.org= lists the other
+  probes: client frames, daemon boots, the first use of everyday keys,
+  editing, long soaks.

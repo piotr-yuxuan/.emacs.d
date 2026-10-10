@@ -1,0 +1,89 @@
+\chapter{The buffer/window/frame model}
+\label{ch:buffer-window-frame}
+\minitoc\label{the-bufferwindowframe-model}
+\index{buffer}\index{window}\index{frame}\index{display-buffer-alist}\index{side windows}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Keybindings dispatch commands (Chapter~\ref{ch:keybindings});
+completion narrows choices (Chapter~\ref{ch:completion}); but where
+does the result appear?  Emacs separates content (buffers), viewports
+(windows), and OS windows (frames) into three distinct layers.  This chapter explains
+the model, the \texttt{display-buffer-alist} dispatch, side windows,
+\texttt{winner-mode}, and \texttt{ace-window}---the tools that let you
+control where things appear and recover when the layout goes wrong.
+
+\section{Three distinct tiers}\label{three-distinct-tiers}
+
+Emacs separates \textbf{content}, \textbf{viewport}, and \textbf{OS window} into three distinct objects:
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+Term & What it is \\
+\midrule
+\textbf{Buffer} & A sequence of characters + associated metadata. May have no window at all. \\
+\textbf{Window} & A rectangular region of a frame that displays one buffer. Tiling; no overlap. \\
+\textbf{Frame} & An OS-level window (X11/Wayland/macOS/NT) containing one or more windows. \\
+\bottomrule
+\end{longtable}
+
+A buffer can be displayed in zero, one, or many windows simultaneously. A window always displays exactly one buffer. A frame always contains at least one window.
+
+This model explains apparently unintuitive commands: \texttt{C-x k} (kill a buffer) and \texttt{C-x 0} (delete a window) are completely separate operations. Killing a buffer removes the content; deleting a window removes a viewport. The buffer persists if other windows show it.
+
+\section{\texttt{display-buffer-alist}}\label{display-buffer-alist}
+
+\texttt{display-buffer} is the function that decides \textbf{where} to show a buffer when a command requests it (e.g., help, compilation output, imenu-list). \texttt{display-buffer-alist} is an alist of \texttt{(CONDITION . (ACTIONS . PARMS))} rules matching against buffer names or major modes:
+
+\begin{minted}{elisp}
+(add-to-list 'display-buffer-alist
+  '("\\*Help\\*"
+    (display-buffer-in-side-window)
+    (side . right) (slot . 0) (window-width . 80)))
+\end{minted}
+
+The \textbf{actions} are a list of functions tried in order; the first one that successfully places the buffer wins. Built-in action functions:
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+Function & Behaviour \\
+\midrule
+\texttt{display-buffer-same-window} & Reuse the current window \\
+\texttt{display-buffer-reuse-window} & Reuse an existing window showing the buffer \\
+\texttt{display-buffer-in-side-window} & Pin to a frame edge (not counted by C-x o) \\
+\texttt{display-buffer-pop-up-window} & Split the current window \\
+\texttt{display-buffer-pop-up-frame} & Create a new OS frame \\
+\bottomrule
+\end{longtable}
+
+\section{Side windows}\label{side-windows}
+
+Side windows (\texttt{display-buffer-in-side-window}) are special: they are anchored to a frame edge (top/bottom/left/right) and are \textbf{not} cycled by \texttt{other-window} (\texttt{C-x o}). They are the right mechanism for persistent panels like \texttt{dirvish-side} (\texttt{<f8>}) and \texttt{imenu-list} (\texttt{<f9>}) because they keep their position and do not interfere with the editing window cycling the user expects from \texttt{C-x o} / \texttt{M-o}.
+
+Key parameters for side windows:
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule
+Parameter & Meaning \\
+\midrule
+\texttt{side} & \texttt{left} / \texttt{right} / \texttt{top} / \texttt{bottom} \\
+\texttt{slot} & Integer; multiple side windows on the same side are \\
+& ordered by slot number \\
+\texttt{window-width} & Fixed width in columns (left/right sides) \\
+\texttt{window-height} & Fixed height in lines (top/bottom sides) \\
+\texttt{preserve-size} & Prevent automatic resize \\
+\bottomrule
+\end{longtable}
+
+\section{\texttt{winner-mode}}\label{winner-mode}
+
+\texttt{winner-mode} records the full window configuration (layout of windows in the current frame) as a ring. \texttt{winner-undo} (\texttt{C-c left}) restores the previous layout; \texttt{winner-redo} (\texttt{C-c right}) goes forward. It is essential for recovering from accidental \texttt{C-x 1} (delete-other-windows) or after a command reshuffles the frame.
+
+\section{\texttt{ace-window}}\label{ace-window}
+
+\texttt{other-window} (\texttt{C-x o}) cycles windows in frame order (fine for two windows, painful for five). \texttt{ace-window} (\texttt{M-o}) overlays a letter on each window and jumps directly to the one whose letter you press, making three-to-six window configurations fully keyboard navigable. With two windows it degenerates to a direct switch, so there is no penalty for using it always.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+The three core display objects form a clear hierarchy: a buffer holds content, a window is a viewport onto a buffer, and a frame is an OS-level window containing one or more Emacs windows.  A buffer can exist without being displayed in any window, but every window always shows exactly one buffer.  When Emacs needs to show a buffer, the rules in \texttt{display-buffer-alist} determine where it appears; action functions are tried in order until one succeeds.  Side windows, created by \texttt{display-buffer-in-side-window}, are anchored to frame edges and deliberately excluded from \texttt{C-x o} cycling so they stay pinned in place.
+
+Two utilities make multi-window layouts manageable.  \texttt{winner-mode} records the full window configuration as a ring, so \texttt{C-c left} and \texttt{C-c right} undo and redo layout changes, invaluable after an accidental \texttt{C-x 1}.  \texttt{ace-window} (\texttt{M-o}) overlays a letter on each window and jumps directly to the one you choose, scaling comfortably to any number of splits.

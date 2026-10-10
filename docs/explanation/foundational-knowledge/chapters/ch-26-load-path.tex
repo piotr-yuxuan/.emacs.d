@@ -1,0 +1,53 @@
+\chapter{\texttt{load-path} manipulation: shadowing built-in packages}
+\label{ch:load-path}
+\minitoc\label{load-path-manipulation-shadowing-built-in-packages}
+\index{load-path}\index{shadowing}\index{built-in packages}\index{require}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Chapter~\ref{ch:straight} described how \texttt{straight.el} clones
+packages into \texttt{repos/} and builds them into \texttt{build/}.
+When straight installs a newer version of a package that
+also ships with Emacs, the built-in copy can shadow the straight
+build.  This chapter explains \texttt{load-path} lookup semantics
+and the explicit-removal pattern that guarantees the correct version
+is loaded.
+
+\section{The problem}\label{the-problem-1}
+
+Emacs ships with its own \texttt{org.el} in the \texttt{lisp/org/} subdirectory of the Emacs installation. \texttt{straight.el} installs a potentially newer \texttt{org} into \texttt{straight/build/org/}. Because Emacs adds its built-in \texttt{lisp/} directories to \texttt{load-path} at startup, \texttt{require 'org} may load the bundled version rather than straight's version, silently and without error.
+
+\section{\texttt{load-path} lookup semantics}\label{load-path-lookup-semantics}
+
+When Emacs processes \texttt{(require 'org)}, it searches \texttt{load-path} entries left-to-right for a file named \texttt{org.el} or \texttt{org.elc}. The first match wins. \texttt{load-path} is an ordered list; straight prepends its build dir, but the Emacs installation dir may still appear earlier via \texttt{site-lisp}.
+
+\section{The explicit removal pattern}\label{the-explicit-removal-pattern}
+
+\begin{minted}{elisp}
+;; Remove the bundled org directory from load-path so straight's
+;; version is found first.  Must run before any transitive require 'org.
+(when-let (library (locate-library "org" nil load-path))
+  (setq-default load-path
+                (delete (substring (file-name-directory library) 0 -1)
+                        load-path)))
+\end{minted}
+
+\begin{itemize}
+\item \texttt{locate-library} returns the full path to \texttt{org.el} in the \textbf{first} matching load-path entry. \texttt{file-name-directory} extracts the directory; the \texttt{(substring … 0 -1)} removes the trailing \texttt{/}.
+\item \texttt{delete} removes all occurrences of that exact string from the list.
+\item \texttt{setq-default} is used because \texttt{load-path} is declared buffer-locally by some packages; setting the default ensures the change is global.
+\end{itemize}
+
+This must appear at the very top of \texttt{init.el}, before the straight bootstrap, because the bootstrap itself may transitively \texttt{require 'org}.
+
+% ── Mental model summary ────────────────────────────────────────────
+\section{Mental model}
+Emacs searches \texttt{load-path} left-to-right and loads the first matching
+file it finds.  This means that a built-in package directory appearing before
+straight.el's build directory will shadow the newer version, defeating the
+purpose of the package manager.  The explicit removal pattern (calling
+\texttt{locate-library} to find the built-in directory and then
+\texttt{delete} to strip it from the list) must run before the straight
+bootstrap so that the bootstrap itself picks up the correct files.
+\texttt{setq-default} is used instead of plain \texttt{setq} because some
+packages declare \texttt{load-path} buffer-locally; setting the default
+ensures the change applies globally.

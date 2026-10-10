@@ -1,0 +1,135 @@
+\chapter{Garbage collection tuning}
+\label{ch:gc-tuning}
+\minitoc\label{garbage-collection-tuning}
+\index{garbage collection!tuning}\index{gc-cons-threshold}\index{gc-cons-percentage}\index{GC pause}
+
+% ── Opening signpost ──────────────────────────────────────────────
+With the startup sequence from Chapter~\ref{ch:startup-lifecycle}
+fresh in mind, we turn to the single largest source of unexpected
+pauses: garbage collection.  This chapter explains the two
+independent GC triggers, shows the two-phase suppression pattern
+used during startup, and demonstrates how to verify that your
+steady-state threshold has not been silently overwritten.  After
+reading it you will be able to diagnose any GC-related slowdown in
+under a minute.
+
+\texttt{(info "(elisp) Garbage Collection")}
+
+\section{The two knobs}\label{the-two-knobs}
+
+\begin{itemize}
+\item \textbf{\texttt{gc-cons-threshold}}: GC fires when this many bytes have been allocated since the last GC. Default: 800,000 bytes (\(\sim\)800 KB). This is absurdly low for modern Emacs with LSP, tree-sitter, and large buffers.
+\item \textbf{\texttt{gc-cons-percentage}}: GC fires when bytes allocated since last GC exceed this fraction of the current heap size. Default: 0.1 (10\%). This is the \textbf{second}, independent trigger: even if \texttt{gc-cons-threshold} is \texttt{most-positive-fixnum}, GC can still fire via this path.
+\end{itemize}
+
+\section{The two-phase pattern}\label{the-two-phase-pattern}
+
+\begin{minted}{elisp}
+;; early-init.el, Phase 1: suppress GC during startup
+(setq gc-cons-threshold most-positive-fixnum
+      gc-cons-percentage 1.0)  ;; BOTH must be raised
+
+;; Phase 2: restore after startup
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (setq gc-cons-threshold (* 512 1024 1024)  ;; 512 MB
+                  gc-cons-percentage 0.1)))
+\end{minted}
+
+The steady-state value of 512 MB means GC runs only during idle time or when a single operation allocates half a gigabyte. For most editing, this means zero GC pauses during interactive use.
+
+\subsection{Why you must raise \textbf{both}}\label{why-you-must-raise-both}
+
+If you only set \texttt{gc-cons-threshold} to \texttt{most-positive-fixnum} but leave \texttt{gc-cons-percentage} at 0.1, GC will fire as the heap grows. The heap starts at \(\sim\)50 MB and grows to \(\sim\)500 MB during package loading. At 0.1, GC fires when 50 MB × 0.1 = 5 MB has been allocated, then again at every subsequent 10\% growth. This produces dozens of GC runs during init.
+
+\section{Why GCMH conflicts}\label{why-gcmh-conflicts}
+
+\texttt{gcmh-mode} (the Garbage Collection Magic Hack) implements its \textbf{own} two-phase strategy: high threshold during commands, low threshold during idle. The problem is its idle-phase threshold: \texttt{gcmh-low-cons-threshold} defaults to \textbf{800,000 bytes}, essentially the Emacs default. Within seconds of startup, GCMH's idle timer overwrites your carefully chosen 512 MB with 800 KB. Every subsequent file operation triggers hundreds of GC pauses.
+
+\section{Verifying GC health}\label{verifying-gc-health}
+
+\begin{minted}{elisp}
+;; Check the current threshold (should be your Phase 2 value):
+(message "gc-cons-threshold: %s" gc-cons-threshold)
+
+;; How many GCs have happened and how long they took:
+(message "GCs: %d, elapsed: %.3fs" gcs-done gc-elapsed)
+
+;; Force a GC and time it:
+(let ((start (current-time)))
+  (garbage-collect)
+  (message "GC took %.3fs" (float-time (time-subtract (current-time) start))))
+\end{minted}
+
+A healthy session after loading a large org file should show single- digit \texttt{gcs-done} and sub-second \texttt{gc-elapsed}. If you see \texttt{gcs-done} in the hundreds and \texttt{gc-elapsed} of 30+ seconds, something is resetting your threshold.
+
+\subsection{Combining startup timing with GC accounting}\label{combining-startup-timing-with-gc-accounting}
+
+\begin{expertdepth}
+The most informative single command: run 3 consecutive file-opens in \texttt{-\/-batch} mode, printing elapsed time alongside GC counters after each:
+
+\begin{minted}{bash}
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
+for i in 1 2 3; do
+  timeout 60 /Applications/Emacs.app/Contents/MacOS/Emacs --batch \
+    -l ~/.emacs.d/early-init.el -l ~/.emacs.d/init.el --eval \
+    "(let ((start (float-time)))
+       (find-file-noselect \"~/Documents/todo/todo.org\")
+       (message \"Run $i org: %.3fs, GC: %d/%.3fs\"
+                (- (float-time) start) gcs-done gc-elapsed))" \
+    2>&1 | grep "Run $i"
+done
+\end{minted}
+
+A healthy result:
+
+\begin{minted}{text}
+Run 1 org: 0.312s, GC: 3/0.018s
+Run 2 org: 0.290s, GC: 3/0.018s
+Run 3 org: 0.287s, GC: 3/0.018s
+\end{minted}
+
+Red flags to watch for:
+
+\begin{itemize}
+\item \texttt{GC: > 20}: something between startup and file-open has reset \texttt{gc-cons-threshold} to a low value. Use \texttt{add-variable-watcher} to find the culprit (see Step 2 of the playbook).
+\item \texttt{GC elapsed > 2s}: GC pauses are consuming more time than the file I/O itself; raise the steady-state threshold.
+\item Erratic variance between runs (>50 ms): a hook is doing non-deterministic work such as network I/O or subprocess spawning.
+\end{itemize}
+
+\end{expertdepth}
+
+\section{The per-operation pattern for expensive functions}\label{the-per-operation-pattern-for-expensive-functions}
+
+For a known-expensive operation (e.g., loading a huge file), you can temporarily suppress GC:
+
+\begin{minted}{elisp}
+(let ((gc-cons-threshold most-positive-fixnum))
+  (find-file "/path/to/huge-file.org"))
+\end{minted}
+
+The \texttt{let} binding restores the old value automatically on exit.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+Garbage collection in Emacs is governed by two independent triggers:
+\texttt{gc-cons-threshold}, an absolute byte count, and
+\texttt{gc-cons-percentage}, a fraction of the current heap size.  Both
+must be raised during startup (Phase~1) to suppress all collection while
+hundreds of packages allocate heavily in a short burst.  Once init
+completes (Phase~2), restoring them to a high-but-finite value (for
+example 512\,MB and 0.1, respectively) on \texttt{emacs-startup-hook}
+keeps interactive editing responsive without inviting long pauses.
+Beware of GCMH: it resets the threshold to 800\,KB on idle, effectively
+undoing your tuning.
+
+Two built-in diagnostic counters, \texttt{gcs-done} and
+\texttt{gc-elapsed}, tell you how healthy the situation is;
+single-digit GC counts after startup are a good sign.  If the numbers
+look wrong, placing an \texttt{add-variable-watcher} on
+\texttt{gc-cons-threshold} instantly reveals whichever package is
+resetting it behind your back.  For one-off expensive operations,
+a \texttt{let}-binding of \texttt{gc-cons-threshold} suppresses
+collection for that call alone without touching global state.
+See Appendix~\ref{app:gc-internals} for the full GC scoring formula
+and heap-growth mechanics.

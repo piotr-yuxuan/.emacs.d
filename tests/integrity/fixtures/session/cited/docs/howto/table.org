@@ -1,0 +1,3 @@
+#+TITLE: Fixture document whose keymaps the self-test's table names
+
+=<f19> c= is bound in the keymap the table names, =<f19> d= only in another.

@@ -1,0 +1,140 @@
+\part{Configuration Patterns \& Idioms}
+\label{part:idioms}
+
+The preceding five parts explained individual mechanisms in
+isolation: startup hooks, GC triggers, \texttt{use-package} keywords,
+mode dispatch, LSP capability mapping, completion protocols, org
+loading.  In practice, you combine several of these mechanisms every
+time you add a new package or tweak an existing one.
+
+This closing part steps back from the details and identifies the
+recurring patterns.  Chapter~\ref{ch:configuration-idioms} collects
+five idioms (the declaration template, deferred-vs-eager loading,
+the variable-setter decision tree, the \texttt{:after} heuristic,
+and feature guards) that account for the vast majority of real-world
+configuration code.  Each idiom cross-references the chapters that
+explain the underlying machinery, so this chapter also serves as a
+reading guide: if you are unsure where to look for a particular
+concept, start here.
+
+\chapter{Configuration idioms}
+\label{ch:configuration-idioms}
+\minitoc
+\index{configuration idioms}\index{use-package!declaration template}\index{deferred loading!vs eager}\index{variable setter}
+
+% ── Opening signpost ──────────────────────────────────────────────
+If you have read the preceding parts, you will have noticed the same
+shapes recurring: a \texttt{use-package} form with a loading trigger,
+a variable set at the right moment, a feature guard.  Most Emacs
+configuration code combines exactly these handful of patterns:
+a \texttt{use-package} declaration with a straight.el recipe, deferred
+loading via \texttt{:defer} or \texttt{:bind}, variable customisation
+through \texttt{setq} or \texttt{:custom}, and feature guards for
+optional dependencies.  This chapter collects those recurring idioms
+in one place, with cross-references to the chapters that explain the
+underlying machinery.
+
+\section{The \texttt{use-package} + \texttt{straight.el} declaration idiom}
+
+The overwhelming majority of package declarations follow a single template:
+
+\begin{minted}{elisp}
+(use-package PACKAGE
+  :straight t                 ; clone + build + activate via straight
+  :defer t                    ; do not require until triggered
+  :hook (some-mode . package-mode)
+  :bind (("C-c x" . package-command))
+  :custom
+  (package-variable value)
+  :config
+  (package-setup-call))
+\end{minted}
+
+The \texttt{:straight t} is implicit when \texttt{straight-use-package-by-default} is set (see Chapter~\ref{ch:straight}).  Built-in packages require \texttt{:straight nil} to prevent straight from cloning a MELPA copy that would shadow the version shipped with Emacs.
+
+\section{Deferred versus eager loading}
+
+With \texttt{use-package-always-defer t} (see Chapter~\ref{ch:use-package}), every package is deferred by default.  The package loads only when one of the following triggers fires:
+
+\begin{itemize}
+  \item A \texttt{:bind} key is pressed (autoload created by \texttt{use-package}).
+  \item A \texttt{:hook} mode activates (autoload via the mode hook).
+  \item A \texttt{:command} is invoked interactively.
+  \item The \texttt{:after} package finishes loading.
+  \item An idle timer (\texttt{run-with-idle-timer}) fires.
+\end{itemize}
+
+Use \texttt{:demand t} to force immediate loading when the package must be available before any trigger can fire; for example, theme packages, modeline packages, or packages that advise core functions.
+
+\section{The \texttt{setq} / \texttt{customize-set-variable} / \texttt{:custom} decision tree}
+
+Three mechanisms set variables, with different side effects (see Chapter~\ref{ch:setq}):
+
+\begin{description}
+  \item[\texttt{setq}] Fastest; no side effects.  Use for variables with no setter function.
+  \item[\texttt{customize-set-variable}] Respects the variable's \texttt{:set} function (if any) and records the setting in \texttt{custom-file}.  Use when the Customize UI or generation from \texttt{M-x customize} matters.
+  \item[\texttt{:custom}] In \texttt{use-package}, expands to \texttt{customize-set-variable} calls.  Use inside \texttt{use-package} for readability; be aware it is marginally slower than \texttt{setq}.
+\end{description}
+
+Rule of thumb: prefer \texttt{setq} unless the variable documentation explicitly mentions a setter, in which case use \texttt{:custom} or \texttt{customize-set-variable}.
+
+\section{The \texttt{:after} / \texttt{with-eval-after-load} heuristic}
+
+Both defer code until a feature is loaded (see Chapter~\ref{ch:with-eval-after-load}):
+
+\begin{itemize}
+  \item \texttt{:after FEATURE} (in \texttt{use-package}): delays the entire package declaration until FEATURE is loaded.  Use when the package is an add-on that extends another package.
+  \item \texttt{with-eval-after-load "FEATURE"}: delays a specific block of code.  Use inside \texttt{:config} or \texttt{:init} when only a few lines depend on the other package.
+\end{itemize}
+
+\begin{minted}{elisp}
+;; :after: the whole declaration waits for eglot
+(use-package flycheck-eglot
+  :after eglot
+  :config (global-flycheck-eglot-mode 1))
+
+;; with-eval-after-load: only one line waits
+(use-package vertico
+  :config
+  (vertico-mode 1)
+  (with-eval-after-load "savehist"
+    (add-to-list 'savehist-additional-variables 'vertico-repeat-history)))
+\end{minted}
+
+\section{Feature-guarded code}
+
+Not all features are guaranteed to be available, especially across Emacs versions or when an optional package is not installed (see Chapter~\ref{ch:fboundp}).  Guard with:
+
+\begin{description}
+  \item[\texttt{(fboundp 'FUNCTION)}] True if the function is defined (or autoloaded).
+  \item[\texttt{(boundp 'VARIABLE)}] True if the variable is defined.
+  \item[\texttt{(featurep 'FEATURE)}] True if the feature has been \texttt{require}d.
+\end{description}
+
+\begin{minted}{elisp}
+;; Safe even if treesit is not compiled into this build:
+(when (and (fboundp 'treesit-available-p) (treesit-available-p))
+  (use-package treesit-auto
+    :config (global-treesit-auto-mode)))
+\end{minted}
+
+A common anti-pattern is guarding with \texttt{(require 'FEATURE nil t)}---this forces a synchronous load rather than deferring.  Prefer \texttt{fboundp} checks over \texttt{require} guards whenever possible.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+The standard declaration template combines \texttt{use-package} with a
+\texttt{:straight} source, a loading trigger (\texttt{:bind},
+\texttt{:hook}, \texttt{:command}, or \texttt{:after}), and customisation
+keywords.  Because \texttt{use-package-always-defer} is set to \texttt{t},
+packages are not loaded until their trigger fires; adding \texttt{:demand t}
+overrides this and forces an immediate load.  For setting variables,
+\texttt{setq} is faster but silently bypasses any \texttt{:set} function
+defined by \texttt{defcustom}, whereas the \texttt{:custom} keyword respects
+those functions at a small runtime cost.  The \texttt{:after} keyword defers
+an entire \texttt{use-package} declaration until the named package loads,
+while \texttt{with-eval-after-load} defers only the enclosed code block.
+Guarding code with \texttt{fboundp}, \texttt{boundp}, or \texttt{featurep}
+lets you test for the presence of functions, variables, or loaded libraries
+without pulling anything into memory.  Using \texttt{(require 'FEATURE nil t)}
+as a guard is an anti-pattern: it triggers a synchronous load, defeating the
+lazy-loading strategy.

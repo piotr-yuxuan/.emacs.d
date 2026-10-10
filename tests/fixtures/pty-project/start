@@ -1,0 +1,2 @@
+The PTY scenarios of plan 091 open this file, at the project root,
+before they start a terminal.

@@ -1,0 +1,180 @@
+\chapter{A reusable diagnostic playbook}
+\label{ch:diagnostic-playbook}
+\minitoc\label{a-reusable-diagnostic-playbook}
+\index{diagnostic playbook}\index{find-file-literally}\index{hook bisection}\index{performance!diagnosis}
+
+% ── Opening signpost ──────────────────────────────────────────────
+This chapter distils the profiling techniques from
+Chapter~\ref{ch:profiling} into a step-by-step decision tree
+that draws on the GC diagnostics of Chapter~\ref{ch:gc-tuning} and
+the runtime knobs of Chapter~\ref{ch:general-performance}.
+Follow the steps in order whenever something is slow: each step
+isolates a different layer, narrowing the search space until you
+reach the root cause.
+
+Follow this checklist in order when something is slow. Each step isolates a different layer.
+
+\section{Step 1: Isolate. Is it Emacs or the file?}\label{step-1-isolate-is-it-emacs-or-the-file}
+
+\begin{minted}{elisp}
+;; Open the file without any mode processing:
+(find-file-literally "/path/to/slow-file")
+\end{minted}
+
+If this is fast, the problem is in modes/hooks (proceed to step 3). If this is slow, the problem is I/O or GC (proceed to step 2).
+
+\section{Step 2: Check GC health}\label{step-2-check-gc-health}
+
+\begin{minted}{elisp}
+(message "threshold: %s, gcs: %d, elapsed: %.3fs"
+         gc-cons-threshold gcs-done gc-elapsed)
+\end{minted}
+
+If \texttt{gc-cons-threshold} is 800,000 or \texttt{gcs-done} is in the hundreds, something has reset your threshold. Find it:
+
+\begin{minted}{elisp}
+;; Watch for the culprit:
+(add-variable-watcher
+ 'gc-cons-threshold
+ (lambda (sym val op where)
+   (when (< val (* 100 1024 1024))  ;; alert if set below 100 MB
+     (message "gc-cons-threshold set to %s by: %s"
+              val (or where "unknown")))))
+\end{minted}
+
+\section{Step 3: Hook bisection}\label{step-3-hook-bisection}
+
+Find which hook function is slow:
+
+\begin{minted}{elisp}
+;; List all functions on the relevant hook:
+(mapcar (lambda (fn)
+          (let ((start (current-time)))
+            (funcall fn)
+            (cons fn (* 1000 (float-time
+                              (time-subtract (current-time) start))))))
+        find-file-hook)
+\end{minted}
+
+For startup hooks, dump them at the right moment:
+
+\begin{minted}{elisp}
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (message "startup-hook fns: %S"
+                     (mapcar #'symbol-name emacs-startup-hook)))
+          -99)  ;; priority -99 = run first
+\end{minted}
+
+\subsection{Cumulative hook restoration (\texttt{find-file-hook} example)}\label{cumulative-hook-restoration-find-file-hook-example}
+
+Once you have a baseline with all hooks nil (Section~\ref{isolating-file-open-cost-nil-all-hooks-add-back-cumulatively}), add them back in groups to measure their cumulative cost. This emacsclient block restores the full \texttt{find-file-hook} and measures:
+
+\begin{minted}{bash}
+timeout 15 emacsclient -e '
+(progn
+  (add-hook (quote find-file-hook) (quote doom-modeline-update-persp-name))
+  (add-hook (quote find-file-hook) (quote doom-modeline-update-vcs))
+  (add-hook (quote find-file-hook) (quote doom-modeline-update-buffer-file-name))
+  (add-hook (quote find-file-hook) (quote doom-modeline-update-buffer-file-icon))
+  (add-hook (quote find-file-hook) (quote doom-modeline-update-env))
+  (add-hook (quote find-file-hook) (quote recentf-track-opened-file))
+  (add-hook (quote find-file-hook) (quote auto-revert--global-adopt-current-buffer))
+  (add-hook (quote find-file-hook) (quote auto-revert-find-file-function))
+  (add-hook (quote find-file-hook) (quote vc-refresh-state))
+  (add-hook (quote find-file-hook) (quote epa-file-find-file-hook))
+  (add-hook (quote find-file-hook) (quote save-place-find-file-hook))
+  (let ((start (float-time)))
+    (find-file-noselect "/tmp/tiny-test-hooks.txt")
+    (let ((elapsed (- (float-time) start)))
+      (kill-buffer "tiny-test-hooks.txt")
+      (cons "+find-file-hook-all" elapsed))))' 2>&1
+\end{minted}
+
+Binary-search by commenting out half the \texttt{add-hook} calls at a time. Within 4--5 rounds you will have isolated the single most expensive entry.
+
+\section{Step 4: \texttt{require} tracing}\label{step-4-require-tracing}
+
+Use the timing advice from Section~\ref{wrapping-require-load-with-timing-advice}. Load it as an \texttt{-l} file:
+
+\begin{minted}{bash}
+gtimeout 15 emacs -l /path/to/require-profiler.el \
+  --eval "(kill-emacs)"
+\end{minted}
+
+Sort by elapsed time. Anything over 10 ms is worth investigating.
+
+\section{Step 5: Trace the caller}\label{step-5-trace-the-caller}
+
+Once you know \textbf{what} is slow (e.g., \texttt{dbus} takes 17 ms), find \textbf{who} loads it using the caller tracing advice from Section~\ref{tracing-who-loads-what}.
+
+\section{Step 5b: Binary-bisect \texttt{init.el}}\label{step-5b-binary-bisect-init.el}
+
+If \texttt{require} tracing shows no obvious single bottleneck (costs are spread across many small packages), bisect \texttt{init.el} by loading only the first half:
+
+\begin{minted}{bash}
+head -600 ~/.emacs.d/init.el > /tmp/init-first-half.el
+timeout 60 /Applications/Emacs.app/Contents/MacOS/Emacs --batch \
+  -l ~/.emacs.d/early-init.el -l /tmp/init-first-half.el --eval '
+(progn
+  (setq org-mode-hook nil text-mode-hook nil
+        outline-mode-hook nil after-change-major-mode-hook nil
+        find-file-hook nil)
+  (message "start: %s" (float-time))
+  (find-file-noselect "~/Documents/todo/todo.org")
+  (message "end: %s" (float-time)))' 2>&1 | grep -E '(start:|end:)'
+\end{minted}
+
+If the first half is fast, the bottleneck is in lines 601--end. Take 900 lines and repeat. Within 3--4 iterations you will have narrowed the culprit to a \(\sim\)50-line window.
+
+Loading a truncated \texttt{init.el} will produce errors for missing variables. Either tolerate them (the timing is still valid) or pipe stderr away:
+
+\begin{minted}{bash}
+head -600 ~/.emacs.d/init.el > /tmp/init-first-half.el
+timeout 60 /Applications/Emacs.app/Contents/MacOS/Emacs --batch \
+  -l ~/.emacs.d/early-init.el -l /tmp/init-first-half.el \
+  --eval "(kill-emacs)" 2>/dev/null; echo "exit: $?"
+\end{minted}
+
+A non-zero exit code means a fatal load error in that slice; reduce the line count to avoid the error-producing declaration.
+
+\section{Step 6: Measure → Fix → Verify}\label{step-6-measure-fix-verify}
+
+\begin{enumerate}
+\item Run 5 benchmark iterations. Record the median.
+\item Apply the fix.
+\item Run 5 more iterations. Compare medians.
+\item If the improvement is within noise (±3 ms), the fix is not performance-relevant (but may still be a correctness fix).
+\end{enumerate}
+
+\section{Step 7: Document}\label{step-7-document}
+
+Append the fix to your fix log with:
+
+\begin{itemize}
+\item Root cause
+\item Change applied (before/after code)
+\item Why it works (mechanistic)
+\item Regression test
+\end{itemize}
+
+The documentation is insurance against re-introducing the problem during future refactoring.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+Every investigation should begin with \texttt{find-file-literally},
+which bypasses all mode and hook processing and therefore cleanly
+separates raw file I/O cost from everything Emacs layers on top.  The
+next check is GC health: if \texttt{gc-cons-threshold} has been
+silently reset by a package, every measurement taken afterward is
+polluted.  Once those baselines are sound, hook bisection (nilling an
+entire hook list, then re-adding functions in halves) converges on the
+expensive function in four or five rounds.  For load-time costs,
+\texttt{require} tracing with timing advice identifies the expensive
+libraries (sort by elapsed time), and capturing
+\texttt{load-file-name} inside that advice answers \emph{who} triggered
+each slow \texttt{require}.  When the overhead is spread thinly across
+many small packages, binary-bisecting \texttt{init.el} narrows the
+window efficiently.  Whatever technique you apply, always measure at
+least five times, take the median, and document the root cause so the
+fix survives future refactoring.

@@ -1,0 +1,193 @@
+%% Foundational knowledge.tex: Root file for:
+%%   Emacs: Foundational Knowledge
+%%   Author: piotr-yuxuan
+%%   Date:   2026-03-05
+%%
+%% ══════════════════════════════════════════════════════════════════
+%% COMPILATION INSTRUCTIONS
+%%   This file must be compiled with LuaLaTeX (not pdfLaTeX / XeLaTeX).
+%%   Junicode is an OpenType font that requires the fontspec package,
+%%   which in turn requires LuaLaTeX or XeLaTeX; the ligature RawFeature
+%%   settings used here are HarfBuzz-specific and require LuaLaTeX.
+%%
+%%   Required passes (four LuaLaTeX runs + one makeindex):
+%%     Pass 1:  lualatex "Foundational knowledge.tex"
+%%     Pass 2:  makeindex "Foundational knowledge.idx"
+%%     Pass 3:  lualatex "Foundational knowledge.tex"
+%%     Pass 4:  lualatex "Foundational knowledge.tex", to stabilise refs
+%%
+%%   minitoc requires at least two lualatex passes to populate per-chapter
+%%   mini tables of contents correctly.  The fourth pass stabilises the
+%%   detailed back-matter ToC, list of tables, and index page numbers.
+%% ══════════════════════════════════════════════════════════════════
+
+\documentclass[
+  paper       = a4,
+  twoside     = true,
+  open        = right,          %% every \chapter starts on a recto page
+  fontsize    = 11pt,
+  parskip     = half-,          %% KOMA: modest inter-paragraph skip
+]{scrbook}
+
+%% ── Preamble files ────────────────────────────────────────────────
+\input{preamble-packages}       %% all \usepackage declarations
+\input{preamble-fonts}          %% fontspec / Junicode / ligature settings
+\input{preamble-layout}         %% geometry, headers, chapter style
+\input{preamble-macros}         %% utility commands: \code{}, \boldlabel{}
+
+%% ══════════════════════════════════════════════════════════════════
+\begin{document}
+%% ══════════════════════════════════════════════════════════════════
+
+%% minitoc initialisation: must precede the first \chapter command
+\dominitoc
+\dominilot                   %% initialise per-chapter list-of-tables stream
+
+%% ── Front matter ──────────────────────────────────────────────────
+\frontmatter
+
+%% Title page
+\begin{titlepage}
+  \centering
+  \vspace*{4cm}
+  {\Huge\bfseries Emacs: Foundational Knowledge\par}
+  \vspace{1cm}
+  {\Large piotr-yuxuan\par}
+  \vspace{0.5cm}
+  {\large\today\par}
+\end{titlepage}
+
+%% Introduction chapter (front matter content from pandoc conversion)
+\cleardoublepage
+\input{chapters/ch-00-introduction}
+\adjustmtc                   %% compensate for chapter without \minitoc
+
+%% ── Save a copy of the .toc for the back-matter detailed ToC ──────
+%% \tableofcontents (via \@starttoc) clears the .toc after reading it,
+%% so we duplicate it to a .dtoc file before that happens.  The
+%% back-matter detailed ToC reads .dtoc with tocdepth=3.
+%%
+%% tex.jobname returns '"Foundational knowledge"' (with quotes) when
+%% the filename contains spaces.  Strip the embedded quotes so that
+%% Lua's io.open receives a bare filename.
+\directlua{
+  local jn = tex.jobname:gsub('"', '')
+  local src = io.open(jn .. ".toc", "r")
+  if src then
+    local dst = io.open(jn .. ".dtoc", "w")
+    if dst then
+      dst:write(src:read("*a"))
+      dst:close()
+    end
+    src:close()
+  end
+}
+
+%% Summary: chapters only (\setcounter{tocdepth}{0})
+%% tocdepth=0 means only \chapter entries are displayed; sections and
+%% below are written to the .toc file regardless and will appear in
+%% the detailed back-matter ToC at tocdepth=3.
+\cleardoublepage
+\setcounter{tocdepth}{0}           %% display chapters only
+\renewcommand{\contentsname}{Summary}
+\tableofcontents
+\setcounter{tocdepth}{3}           %% restore for remainder of document
+
+%% ── Main matter ───────────────────────────────────────────────────
+\mainmatter
+
+%% ── Part I: Startup, Performance & Diagnostics ───────────────────
+\input{chapters/ch-01-startup-lifecycle}    %% contains \part{} heading
+\input{chapters/ch-02-gc-tuning}
+\input{chapters/ch-08-general-performance}
+\input{chapters/ch-20-early-init-frame}
+\input{chapters/ch-19-pre-command-hook}
+\input{chapters/ch-03-profiling}
+\input{chapters/ch-09-diagnostic-playbook}
+
+%% ── Part II: Package Management & the Loading Model ──────────────
+\input{chapters/ch-04-use-package}          %% contains \part{} heading
+\input{chapters/ch-16-straight}
+\input{chapters/ch-05-compile-angel}
+\input{chapters/ch-26-load-path}
+\input{chapters/ch-21-load-prefer-newer}
+\input{chapters/ch-18-with-eval-after-load}
+\input{chapters/ch-17-setq}
+\input{chapters/ch-32-fboundp}
+
+%% ── Part III: Language Support & Development Tooling ─────────────
+\input{chapters/ch-06-tree-sitter}          %% contains \part{} heading
+\input{chapters/ch-14-major-minor-modes}
+\input{chapters/ch-15-eglot-lsp}
+\input{chapters/ch-22-eglot-server-programs}
+\input{chapters/ch-25-find-file-visit-truename}
+\input{chapters/ch-23-dape}
+\input{chapters/ch-24-fringe-bitmaps}
+\input{chapters/ch-10-testing}
+
+%% ── Part IV: UI, Completion & Interaction ────────────────────────
+\input{chapters/ch-11-keybindings}          %% contains \part{} heading
+\input{chapters/ch-12-completion}
+\input{chapters/ch-13-buffer-window-frame}
+\input{chapters/ch-27-face-remap}
+\input{chapters/ch-31-wayland-clipboard}
+
+%% ── Part V: Org-mode & Document Authoring ────────────────────────
+\input{chapters/ch-07-org-modules}          %% contains \part{} heading
+\input{chapters/ch-29-org-export}
+\input{chapters/ch-30-org-babel}
+\input{chapters/ch-28-auth-source}
+
+%% ── Part VI: Configuration Patterns & Idioms ─────────────────────
+\input{chapters/ch-33-configuration-idioms} %% contains \part{} heading
+
+%% ── Back matter ───────────────────────────────────────────────────
+\backmatter
+\input{chapters/ch-99-conclusion}
+
+%% ── Appendices ────────────────────────────────────────────────────
+%% Switch back to mainmatter numbering so \appendix chapters get
+%% letters (A, B, C …).  \backmatter turned off numbering, but
+%% \appendix needs it.
+\makeatletter
+\@mainmattertrue
+\makeatother
+\appendix
+\input{chapters/app-a-variable-table}
+\input{chapters/app-b-hook-timing}
+\input{chapters/app-c-keybinding-index}
+\input{chapters/app-d-gc-internals}
+\input{chapters/app-e-lsp-protocol}
+\input{chapters/app-f-straight-internals}
+\input{chapters/app-g-floating-org-tables}
+
+%% ── List of Tables ──────────────────────────────────────────────────
+\cleardoublepage
+\listoftables
+
+%% ── Detailed Table of Contents ─────────────────────────────────────
+%% Re-reads the saved .dtoc (a snapshot of the previous-pass .toc)
+%% with tocdepth=3 so that sections, subsections, and subsubsections
+%% are all visible.  \@input bypasses minitoc's redefined
+%% \tableofcontents, avoiding double-initialisation of mini-ToC data.
+%% The filename is hardcoded because \jobname embeds quotes around
+%% names with spaces, producing an invalid path.
+\cleardoublepage
+\begingroup
+  \setcounter{tocdepth}{4}
+  \chapter*{Table of contents}
+  \addcontentsline{toc}{chapter}{Table of contents}
+  \markboth{Table of contents}{Table of contents}
+  \makeatletter
+  \@input{Foundational knowledge.dtoc}%
+  \makeatother
+\endgroup
+
+\markboth{Index}{Index}
+\cleardoublepage
+\addcontentsline{toc}{chapter}{Index}
+\printindex
+
+%% ══════════════════════════════════════════════════════════════════
+\end{document}
+%% ══════════════════════════════════════════════════════════════════

@@ -1,0 +1,65 @@
+mode nix-mode
+face font-lock-comment-delimiter-face
+face font-lock-comment-face :weight light :slant italic
+face font-lock-string-face
+face indent-bars-1 :inherit indent-bars-face
+face indent-bars-2 :inherit indent-bars-face
+face nix-antiquote-face :inherit font-lock-preprocessor-face
+face nix-attribute-face :inherit font-lock-variable-name-face
+face nix-builtin-face :inherit font-lock-builtin-face
+face nix-constant-face :inherit font-lock-constant-face
+face nix-keyword-face :inherit font-lock-keyword-face
+face rainbow-delimiters-depth-1-face
+face rainbow-delimiters-depth-2-face
+1:0 font-lock-comment-delimiter-face "# "
+1:2 font-lock-comment-face "A golden fixture of Nix: a development shell.\n"
+2:0 (rainbow-delimiters-depth-1-face) "{"
+3:9 nix-builtin-face "import"
+3:16 nix-constant-face "<nixpkgs>"
+3:26 (rainbow-delimiters-depth-2-face) "{"
+3:27 (rainbow-delimiters-depth-2-face) "}"
+5:0 (rainbow-delimiters-depth-1-face) "}"
+5:3 nix-keyword-face "let"
+6:2 nix-keyword-face "inherit"
+6:10 (rainbow-delimiters-depth-1-face) "("
+6:15 (rainbow-delimiters-depth-1-face) ")"
+7:2 nix-attribute-face "python"
+7:37 (rainbow-delimiters-depth-1-face) "("
+7:42 (rainbow-delimiters-depth-2-face) "["
+7:64 (rainbow-delimiters-depth-2-face) "]"
+7:65 (rainbow-delimiters-depth-1-face) ")"
+8:2 nix-attribute-face "greeting"
+8:13 font-lock-string-face "\"hello from "
+8:25 nix-antiquote-face "$"
+8:26 (rainbow-delimiters-depth-1-face nix-antiquote-face) "{"
+8:38 (rainbow-delimiters-depth-1-face nix-antiquote-face) "}"
+9:0 nix-keyword-face "in"
+10:15 (rainbow-delimiters-depth-1-face) "{"
+11:2 indent-bars-1 " "
+11:4 nix-attribute-face "name"
+11:11 font-lock-string-face "\"sample\""
+12:2 indent-bars-1 " "
+12:4 nix-attribute-face "packages"
+12:15 (rainbow-delimiters-depth-2-face) "["
+12:35 (rainbow-delimiters-depth-2-face) "]"
+13:2 indent-bars-1 " "
+13:4 nix-attribute-face "env.LIMIT"
+13:16 nix-builtin-face "toString"
+14:2 indent-bars-1 " "
+14:4 nix-attribute-face "shellHook"
+14:16 font-lock-string-face "''\n  "
+15:2 indent-bars-1 " "
+15:3 font-lock-string-face " "
+15:4 indent-bars-2 " "
+15:5 font-lock-string-face " echo "
+15:11 nix-antiquote-face "$"
+15:12 (rainbow-delimiters-depth-2-face nix-antiquote-face) "{"
+15:21 (rainbow-delimiters-depth-2-face nix-antiquote-face) "}"
+15:22 font-lock-string-face "\n  "
+16:2 indent-bars-1 " "
+16:3 font-lock-string-face " "
+16:4 indent-bars-2 " "
+16:5 font-lock-string-face " export PATH=$PWD/bin:$PATH\n  "
+17:2 indent-bars-1 " "
+17:3 font-lock-string-face " ''"
+18:2 (rainbow-delimiters-depth-1-face) "}"

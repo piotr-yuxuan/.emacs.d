@@ -1,0 +1,100 @@
+#+TITLE: Add a scenario test
+#+OPTIONS: toc:nil num:nil
+#+KEYMAPS: org-mode-map
+
+A scenario says what the user does and what the user then sees: it
+opens a file, presses real keys in a fresh Emacs, and checks the
+result.  Write one for every behaviour a change adds.  [[file:../explanation/test-strategy.org][The test
+strategy]] explains why, and [[file:../reference/tests.org][the test reference]] lists the commands and
+the file headers.
+
+* Write the scenario
+
+1. Create =tests/scenarios/l1-AREA.el=, named after the behaviour.
+   When the scenario needs a real external program, such as a
+   language server, name it =l3-AREA.el= and put =;; scenario-tier: l3=
+   on the line after its title: the header, not the name, keeps the
+   file out of the fast profile.
+2. Describe one user action and what it must show.  The existing
+   =tests/scenarios/l1-expreg.el= is an example, shown here without
+   its commentary: ~C-=~ must select the symbol around point.
+   #+BEGIN_SRC elisp
+   ;;; l1-expreg.el --- C-= grows the region across syntax nodes -*- lexical-binding: t -*-
+
+   ;;; Code:
+
+   (require 'scenario)
+
+   (scenario
+    :describe "BL1-EXPREG-EXPAND: C-= grows the region around the symbol at point"
+    :given ((:name "balanced-elisp"
+             :file "scratch.el"
+             :text "(defun f (x) (* va-!-lue x))"))
+    :when ((:keys "C-="))
+    :then ((:region-text "value")))
+
+   (provide 'l1-expreg)
+
+   ;;; l1-expreg.el ends here
+   #+END_SRC
+   - =:given= lists where the user starts: here a new file with that
+     text, and point where =-!-= is.  Each row is one spec; add rows to
+     check the same keys in other kinds of file.
+   - =:when= lists the keys, as =C-h k= writes them but with the
+     graphical name of the Return key, as in =(:keys "C-x b <return>")=.
+     =(:type "text")= types text.
+   - =:then= lists the outcomes the user must see.
+3. Pick the outcomes from the vocabulary.  Print it from the root of
+   the checkout with:
+   #+BEGIN_SRC zsh
+   emacs --batch -Q -L tests/helpers -L ~/.emacs.d/straight/build/buttercup \
+     -l scenario --eval '(princ (my/scenario-vocabulary))'
+   #+END_SRC
+   If none fits, define one in your own file under
+   =tests/helpers/outcomes/=, with =my/scenario-define-outcome=, as
+   =tests/helpers/outcomes/window.el= does.
+
+* Run it
+
+From the root of the checkout, run the files whose path contains a
+filter:
+
+#+BEGIN_SRC zsh
+tests/run fast l1-expreg
+#+END_SRC
+
+A file with the =scenario-tier: l3= header runs only in the full
+profile, as in =tests/run full l3-AREA=.  A failing run keeps its
+session directory and prints its path; read =messages.txt= there
+first, then =emacs.log=.
+
+* Check that it can fail
+
+A test that cannot fail protects nothing.  Break the behaviour on
+purpose and run the scenario again:
+
+1. In =init.el=, bind the key to =ignore= instead of its command: for
+   the example, replace ~("C-=" . expreg-expand)~ with
+   ~("C-=" . ignore)~.
+2. Run =tests/run fast l1-expreg=: the scenario must fail.
+3. Restore =init.el= by tangling =README.org= again (=C-c C-v t= in
+   its buffer), which keeps the changes you have not committed.
+
+To keep that check, add the edit as a mutant to
+=tests/mutation/mutants.py=.  The example's mutant is already there,
+=K12-expreg=: =tests/mutate K12= runs it, and reports =KILLED= when the
+tests catch it.  It runs the whole fast profile, so it takes a while.
+
+* Handle a missing program
+
+An =l3-= scenario that waits for a program skips when the program is
+missing, and an unexpected skip fails the run.  Declare the skip in
+your plan's file under =tests/expected-skips/=:
+
+#+BEGIN_SRC elisp
+("\\`J-11: .* in Python " (:missing-executable "basedpyright-langserver"))
+#+END_SRC
+
+The first element matches the names of the specs; the second is a
+reason the session can check: =(:missing-executable "NAME")=,
+=(:no-gui)= or =(:platform SYSTEM)=.

@@ -1,0 +1,86 @@
+%% preamble-packages.tex
+%% All \usepackage declarations for Emacs: Foundational Knowledge.
+%% Loaded by Foundational knowledge.tex before preamble-fonts and preamble-layout.
+
+%% ── Microtypography ───────────────────────────────────────────────
+\usepackage{microtype}          % Character protrusion, font expansion, tracking
+
+%% ── Tables ────────────────────────────────────────────────────────
+\usepackage{booktabs}           % \toprule / \midrule / \bottomrule
+\usepackage{tabularx}           % X column type: auto-width to fill a specified total
+\usepackage{array}              % Extended column specifiers (e.g. >{\raggedright})
+\usepackage{rotating}           % sidewaystable / sidewaysfigure environments
+\usepackage{multirow}           % \multirow for spanning table cells (future use)
+
+%% ── Mini tables of contents ───────────────────────────────────────
+\usepackage{minitoc}            % Per-chapter mini ToCs (\minitoc)
+
+%% ── Structure and headings ────────────────────────────────────────
+% scrbook (KOMA-Script) loaded in \documentclass; no separate \usepackage needed.
+
+%% ── Running headers / footers ─────────────────────────────────────
+\usepackage{scrlayer-scrpage}   % KOMA-Script header/footer layer system
+
+%% ── Page geometry ─────────────────────────────────────────────────
+\usepackage{geometry}           % Margins and page layout
+
+%% ── Colours (must precede minted) ───────────────────────────────────────────
+\usepackage[dvipsnames,svgnames,x11names]{xcolor}
+
+%% ── Syntax highlighting via Pygments ─────────────────────────────────────────
+\usepackage[cache]{minted}
+\setminted{
+  fontsize      = \small,
+  breaklines    = true,
+  breakanywhere = true,
+  linenos       = false,
+  frame         = lines,
+  framesep      = 4pt,
+  rulecolor     = \color{gray!40},
+  bgcolor       = gray!6,
+}
+\setminted[emacs-lisp]{style=emacs}
+\setminted[bash]{style=tango}
+\setminted[text]{style=bw, frame=none, bgcolor=gray!4}
+
+%% ── Multi-page tables ─────────────────────────────────────────────────────────
+\usepackage{longtable}
+
+%% ── Callout boxes ─────────────────────────────────────────────────────────────
+\usepackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+
+%% ── Index ─────────────────────────────────────────────────────────
+\usepackage{makeidx}            % \index{} entries and \printindex
+\makeindex
+
+%% ── Hyperlinks ────────────────────────────────────────────────────
+\usepackage{xurl}               % Allow URL line-breaks at any character (must precede hyperref)
+\usepackage[
+  unicode,
+  colorlinks  = true,
+  linkcolor   = NavyBlue,
+  urlcolor    = DarkOrchid,
+  citecolor   = NavyBlue,
+  pdfauthor   = {piotr-yuxuan},
+  pdftitle    = {Emacs: Foundational Knowledge},
+  pdfsubject  = {Emacs internals and configuration idioms},
+  pdfkeywords = {Emacs; Elisp; straight.el; eglot; LSP; org-mode},
+]{hyperref}
+
+%% ── Quotations ────────────────────────────────────────────────────
+\usepackage[british]{babel}     % British English hyphenation and conventions
+
+%% ── Verbatim / code blocks ────────────────────────────────────────
+\usepackage{fvextra}            % Extended Verbatim: smart continuation lines (required by minted)
+\usepackage{csquotes}           % Context-sensitive \enquote{} (load after fvextra)
+%% \usepackage{listings}: superseded by minted for all chapter content
+
+%% ── Graphics ──────────────────────────────────────────────────────
+\usepackage{graphicx}           % \includegraphics (for future diagrams)
+
+%% ── Spacing utilities ─────────────────────────────────────────────
+\usepackage{xspace}             % Smart post-macro spacing (\xspace)
+
+%% ── PDF bookmarks ─────────────────────────────────────────────────
+% hyperref already provides PDF bookmarks; no additional package required.

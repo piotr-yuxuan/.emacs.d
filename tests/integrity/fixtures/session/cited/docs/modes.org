@@ -1,0 +1,20 @@
+#+TITLE: Fixture document about the keys of some modes
+#+KEYMAPS: t1fx-clean-map t1fx-dangling-map
+#+KEYMAPS: t1fx-reading-map t1fx-unbound-map
+
+| =<f19> c=       | bound in a keymap the document names                 |
+| =C-c k x=       | bound under a prefix                                 |
+| =C-c k=         | the prefix itself                                    |
+| =<f19> f=       | bound to a menu item whose filter hides it           |
+| =<f19> y g=     | read by the command its first keys run               |
+| =<f19> m=       | bound by a global minor mode that is on              |
+| =<f19> j C-c a= | under a :bind-keymap prefix, in its keymap           |
+| =C-c a g=       | after a command that reads no key                    |
+| =C-c b=         | bound to a function that does not exist              |
+| =C-c d=         | bound to an autoload its loaded file never defined   |
+| =C-c p q=       | bound to a function that is not a command            |
+| =C-c q z=       | under a key nothing binds                            |
+| =<f19> o=       | bound by a global minor mode that is off             |
+| =<f19> l=       | bound by a buffer-local minor mode                   |
+| =C-c y=         | bound only in a keymap the document does not name    |
+| =<f19> j C-c z= | under a :bind-keymap prefix, not in its keymap       |

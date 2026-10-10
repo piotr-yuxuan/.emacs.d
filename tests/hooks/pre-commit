@@ -1,0 +1,10 @@
+#!/bin/sh
+# Run the static tier of the tests before every commit.
+#
+# Not installed by default.  To use the hooks of each worktree's own
+# tests/hooks directory in every worktree of this repository, run once:
+#
+#   git config core.hooksPath tests/hooks
+#
+# and undo it with: git config --unset core.hooksPath
+exec "$(git rev-parse --show-toplevel)/tests/run" static

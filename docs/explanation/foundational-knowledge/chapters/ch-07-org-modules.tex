@@ -1,0 +1,82 @@
+\part{Org-mode \& Document Authoring}
+\label{part:org}
+
+Org-mode is Emacs' most powerful subsystem: an outliner, a TODO
+manager, a literate-programming environment, and an export engine
+rolled into one.  It is also, for many users, the single largest
+contributor to startup and file-open latency, which is why the
+performance techniques from Part~\ref{part:startup} matter here more
+than anywhere else.
+
+Chapter~\ref{ch:org-modules} opens with the hidden cost of
+\texttt{org-modules}: a default list that transitively loads the
+entire Gnus mail client and the EWW HTML renderer on first org file
+open.  Chapter~\ref{ch:org-export} shows how
+\texttt{org-export-in-background} offloads long exports to a child
+Emacs process, and Chapter~\ref{ch:org-babel} explains the language
+registration mechanism that must be in place before any source block
+can execute.  The part closes with Chapter~\ref{ch:auth-source},
+which covers the credential infrastructure (GPG decryption,
+\texttt{auth-source} lookup, pinentry routing) that underlies email
+(\texttt{mu4e}), version-control forges (\texttt{forge}), and remote
+file access (\texttt{TRAMP}).
+
+\chapter{\texttt{org-modules} loading}
+\label{ch:org-modules}
+\minitoc\label{org-modules-loading}
+\index{org-modules}\index{org-load-modules-maybe}\index{org-mode!modules}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Org-mode's startup sequence silently loads every module listed in
+\texttt{org-modules}---including heavyweight transitive dependencies.
+This chapter explains \texttt{org-load-modules-maybe}, identifies the
+most expensive default modules, and shows how to audit and trim the
+list for a faster first org file open.  The profiling techniques from
+Chapter~\ref{ch:profiling} are directly applicable here---\texttt{require}
+tracing is the fastest way to see what \texttt{ol-gnus} really loads.
+
+\section{\texttt{org-load-modules-maybe}}\label{org-load-modules-maybe}
+
+When \texttt{org-mode} activates, it calls \texttt{org-load-modules-maybe}, which iterates over the list \texttt{org-modules} and \texttt{require=s each one.  The default value of =org-modules} includes:
+
+\begin{itemize}
+\item \texttt{ol-gnus}: the Gnus link type (\texttt{gnus:} links)
+\item \texttt{ol-eww}: the EWW link type (\texttt{eww:} links)
+\item \texttt{ol-bbdb}, \texttt{ol-mhe}, \texttt{ol-rmail}, \texttt{ol-irc}, \texttt{ol-w3m}
+\end{itemize}
+
+\section{The transitive cost of \texttt{ol-gnus}}\label{the-transitive-cost-of-ol-gnus}
+
+\texttt{ol-gnus} requires \texttt{gnus}, which requires \texttt{gnus-start}, \texttt{gnus-group}, \texttt{nnimap}, \texttt{nntp}, and dozens more. The entire Gnus mail/news client loads transitively. On your system, this cost \(\sim\)1.2 s.
+
+\texttt{ol-eww} similarly drags in \texttt{eww}, \texttt{shr} (the HTML renderer), \texttt{browse-url}, and the DOM parser, at \(\sim\)0.4 s.
+
+\section{Auditing which modules you use}\label{auditing-which-modules-you-use}
+
+Check your org files for link types:
+
+\begin{minted}{bash}
+# From the shell: which org-link protocols do you actually use?
+grep -rhoP '\[\[[a-zA-Z]+:' ~/Documents/todo/*.org | sort -u
+\end{minted}
+
+If you only use \texttt{https:}, \texttt{file:}, \texttt{doi:}, and \texttt{info:} links, set:
+
+\begin{minted}{elisp}
+(setq org-modules '(ol-doi ol-info))
+\end{minted}
+
+This eliminates \(\sim\)1.6 s from the first org file open.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+When org-mode activates, \texttt{org-load-modules-maybe} iterates over
+\texttt{org-modules} and calls \texttt{require} for every entry, so the
+default list directly determines how long the first Org file takes to
+open.  Two modules are especially costly: \texttt{ol-gnus} transitively
+pulls in the entire Gnus mail/news client (\(\sim\)1.2\,s), and
+\texttt{ol-eww} loads the built-in HTML renderer (\(\sim\)0.4\,s).  The
+fix is to audit your Org files for the link types actually in use
+(\texttt{grep -rhoP '\textbackslash[\textbackslash[[a-zA-Z]+:'} does
+this quickly) and trim \texttt{org-modules} down to just those.  That
+single change can eliminate roughly 1.6\,s from the first Org file open.

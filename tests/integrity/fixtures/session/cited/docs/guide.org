@@ -1,0 +1,12 @@
+#+TITLE: Fixture document citing keys
+
+Press =C-c a= to start; =M-x t1fx-command= is a command, not a key.
+In a table, ~<f8>~ toggles, and =C-c a= is cited again.  Where a = b
+and c = d, nothing is cited.  =C-x 8 RET= inserts a character, and
+=S-<f2>= too.  =not a key=, =a= and =< / >= are not keys.
+Contract with ~C-M-=~; =C-c l / C-c C-l= are alternatives.
+
+| =C-c P u= | ~C-=~ |
+
+Keys =C-x= =C-c x= ~M-x~ =<f5>= on one line.
+Press =C-c b=, or ~C-c q z~, or =C-c b= again.

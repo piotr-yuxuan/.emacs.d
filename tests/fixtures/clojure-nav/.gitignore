@@ -1,0 +1,9 @@
+# clojure-lsp / clj-kondo / Clojure scratch dirs populated when a
+# scenario opens this fixture under the live config.  Plan 062b keeps
+# the fixture pristine so each cold-attach scenario reads the same
+# baseline.
+.lsp/
+.cpcache/
+.clj-kondo/
+.calva/
+target/

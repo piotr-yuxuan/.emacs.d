@@ -1,0 +1,53 @@
+#+TITLE: Update the packages safely
+#+OPTIONS: toc:nil num:nil
+
+straight.el installs the packages at the versions of the lockfile,
+=straight/versions/default.el=.  An update is kept only when the
+configuration still passes its fast tests; otherwise the lockfile
+versions come back.  The /Safe package update/ section of =README.org=
+explains the command.
+
+* Update every package
+
+1. Start from a committed lockfile, so that its diff shows the update
+   alone.
+2. Press =C-c P u=.  Emacs pulls every package and rebuilds the
+   changed ones; Emacs is busy until that is done.  If straight.el
+   cannot pull a repository, it asks what to do: it never discards
+   local changes on its own.
+3. The buffer =*Package update tests*= opens and runs =tests/run fast=.
+   Emacs stays usable meanwhile.  On macOS the tests run without
+   graphical frames, so the golden tests are skipped.
+4. Read the message when the tests end:
+   - /Package update: the tests passed, freezing the lockfile/: the
+     new versions are in =straight/versions/default.el=.  Commit it.
+   - /Package update undone: .../: the reason follows, and the
+     lockfile versions are back.  Read the first failure in
+     =*Package update tests*=.  If the message names packages it could
+     not check out, run =M-x straight-thaw-versions= again.
+
+A second =C-c P u= is refused while the tests of the first one run.
+
+* Keep an update that changes the golden records
+
+The golden tests record the face of every token, and the indentation,
+of the sample files in =tests/golden/=.  A package that changes how a
+language looks fails them, and =*Package update tests*= names the
+first line that differs.  When the change is what you want:
+
+1. Run =M-x straight-pull-all=, then =M-x straight-check-all=: the
+   test sessions use the packages built here and never rebuild them.
+2. In a shell, approve the new records:
+   #+BEGIN_SRC zsh
+   cd ~/.emacs.d
+   UPDATE_GOLDEN=1 tests/run fast golden
+   git --no-pager diff tests/golden/
+   #+END_SRC
+3. Read the diff, then commit =tests/golden/=.
+4. Press =C-c P u= again: the tests now pass, and the lockfile is
+   frozen.
+
+* Abandon an update
+
+Run =M-x straight-thaw-versions=, then =M-x straight-check-all=: the
+packages go back to the lockfile's versions and are rebuilt.

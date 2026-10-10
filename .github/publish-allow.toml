@@ -1,0 +1,10 @@
+# What the publishing gate accepts in this repository by exact value:
+# strings that its generic checks flag and that are fine to publish,
+# and the SHA-256 digests of the binary files.
+values = [
+  "/home/user", # a generic example path in chapter 25 of the book
+  "01234567-89ab-cdef-0123-456789abcdef", # a synthetic identifier in tests/scenarios/l1-org-codex-link.el
+]
+sha256 = [
+  "5368673e8999481d4e2dbf19b9f0f06752342311a5f555990cb08c1125005f0d", # example-mermaid-diagram.png
+]

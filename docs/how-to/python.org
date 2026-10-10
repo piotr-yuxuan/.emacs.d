@@ -1,0 +1,103 @@
+#+TITLE: Work on a Python project
+#+OPTIONS: toc:nil num:nil
+#+KEYMAPS: python-base-mode-map prog-mode-map flycheck-mode-map compilation-mode-map
+
+Each section is one task.  Keys are pressed in a Python buffer unless
+the step says otherwise.  The /Python/ section of =README.org= explains
+the configuration, and [[file:../reference/keys.org][the key reference]] lists every key.
+
+* Open a project
+
+1. Open any =.py= file of the project with =C-x C-f=.
+2. Wait a few seconds the first time.  PET finds the project's
+   environment (uv, Poetry, Pipenv or a =.venv= directory), then
+   BasedPyright and Ruff start for that project only, without asking
+   for its root.
+3. =M-x lsp-describe-session= lists the servers of each project.  If
+   one is missing, install it (see [[file:../reference/dependencies.org][the dependencies]]) and reopen the
+   file.
+
+* Find your way in the code
+
+- =M-.= goes to the definition of the symbol at point, and =M-,=
+  comes back.
+- =M-?= asks which symbol, with the one at point as the default: press
+  =RET=.  The =*xref*= buffer lists its references; =RET= on one goes
+  there.
+- =C-c l g i= lists the implementations of a method; =C-c l G i=
+  shows them in a peek window instead.
+- =C-c l g h= shows who calls the function at point, as a tree.
+- =<f9>= toggles a tree of the file's classes, functions and
+  variables; =RET= on an entry jumps to it.  =C-c l s f= offers the
+  same symbols in the minibuffer, and =M-g i= works in any file.
+- =C-h C-d= shows the documentation of the symbol at point in a
+  popup: its signature, inferred type and docstring.
+
+* Read and fix problems
+
+1. A problem is underlined as you type.  Press =C-c ! n= and
+   =C-c ! p= to move to the next or previous one, =C-c ! h= to read the
+   whole message, and =C-c ! l= to list them all.
+2. Put point on the problem and press =C-c l a a= for the fixes the
+   servers offer: an import to add, a Ruff fix, a type suppression.
+3. =C-c l r r= renames the symbol at point in the whole project.
+4. =C-c l r o= sorts the imports with Ruff.  It does not remove unused
+   imports: =C-c l a a= on the import does.
+
+Saving a file formats it with isort, then Black.  =C-c r= formats the
+buffer without saving.
+
+To make the type checker less strict in one project, set its mode in
+=pyproject.toml=; the project's setting wins over the editor's:
+
+#+BEGIN_SRC toml
+[tool.basedpyright]
+typeCheckingMode = "recommended"
+#+END_SRC
+
+* Try code in a REPL
+
+1. Press =C-c C-p= to start the project's Python, with the project's
+   interpreter.  Each project gets its own REPL.
+2. Send code to it: =C-M-x= the definition at point, =C-c C-r= the
+   region, =C-c C-c= the whole buffer.
+3. =C-c C-z= goes to the project's REPL, once =C-c C-p= has started
+   it.  Come back with =C-x o= or =C-x b=: in the REPL, =C-c C-z=
+   stops the Python process.
+
+* Run the tests
+
+pytest must be installed in the project's environment.
+
+- =C-c k t= runs the test at point, or the tests of the function at
+  point.
+- =C-c k f= runs the tests of the file, =C-c k a= every test, and
+  =C-c k l= repeats the last run.
+- =C-c k k= opens a menu to choose the tests and pytest's options.
+- =C-c k w= starts pytest-watcher, which reruns the tests whenever a
+  file changes, in the buffer =*pytest-watch:PROJECT*=.  Press =C-c C-k=
+  in that buffer to stop it.
+
+* Debug a program
+
+debugpy must be installed in the project's environment.
+
+1. Put point on a line and press =C-c d b= to set a breakpoint there;
+   press it again to remove it.
+2. Press =C-c d d=.  The prompt proposes a command that runs the
+   current file, or the package's =__main__.py=, with the project's
+   Python.  Press =RET= to start it.  Edit =:module= or =:program= in
+   the prompt to run something else, for example:
+   #+BEGIN_EXAMPLE
+   debugpy-module command "/path/to/project/.venv/bin/python" :module "package.module"
+   #+END_EXAMPLE
+3. When the program stops, step with =C-c d n= (next line), =C-c d i=
+   (into a call), =C-c d o= (out of it), and continue with =C-c d c=.
+4. =C-c d e= evaluates a Python expression in the stopped frame.
+5. =M-x dape-info= shows the stack, the variables and the
+   breakpoints, and =M-x dape-repl= the debugger's console.  Other
+   commands: =M-x dape-until= runs to the line at point, and
+   =M-x dape-watch-dwim= watches an expression.
+
+If the panes do not open on their own, =M-x dape-many-windows= turns
+the multi-pane layout on for later sessions.

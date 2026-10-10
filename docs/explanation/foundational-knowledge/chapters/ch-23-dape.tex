@@ -1,0 +1,71 @@
+\chapter{Debug Adapter Protocol: \texttt{dape} via \texttt{jsonrpc}}
+\label{ch:dape}
+\minitoc\label{debug-adapter-protocol-dape-via-jsonrpc}
+\index{dape}\index{Debug Adapter Protocol}\index{DAP|see{Debug Adapter Protocol}}\index{jsonrpc}\index{breakpoints}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Where Eglot (Chapter~\ref{ch:eglot-lsp}) provides static analysis
+via LSP, the Debug Adapter Protocol (DAP) is the runtime counterpart:
+it handles breakpoints, stepping,
+and variable inspection.  This chapter explains how \texttt{dape}
+implements DAP on top of Emacs' built-in \texttt{jsonrpc} library,
+and how JDTLS connects to the \texttt{java-debug} plugin.
+
+\section{DAP vs LSP}\label{dap-vs-lsp}
+
+The Language Server Protocol (LSP) handles \textbf{static} language intelligence: completions, hover, diagnostics, rename. The Debug Adapter Protocol (DAP) handles \textbf{runtime} debugging: breakpoints, step-in/over/out, variable inspection, expression evaluation. Both are JSON-RPC protocols and both require a server process, but they are completely separate: a language server and a debug adapter are different executables (though JDTLS bundles both).
+
+\section{\texttt{dape} and the built-in \texttt{jsonrpc} library}\label{dape-and-the-built-in-jsonrpc-library}
+
+\texttt{dape} implements DAP on top of Emacs' built-in \texttt{jsonrpc} library (Emacs 27+). It requires no external process manager; it speaks the DAP wire protocol directly over a TCP socket or a subprocess pipe.
+
+\texttt{(info "(elisp) JSONRPC")}
+
+The \texttt{jsonrpc} library provides:
+
+\begin{itemize}
+\item \texttt{jsonrpc-connection} objects representing a live protocol connection.
+\item \texttt{jsonrpc-request} for synchronous calls with timeout.
+\item \texttt{jsonrpc-async-request} for non-blocking calls.
+\item \texttt{jsonrpc-notify} for one-way notifications.
+\end{itemize}
+
+\texttt{dape} wraps these into a higher-level DAP session abstraction with event dispatching for \texttt{stopped}, \texttt{exited}, \texttt{thread}, \texttt{output} events.
+
+\section{Connecting JDTLS to \texttt{java-debug}}\label{connecting-jdtls-to-java-debug}
+
+JDTLS requires the \texttt{java-debug} plugin to expose DAP endpoints. The plugin's JAR path must appear in the \texttt{:bundles} array of the initialization options:
+
+\begin{minted}{elisp}
+;; In custom-eglot-java-init-opts (called by eglot-java via
+;; eglot-java-user-init-opts-fn):
+'(:bundles ["/usr/share/java-debug/com.microsoft.java.debug.plugin.jar"]
+  :settings (:java (:signatureHelp (:enabled t))))
+\end{minted}
+
+Without the `:bundles` entry, JDTLS starts successfully but does not register DAP endpoints, so \texttt{dape} can connect but receives no debug capabilities.
+
+\section{Persistent breakpoints}\label{persistent-breakpoints}
+
+\texttt{dape-breakpoint-save} and \texttt{dape-breakpoint-load} serialise breakpoints to a file between sessions:
+
+\begin{minted}{elisp}
+(use-package dape
+  :hook
+  (kill-emacs . dape-breakpoint-save)   ; persist on quit
+  (dape-start . dape-breakpoint-load))  ; restore on debug start
+\end{minted}
+
+Breakpoints are keyed by filename and line number. If the file is modified and lines shift, restored breakpoints may be off by the number of inserted/deleted lines; there is no content-hash tracking.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+DAP and LSP are separate JSON-RPC protocols that require distinct server
+processes, although some servers such as JDTLS bundle both capabilities in a
+single binary.  On the Emacs side, \texttt{dape} communicates over DAP using
+the built-in \texttt{jsonrpc} library, so no external process manager is
+needed.  For JDTLS specifically, the \texttt{java-debug} plugin JAR must be
+listed in the server's \texttt{:bundles} array; without it the DAP endpoints
+never register and \texttt{dape} cannot attach.  Breakpoints are persisted
+across sessions by \texttt{dape-breakpoint-save} and restored by
+\texttt{dape-breakpoint-load}, both keyed by filename and line number.

@@ -1,0 +1,59 @@
+\chapter{\texttt{face-remap-add-relative}: buffer-local face overrides}
+\label{ch:face-remap}
+\minitoc\label{face-remap-add-relative-buffer-local-face-overrides}
+\index{face-remap-add-relative}\index{set-face-attribute}\index{face-remapping-alist}\index{buffer-local faces}
+
+% ── Opening signpost ──────────────────────────────────────────────
+The buffer/window/frame model (Chapter~\ref{ch:buffer-window-frame})
+gives each buffer its own content; this chapter adds another
+per-buffer dimension: faces.  Sometimes you need a different font
+or size in a single buffer without changing the global face.  This chapter explains
+\texttt{face-remap-add-relative}, the return cookie mechanism, and
+how \texttt{face-remapping-alist} merges buffer-local overrides with
+the global face definition.
+
+\texttt{(info "(elisp) Face Remapping")}
+
+\section{\texttt{set-face-attribute} vs \texttt{face-remap-add-relative}}\label{set-face-attribute-vs-face-remap-add-relative}
+
+\texttt{set-face-attribute} modifies the \textbf{global} face definition: every buffer that uses the face sees the change. \texttt{face-remap-add-relative} modifies the face for \textbf{only the current buffer} by adding an entry to the buffer-local \texttt{face-remapping-alist}:
+
+\begin{minted}{elisp}
+;; Global, affects all buffers:
+(set-face-attribute 'variable-pitch nil :family "Garamond" :height 160)
+
+;; Buffer-local, only the current buffer:
+(face-remap-add-relative 'variable-pitch :family "Garamond" :height 160)
+\end{minted}
+
+\section{\texttt{face-remapping-alist} and the return cookie}\label{face-remapping-alist-and-the-return-cookie}
+
+\texttt{face-remap-add-relative} returns a \textbf{cookie} (a cons cell identifying the remap entry). The cookie must be saved to undo the remap with \texttt{face-remap-remove-relative}:
+
+\begin{minted}{elisp}
+(defun my/garamond-font ()
+  "Apply Garamond face remapping in the current buffer."
+  (setq-local my/garamond-cookie
+              (face-remap-add-relative 'variable-pitch
+                                       :family "Garamond"
+                                       :height 160)))
+
+(defun my/garamond-remove ()
+  (when (bound-and-true-p my/garamond-cookie)
+    (face-remap-remove-relative my/garamond-cookie)))
+\end{minted}
+
+\section{How \texttt{face-remapping-alist} is applied}\label{how-face-remapping-alist-is-applied}
+
+When Emacs renders a character with a given face, it looks up the face in \texttt{face-remapping-alist} (buffer-local) before the global face table. The spec in the alist entry is \textbf{merged} with the global face (relative remapping), not replacing it outright, so unspecified attributes (\texttt{:foreground}, \texttt{:weight}, etc.) still come from the global definition.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+\texttt{set-face-attribute} modifies a face globally, whereas
+\texttt{face-remap-add-relative} applies a buffer-local overlay on top of the
+global definition.  The latter returns a cookie that must be saved, because it
+is the only way to undo the remap later.  At render time Emacs consults
+\texttt{face-remapping-alist} before the global face table, merging the
+remapped attributes with the global ones; any attribute not explicitly
+overridden (such as \texttt{:foreground} or \texttt{:weight}) still comes
+from the global definition.

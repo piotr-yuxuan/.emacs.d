@@ -1,0 +1,39 @@
+\chapter*{Introduction}
+\addcontentsline{toc}{chapter}{Introduction}
+\label{ch:introduction}
+\index{startup sequence}\index{garbage collection}\index{keybinding dispatch}\index{LSP!integration}\index{org-mode!export pipeline}
+
+This book is a deep tour of the mechanisms that make GNU~Emacs
+tick: from the two-file startup sequence and garbage-collection
+tuning to the keybinding dispatch stack, the LSP integration layer,
+and the org-mode export pipeline.
+
+\paragraph{Who this book is for.}
+You have been using Emacs for a while.  You can install packages,
+write basic Elisp, and navigate the Info manual.  What you lack is
+the mental model that ties the pieces together: \emph{why} does
+\texttt{use-package-always-defer} change loading behaviour?
+\emph{How} does \texttt{eglot-ensure} select a server?  \emph{When}
+does \texttt{gc-cons-threshold} actually matter?  This book answers
+those questions.
+
+\paragraph{How to read it.}
+The six parts are largely independent.  Part~\ref{part:startup}
+(startup and performance) is foundational and worth reading first;
+Part~\ref{part:packages} (the loading model) is a close second,
+since its concepts surface in every later chapter.  After those two,
+jump to whichever part addresses your current interest.  Each chapter
+opens with a signpost that sets expectations and closes with a
+\textbf{Mental model} summary you can use as a revision checklist.
+
+\paragraph{Expert-depth blocks.}
+Paragraphs marked with a blue \textit{Expert depth} sidebar contain
+internal implementation detail that is not needed on a first reading.
+Skip them unless you are debugging a specific problem or are simply
+curious.
+
+\paragraph{Appendices.}
+The appendices collect quick-reference tables (variables, hooks,
+keybindings) and deep-dive material extracted from the main chapters
+so that the narrative flow is not interrupted by long reference
+listings.

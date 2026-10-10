@@ -1,0 +1,63 @@
+\chapter{\texttt{org-babel-do-load-languages}: babel language registry}
+\label{ch:org-babel}
+\minitoc\label{org-babel-do-load-languages-babel-language-registry}
+\index{org-babel}\index{org-babel-do-load-languages}\index{org-mode!babel}\index{literate programming}
+
+% ── Opening signpost ──────────────────────────────────────────────
+Where Chapter~\ref{ch:org-export} dealt with turning org into output
+documents, this chapter covers the reverse direction: executing
+source code blocks \emph{inside} org files.  Each language must be
+explicitly registered.  This chapter explains the
+registration mechanism, the feature-name mapping, and why the
+\texttt{org-babel-do-load-languages} call belongs in the org
+\texttt{:config} block.
+
+\section{What Babel does}\label{what-babel-does}
+
+Org-babel allows executing source code blocks (\texttt{\#+begin\_src LANG … \#+end\_src}) inline in org files. \texttt{C-c C-c} on a src block calls \texttt{org-babel-execute-src-block}, which dispatches to a language-specific function \texttt{org-babel-execute:LANG}.
+
+\section{The registry mechanism}\label{the-registry-mechanism}
+
+Language support is not loaded at org startup. Each language is registered by calling \texttt{org-babel-do-load-languages}:
+
+\begin{minted}{elisp}
+(org-babel-do-load-languages
+ 'org-babel-load-languages
+ '((shell   . t)    ; requires ob-shell
+   (mermaid . t)    ; requires ob-mermaid (external package)
+   (python  . t)))  ; requires ob-python
+\end{minted}
+
+\texttt{org-babel-do-load-languages} iterates the alist and calls \texttt{(require 'ob-LANG)} for every entry with value \texttt{t}. Until this call, \texttt{org-babel-execute:shell} is undefined and executing a \texttt{\#+begin\_src sh} block signals: \texttt{No org-babel-execute:sh defined}.
+
+\section{Feature names}\label{feature-names}
+
+The \texttt{ob-shell} feature covers both \texttt{sh} and \texttt{bash} src blocks. Common mappings:
+
+\begin{longtable}[]{@{}lll@{}}
+\toprule
+Src block language & require'd feature & Notes \\
+\midrule
+\texttt{sh} / \texttt{bash} & \texttt{ob-shell} & One feature for all POSIX shells \\
+\texttt{python} & \texttt{ob-python} & Built-in \\
+\texttt{emacs-lisp} / \texttt{elisp} & \texttt{ob-emacs-lisp} & Built-in \\
+\texttt{mermaid} & \texttt{ob-mermaid} & External package; must be installed \\
+\bottomrule
+\end{longtable}
+
+\section{Why loading in \texttt{:config} matters}\label{why-loading-in-config-matters}
+
+\texttt{org-babel-load-languages} is read when \texttt{org-mode} calls \texttt{org-babel-do-load-languages} (typically at org startup or when a src block is first executed). The \texttt{org use-package :config} block ensures the call happens immediately after org loads, so src blocks are executable from the first org buffer opened, without needing a separate interactive trigger.
+
+% ── Mental model summary ──────────────────────────────────────────
+\section{Mental model}
+\texttt{org-babel-do-load-languages} walks an alist of language entries and
+\texttt{require}s the corresponding \texttt{ob-LANG} feature for each one
+that is enabled.  Note that feature names do not always mirror src-block
+names; for instance, both \texttt{sh} and \texttt{bash} map to
+\texttt{ob-shell}.  The call must appear in the \texttt{:config} section of
+the org \texttt{use-package} declaration (i.e.\ after org has loaded) so that
+\texttt{org-babel-load-languages} is already defined; this is a direct
+consequence of the \texttt{:init} vs.\ \texttt{:config} distinction covered
+in Chapter~\ref{ch:use-package}.  Without this registration step, attempting
+to execute a src block signals ``No org-babel-execute:LANG defined.''
