@@ -10,6 +10,8 @@ like =:name= or =:tangle=.
 
 The command =org-babel-tangle= (=C-c C-v t=) will write init files.
 
+[[./startup.png]]
+
 * How to use this file
 
 These are the most important keystrokes of all. If you know these keys
