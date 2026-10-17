@@ -6,6 +6,7 @@ values = [
   "01234567-89ab-cdef-0123-456789abcdef", # a synthetic identifier in tests/scenarios/l1-org-codex-link.el
 ]
 sha256 = [
+  "2d3bdddde4a65d4ec8defb8e02f3aeed956d33e5788eeef57923098df49ca82b", # docs/social-media-preview.png
   "b6255c8361697768c9266e7d38b10f8cf19692146d6de2d3f337010da5b6e959", # startup.png
   "4b804a0dc177925731d47b3ebc9284f12a408bc1f6ed5039336e76414dda32d1", # docs/social-media-preview.png
   "5368673e8999481d4e2dbf19b9f0f06752342311a5f555990cb08c1125005f0d", # example-mermaid-diagram.png

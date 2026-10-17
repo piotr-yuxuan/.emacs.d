@@ -1,5 +1,3 @@
-If `AGENTS.local.md` exists at the repository root, read it first.
-
 # AGENTS.md
 
 This file guides LLM agents working in this repository.  The
@@ -57,6 +55,19 @@ with the `init.el` and `early-init.el` it tangles.
 | `tests/`                       | Tests; reference in `docs/reference/tests.org`                                  |
 | `./tmp`                        | Temporary files, ignored by git. Do not use `/tmp`.                             |
 
+## Repository and worktrees
+
+The private repository is a bare git repository, with no working tree
+of its own.  Its worktrees:
+
+| Path                             | Branch     | Purpose                                                                         |
+|----------------------------------|------------|---------------------------------------------------------------------------------|
+| `~/.emacs.d/`                    | `main`     | The live configuration the user runs, the primary checkout of `workflow:plans`  |
+| `~/.emacs.d/.worktree/NNN-slug/` | `NNN-slug` | One plan: created for it, removed after its merge                               |
+
+`.gitignore` ignores `/.worktree/`, so the worktrees never show in the
+live checkout.
+
 ## Public export
 
 This repository is published as a mechanical export: a tool copies the
@@ -72,96 +83,70 @@ the files themselves:
 - A new file is classified in `publish/manifest.toml`, as included or
   excluded, in the commit that adds it.  The manifest ignores
   `publish/` itself.
+- `publish/manifest.toml` is the one list of what is exported and
+  what is not.  A published file does not link to a file that is not:
+  it names it in plain text, as `tests/docs-test.el` checks.
 
-The process below runs in the private repository: the work records
+The workflow below runs in the private repository: the work records
 under `docs/work/` and the task file `todo.org`, which it names, are
 among the files the manifest denies.
 
-## Process
+## Workflow
 
-Every change is a plan.  A task from `todo.org` or a review becomes a
-plan before any code is written, and a plan starts only once the user
-has approved it, alone or as part of a programme.  The coordinator is
-the agent that runs the programme; with a single agent, that agent.
+Every change follows the skill `workflow:plans`; load it before the
+first edit.  In this repository: plans are
+`docs/work/plans/NNN-slug.org`, tracked; the checks are
+`tests/run static` and `tests/run fast FILTER` while working, then
+`tests/run full`, `tests/integrity/session/run` and the sweep of
+"Dash ban" before the merge; the extra steps are these:
 
-1. **Plan.**  The coordinator writes `docs/work/plans/NNN-slug.org`,
-   adds its row to `docs/work/README.org`, and commits both on the
-   integration branch with the status "In progress", naming the plan's
-   worktree and branch.
-   - `NNN` is the number after the highest one in use under
-     `docs/work/` (plans, changelog, findings) and among branches and
-     worktrees; `slug` is kebab-case.  A number names one plan; never
-     reuse one.
-   - Plans and changelog entries are org-mode files (`* Heading`,
-     `=verbatim=`, `#+BEGIN_SRC ... #+END_SRC`, org tables).  Markdown
-     plans written before this rule stay as they are.
-2. **Worktree.**  The coordinator creates the plan's worktree and
-   branch from the current integration branch:
+- At step 1, the plan is written in its own worktree, not in
+  `~/.emacs.d`, not even under `docs/work/`: create the worktree and
+  its branch from `main` with step 3, its command then its check,
+  before writing the plan, then commit the plan and its row of the
+  index `docs/work/README.org` as the branch's first commit, before
+  approval.  Step 3 is then done: after approval, only its check is
+  repeated.
+- At step 4, a change of the configuration is made in `README.org`
+  and retangled, as "Source of truth" says, with the tests that "Test
+  strategy" asks for.
+- At step 6, resolve conflicts in `README.org`, then retangle; never
+  merge `init.el`, `early-init.el` or `docs/reference/keys.org` by
+  hand; where rows of the index conflict, keep the rows of both
+  sides.  Then, even when `main` had not moved, regenerate the key
+  reference with `tests/integrity/session/run cheatsheet` and commit
+  `docs/reference/keys.org` if it changed.
+- At step 7, the commit of the `git mv` to `docs/work/changelog/`
+  also gives the plan's row in the index its new link and its status.
+- At step 9, right before the merge, in the worktree,
+  `git merge-base --is-ancestor main HEAD` must succeed.  If it
+  fails, `main` moved after the last catch-up: do step 6 again, with
+  the checks before the merge, and merge only once the owner, told
+  the outcome, confirms again.  So `~/.emacs.d` receives only a tree
+  the checks ran on.
+- Plans running in parallel share the registries that the index
+  describes (known defects, expected skips, outcomes): each plan
+  writes only its own entries.
 
-   ``` zsh
-   INTEGRATION=existing-config-improvements
-   git -C ~/.emacs.d/.worktree/$INTEGRATION worktree add \
-     ~/.emacs.d/.worktree/NNN-slug -b NNN-slug $INTEGRATION
-   ```
+Plans and changelog entries are Org files (`* Heading`, `=verbatim=`,
+`#+BEGIN_SRC ... #+END_SRC`, Org tables); Markdown plans written
+before this rule stay as they are.  The open tasks of this repository
+wait in `todo.org`.
 
-   Before touching anything, check the context: `git rev-parse
-   --show-toplevel` prints the plan's worktree and `git branch
-   --show-current` prints `NNN-slug`.
-3. **Implement** in that worktree only, following the
-   `programming-principles` and `karpathy-guidelines` skills: edit
-   `README.org`, retangle, and add scenarios or logic tests for every
-   behaviour the plan introduces.  Run `tests/run static` and
-   `tests/run fast FILTER` while working.
-4. **Review.**  An adversarial review (principles, correctness,
-   requirements); fix blocking and major findings, then review again
-   until none remain.
-5. **Catch up.**  Merge the current integration branch into the plan
-   branch, in the plan's worktree (`git merge -m "Merge the
-   integration branch into NNN-slug" $INTEGRATION`).
-   - Resolve conflicts in `README.org` only, then retangle.  Never
-     hand-merge `init.el`.
-   - Run `tests/run full` and `tests/integrity/session/run`; both must
-     be green.
-6. **Record.**  Add the implementation notes to the plan: what each
-   step did, with its commits, the decisions, the deviations, the test
-   results and the open questions.  Move the plan to
-   `docs/work/changelog/` with `git mv`.
-7. **Merge** the plan branch into the integration branch with
-   `--no-ff`, and a sentence-case message:
-
-   ``` zsh
-   git -C ~/.emacs.d/.worktree/$INTEGRATION merge --no-ff NNN-slug \
-     -m "NNN-slug: Short sentence describing the change"
-   ```
-
-   Never fast-forward: the merge commit groups the plan's commits and
-   gives the work one revertable handle.
-8. **After the merge**, the coordinator updates the status rows of
-   `docs/work/README.org`, regenerates `docs/reference/keys.org` with
-   `tests/integrity/session/run cheatsheet`, then removes the plan's
-   worktree (`git worktree remove`) and branch (`git branch -d`).
-9. **The user** tries the integration branch and merges it into
-   `main`.
-
-Only the coordinator edits `docs/work/README.org`, its status rows and
-the generated `docs/reference/keys.org`.  Plans running in parallel
-share the registries that file describes (known defects, expected
-skips, outcomes): each plan writes only its own entries.
-
-Never push, never merge into `main`, never edit the live checkout
-`~/.emacs.d` (its files outside `.worktree/`) other than its
-`local.el`, never connect to the user's running Emacs daemon, never
-install git hooks.
+Never edit the live checkout `~/.emacs.d` (its files outside
+`.worktree/`) other than its `local.el`: the merge of step 9 is its
+one other change.  This is stricter than the shared rule, which allows
+writing under `docs/work/`, but for `local.el`, which the shared rule
+does not allow.  Never connect to the user's running Emacs daemon, and
+never install git hooks.
 
 ### Commits
 
-- Commit only the hunks you changed; never `git add -A`.
-- Small, well-contained commits; titles in sentence case and the
-  imperative.  A title that needs "and" is two commits.
+- Commit only the hunks you changed, not every change in a path you
+  touched: stricter than `workflow:plans`.
+- A title that needs "and" is two commits.
 - Pass `-m` to `git commit` and `git merge`, and `--no-pager` to
   commands that page: nothing may wait for input.
-- No attribution trailer in a commit message: no `Co-Authored-By`
-  line, nor any other line that credits a tool or an agent.
 
 ### Running the tests from a worktree
 
@@ -339,21 +324,15 @@ stale entry (its specs ran and none skipped) and any `xit` or
 
 ## Dash ban (no Unicode dashes)
 
-No em dash (`U+2014`) and no en dash (`U+2013`) in anything written
-for this repository: plans, changelog entries, findings, documents
-under `docs/`, `AGENTS.md`, commit messages, code comments and test
-names.  Use ASCII: comma, semicolon, colon, parentheses, hyphen-minus
-(`-`), or "to" for ranges.  Older text keeps its dashes until it is
-edited.
+The shared rules (`instructions/global.md` of shift-left) ban the em
+dash (`U+2014`) and the en dash (`U+2013`), but in a verbatim licence:
+here `publish/overlay/LICENSE`.  Use ASCII instead: comma, semicolon,
+colon, parentheses, hyphen-minus (`-`), or "to" for ranges.  Older
+text keeps its dashes until it is edited.
 
-There are two exceptions:
-
-- a quoted character literal or regex pattern inside `verbatim` or
-  `SRC` markup whose purpose is to name or detect the banned
-  characters;
-- `publish/overlay/LICENSE`, the licence of the public repository: it
-  is the verbatim text of the EUPL-1.2, which is not written for this
-  repository, and it keeps its dashes.
+This repository adds one exception: a quoted character literal or
+regex pattern inside `verbatim` or `SRC` markup whose purpose is to
+name or detect the banned characters.
 
 Before a merge, this sweep of the lines the plan added, from BASE, the
 commit it branched from, reports nothing:
