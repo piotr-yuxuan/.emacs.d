@@ -35,6 +35,11 @@ sessions at a time, how many L3 files, on how many usable CPUs (those
 =taskset= leaves it).  Under a session's line, a =warning= line gives
 each warning a spec logged: recorded, not judged.  A =harness error=
 is an error that escaped the specs; the session still reports its end.
+A session that misses its deadline names the spec it was in ("started
+and never finished"), then what it was doing then: the minibuffer, the
+echo area, the selected buffer, the recursion depth, whether a keyboard
+macro ran, and its processes.  Its =results.jsonl= keeps that state
+line with the backtrace.
 
 * Tiers
 
@@ -53,7 +58,9 @@ screen.  The logic tests share one batch session.  Files run in
 parallel, L3 files in a smaller pool.  A session loads the native code
 of =EMACS_LIVE_DIR= where it exists and byte code elsewhere: it
 compiles nothing just in time, so the cold cache of a new Emacs build
-slows no run.
+slows no run.  A session reaches no session D-Bus, as on a CI runner:
+the desktop's appearance never picks its theme.  A session's temporary
+directory is a true path, without the links of macOS's =/tmp=.
 
 * Scenario file headers
 
@@ -117,18 +124,23 @@ Each runs four jobs:
 | System              | Emacs                                     | Graphical frames | Fails the run |
 |---------------------+-------------------------------------------+------------------+---------------|
 | Linux, Ubuntu 24.04 | GNU Emacs 31.1 (pgtk) from nixpkgs        | on Xvfb          | yes           |
-| Linux, Ubuntu 24.04 | neomacs, its latest release               | none             | no            |
+| Linux, Ubuntu 24.04 | neomacs, its latest release               | none             | never         |
 | macOS 15            | GNU Emacs, the cask of the Mac's Brewfile | none             | yes           |
-| macOS 15            | neomacs, its latest cask                  | none             | no            |
+| macOS 15            | neomacs, its latest cask                  | none             | never         |
 
 - The programs besides Emacs come from the flake of =.github/ci=,
   whose nixpkgs is that of the NixOS machine, moved by hand; it leaves
   out zig, so gterm's scenarios skip.
+- Each job restores the packages' sources, cached once for every job
+  and keyed by the lock file, and their builds, cached once per system,
+  Emacs and version; it saves them once their pins check, whatever the
+  tests then find.  A new lock file starts from no cache.
 - Before the tests, each job installs the packages from the lock file,
   checks their pins, links the flake's tree-sitter grammars into the
   checkout, builds jinx's module, and checks that a session finds the
   flake's programs first on =PATH=.
-- A neomacs job measures how far neomacs gets: it never fails the run,
-  and its summary gives the last line of each =tests/run=.
+- A neomacs job measures how far neomacs gets: each of its steps
+  continues on error, so the job ends green, and its summary gives the
+  outcome of each step and the last line of each =tests/run=.
 - GitHub stops the schedule of a public repository after 60 days
   without a push.

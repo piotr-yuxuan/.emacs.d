@@ -5,7 +5,9 @@
 ;; files to the freedesktop trash under XDG_DATA_HOME.  This file sets
 ;; that variable, for its own session, to a fresh directory of the
 ;; session's temporary directory, which the runner removes with the
-;; session: the user's trash is never touched.
+;; session: the user's trash is never touched.  Where Emacs trashes
+;; through the system instead, as on macOS into the user's own Trash, the
+;; spec skips before its keys (plan 106).
 
 ;;; Code:
 
@@ -16,6 +18,7 @@
 (scenario
  :describe "BL1-DIRVISH-TRASH: D on a file moves it to the trash"
  :given ((:name "notes" :project "file-tree" :entry "." :point-on " notes.txt"))
+ :wait-for ((:freedesktop-trash))
  :when ((:keys "D y"))
  :then ((:trashed "notes.txt")))
 

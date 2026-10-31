@@ -223,6 +223,59 @@ class WarningAndStopTest(unittest.TestCase):
             ([], ["expected-skip entry 090.el:1 is stale: it matches no spec"]))
 
 
+def started(name: str) -> dict[str, object]:
+    """Return a spec-started line as a session writes it."""
+    return {"type": "spec-started", "file": FILE, "name": name}
+
+
+WAITING = {"type": "state", "minibuffer": "Restart clojure-lsp? (y or n) ",
+           "echo": None, "buffer": "core.clj", "recursion_depth": 1,
+           "keyboard_macro": False,
+           "processes": [{"name": "clojure-lsp", "status": "exit"}],
+           "backtrace": '  y-or-n-p("Restart clojure-lsp? ")\n'}
+
+
+class HangTest(unittest.TestCase):
+    """Plan 106: a spec that never ends is named, with what it waited for."""
+
+    def test_a_spec_that_started_and_finished_is_no_problem(self) -> None:
+        """The spec-started line alone judges nothing."""
+        verdict = judge(started("a"), spec("a"))
+        self.assertEqual((verdict.problems, verdict.stopped), ([], False))
+
+    def test_a_spec_that_never_finished_is_named_with_the_prompt(self) -> None:
+        """At the deadline the session has no done line, only its state."""
+        lines = (started("a"), spec("a"), started("b"), WAITING)
+        records, malformed = accounting.parse_report([json.dumps(x) for x in lines])
+        verdict = accounting.judge(records, [FILE], SOCKET, DISPLAY)
+        self.assertEqual(malformed, [])
+        self.assertIn("b: started and never finished", verdict.problems)
+        self.assertNotIn("a: started and never finished", verdict.problems)
+        state = next(p for p in verdict.problems if p.startswith("at the deadline"))
+        for fact in ("Restart clojure-lsp? (y or n)", "core.clj", "clojure-lsp (exit)"):
+            self.assertIn(fact, state)
+        self.assertTrue(verdict.stopped)
+
+    def test_a_file_whose_first_spec_hung_defines_specs(self) -> None:
+        """Its spec-started line is the file's report."""
+        lines = (started("a"), WAITING)
+        records, _ = accounting.parse_report([json.dumps(x) for x in lines])
+        verdict = accounting.judge(records, [FILE], SOCKET, DISPLAY)
+        self.assertNotIn(f"{FILE}: defines no specs", verdict.problems)
+
+    def test_a_hung_session_leaves_no_entry_stale_for_want_of_specs(self) -> None:
+        """The specs after the one that hung never ran."""
+        entries = (entry("090.el:1", holds=False),)
+        hung = judge(started("a"), entries=entries)
+        self.assertEqual(accounting.registry_problems([hung], complete=True), [])
+
+    def test_a_state_line_with_a_malformed_process_is_rejected(self) -> None:
+        """Each process of the line is checked at the boundary."""
+        line = {**WAITING, "processes": [{"name": "clojure-lsp"}]}
+        _, malformed = accounting.parse_report([json.dumps(line)])
+        self.assertEqual(len(malformed), 1)
+
+
 class IsolationTest(unittest.TestCase):
     """A session never reaches the user's Emacs."""
 

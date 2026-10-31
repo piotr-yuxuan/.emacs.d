@@ -25,8 +25,10 @@
         btop
         clojure
         clojure-lsp
+        delta
         isort
         jdk
+        jdt-language-server
         ltex-ls-plus
         marksman
         opentofu
@@ -55,8 +57,10 @@
           "btop"
           "clojure"
           "clojure-lsp"
+          "delta"
           "isort"
           "java"
+          "jdtls"
           "ltex-ls-plus"
           "marksman"
           "tofu"

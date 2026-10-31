@@ -4,7 +4,8 @@ The expectations come from plan 085: a session's git reads only the
 runner's configuration, never the repository of the caller; when a
 session stops, every process it started stops too; and a run that dies,
 cleanly or not, leaves no process behind.  Plan 102 adds one: a session
-compiles nothing just in time.
+compiles nothing just in time.  Plan 106 another: a session that waits
+past its deadline names the spec it waits in, and what it waits for.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest import mock
 
-from runner import sessions
+from runner import accounting, sessions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -29,6 +30,8 @@ if TYPE_CHECKING:
 SCENARIO = "l1-session-first-file"  # one short scenario file, as a filter
 WARNING_SCENARIO = "l1-session-warning-gui"  # its first spec logs a warning
 MACOS_TMPDIR = 48  # the length of a standard macOS TMPDIR, /var/folders/xx/<30>/T
+HANG_FIXTURE = sessions.TESTS / "runner" / "fixtures" / "hang-in-prompt.el"
+HANG_SECONDS = 15  # a session reaches its specs in about 5 s, even under load
 
 # What git exports to a hook that runs in a linked worktree.
 HOOK_GIT = {
@@ -67,6 +70,16 @@ class PrepareTest(unittest.TestCase):
              "GIT_CEILING_DIRECTORIES": os.pathsep.join(
                  [str(repositories / "alpha"), str(repositories / "beta")])})
 
+    def test_a_session_reaches_no_session_bus(self) -> None:
+        """Plan 106: the owner's D-Bus would give it the desktop's theme."""
+        environment = sessions.prepare(self.directory / "s", None).environment
+        result = subprocess.run(
+            [sessions.EMACS, "--batch", "--eval",
+             ("(progn (require 'dbus nil t) (princ (and (featurep 'dbusbind)"
+              ' (dbus-ping :session "org.freedesktop.DBus"))))')],
+            env=environment, capture_output=True, text=True, timeout=60, check=True)
+        self.assertEqual(result.stdout, "nil")
+
     def test_a_session_compiles_nothing_just_in_time(self) -> None:
         """Once the configuration's early-init.el has run, JIT compilation is off.
 
@@ -80,6 +93,27 @@ class PrepareTest(unittest.TestCase):
              "--eval", "(princ native-comp-jit-compilation)"],
             env=environment, capture_output=True, text=True, timeout=60, check=True)
         self.assertEqual(result.stdout, "nil")
+
+    def test_a_failing_configuration_leaves_the_harness_and_lifeline(self) -> None:
+        """Plan 106: the configuration's early-init.el fails, as in neomacs.
+
+        The session must still answer the runner's protocol and end with
+        its runner: a daemon outlives an error in its early-init.
+        """
+        source = self.directory / "source"
+        source.mkdir()
+        (source / "early-init.el").write_text('(error "Boom in early-init")\n')
+        session = self.directory / "s"
+        with mock.patch.object(sessions, "SOURCE", source):
+            environment = sessions.prepare(session, None).environment
+        early_init = sessions.elisp_string(session / "init" / "early-init.el")
+        result = subprocess.run(
+            [sessions.EMACS, "--batch", "--eval",
+             f"(condition-case nil (load {early_init} nil t t) (error nil))",
+             "--eval", ("(princ (list (boundp 'my/test-session-started)"
+                        " (length (seq-filter #'timer--repeat-delay timer-list))))")],
+            env=environment, capture_output=True, text=True, timeout=60, check=True)
+        self.assertEqual(result.stdout, "(t 1)")
 
 
 
@@ -178,6 +212,48 @@ class WarningTest(unittest.TestCase):
         self.assertIn("warning SL-WARNING: ", result.stdout)
         self.assertIn("a probe warning", result.stdout)
         self.assertLess(time.monotonic() - start, sessions.SCENARIO_SECONDS / 2)
+
+
+@unittest.skipUnless(sessions.XVFB and os.environ.get("EMACS_TEST_GUI") != "0",
+                     "needs graphical frames on Xvfb")
+class HangTest(unittest.TestCase):
+    """Plan 106: a session that waits past its deadline says for what."""
+
+    def test_a_spec_waiting_in_a_prompt_is_reported_with_it(self) -> None:
+        """The spec is named, and the state shows the question asked."""
+        root = Path(tempfile.mkdtemp(prefix="emacs-test-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        scenario = sessions.Scenario(HANG_FIXTURE, accounting.Headers())
+        with mock.patch.object(sessions, "SCENARIO_SECONDS", HANG_SECONDS):
+            outcome = sessions.run_scenario(scenario, root / "00", sessions.Reaper(),
+                                            graphic=True)
+        self.assertEqual(outcome.error,
+                         "deadline exceeded while waiting for the end of the specs")
+        records, malformed = accounting.parse_report(outcome.lines)
+        verdict = accounting.judge(records, outcome.files, outcome.socket,
+                                   outcome.display)
+        self.assertEqual(malformed, [])
+        hung = "HANG waits for an answer nobody gives: started and never finished"
+        self.assertIn(hung, verdict.problems)
+        self.assertTrue(any("Restart the probe server?" in problem
+                            for problem in verdict.problems), verdict.problems)
+
+
+class LinkedTmpdirTest(unittest.TestCase):
+    """Plan 106: under a linked TMPDIR, as macOS's /tmp is, files are found."""
+
+    def test_a_first_file_scenario_passes_under_a_linked_tmpdir(self) -> None:
+        """The runner finds the first file that the session visited."""
+        base = Path(tempfile.mkdtemp(prefix="r", dir="/tmp"))
+        self.addCleanup(shutil.rmtree, base)
+        (base / "real").mkdir()
+        (base / "link").symlink_to(base / "real")
+        result = subprocess.run(
+            [sys.executable, "-m", "runner", "fast", SCENARIO], cwd=sessions.TESTS,
+            env={**os.environ, "TMPDIR": str(base / "link"), "EMACS_TEST_GUI": "0"},
+            capture_output=True, text=True,
+            timeout=sessions.SCENARIO_SECONDS + 60, check=False)
+        self.assertEqual(result.returncode, 0, result.stdout)
 
 
 class SignalledRunTest(unittest.TestCase):

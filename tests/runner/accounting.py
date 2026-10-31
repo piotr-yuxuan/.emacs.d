@@ -3,8 +3,9 @@
 A session writes JSON lines (see tests/helpers/test-session.el).  They are
 parsed here at the boundary, then judged:
 - a failed spec, a disabled spec (xit, xdescribe), a load error, an
-  unreadable line, a harness error, or a session that never finished is
-  a problem; the warnings a spec logged are not;
+  unreadable line, a harness error, a spec that started and never
+  finished, or a session that never finished is a problem; the warnings
+  a spec logged are not;
 - a skipped spec is expected only when an expected-skip entry matches
   it and the entry's reason holds in that session;
 - an entry whose reason holds is stale when specs it matches ran and
@@ -44,7 +45,17 @@ SCHEMAS = {
         "warnings": OPTIONAL_TEXT,
     },
     "load-error": {"file": str, "error": str},
+    "spec-started": {"file": OPTIONAL_TEXT, "name": str},
     "harness-error": {"spec": OPTIONAL_TEXT, "error": str},
+    "state": {
+        "minibuffer": OPTIONAL_TEXT,
+        "echo": OPTIONAL_TEXT,
+        "buffer": str,
+        "recursion_depth": int,
+        "keyboard_macro": bool,
+        "processes": list,
+        "backtrace": str,
+    },
     "skip-entries": {"entries": list},
     "done": {
         "server_socket": OPTIONAL_TEXT,
@@ -62,6 +73,10 @@ ENTRY_SCHEMA = {
     "reason": str,
     "holds": (bool, type(None)),
     "error": OPTIONAL_TEXT,
+}
+NESTED_SCHEMAS = {  # the items of a list that a line holds
+    "entries": ENTRY_SCHEMA,
+    "processes": {"name": str, "status": str},
 }
 
 
@@ -121,8 +136,9 @@ def parse_report(lines: list[str]) -> tuple[dict[str, list[Record]], list[str]]:
         try:
             record = json.loads(line)
             conform(record, SCHEMAS[record["type"]])
-            for entry in record.get("entries", []):
-                conform(entry, ENTRY_SCHEMA)
+            for key, schema in NESTED_SCHEMAS.items():
+                for item in record.get(key, []):
+                    conform(item, schema)
         except (ValueError, KeyError, TypeError) as error:
             problems.append(f"result line {number} is malformed ({error})")
             continue
@@ -164,9 +180,8 @@ def judge(records: dict[str, list[Record]], files: list[str], socket: str,
     """
     load_errors = records["load-error"]
     problems = [f"{r['file']}: failed to load: {r['error']}" for r in load_errors]
-    stops = records["harness-error"]
-    problems += [f"the harness stopped after {r['spec'] or 'no spec'}: {r['error']}"
-                 for r in stops]
+    stops = stop_problems(records)
+    problems += stops
     entries = {e["id"]: e for r in records["skip-entries"] for e in r["entries"]}
     holding = {i for i, e in entries.items() if e["holds"]}
     specs = records["spec"]
@@ -186,7 +201,7 @@ def judge(records: dict[str, list[Record]], files: list[str], socket: str,
         matches = [s for s in specs if entry_id in s["skip_entries"]]
         if matches and not any(skipped(s) for s in matches):
             problems.append(f"expected-skip entry {entry_id} is stale: its specs ran")
-    reported = {s["file"] for s in specs} | {r["file"] for r in load_errors}
+    reported = {r["file"] for r in specs + records["spec-started"] + load_errors}
     problems += [f"{f}: defines no specs" for f in files if f not in reported]
     problems += isolation_problems(records["done"], socket, display)
     passed = sum(s["status"] == "passed" for s in specs)
@@ -195,6 +210,29 @@ def judge(records: dict[str, list[Record]], files: list[str], socket: str,
     warnings = [f"{s['name']}: {s['warnings']}" for s in specs if s["warnings"]]
     return Verdict(problems, passed, expected, matched, entries, statuses,
                    warnings, stopped=bool(stops))
+
+
+def stop_problems(records: dict[str, list[Record]]) -> list[str]:
+    """Return why the session stopped before the end of its specs, if it did.
+
+    A harness error stops it after a spec.  A spec that started and
+    never finished held it until its deadline; the state the session
+    reported then says what it waited for (plan 106).  Kept apart from
+    `judge', as the one concern whose problems also mark the session
+    stopped.
+    """
+    problems = [f"the harness stopped after {r['spec'] or 'no spec'}: {r['error']}"
+                for r in records["harness-error"]]
+    finished = {s["name"] for s in records["spec"]}
+    problems += [f"{r['name']}: started and never finished"
+                 for r in records["spec-started"] if r["name"] not in finished]
+    problems += [
+        f"at the deadline: minibuffer {s['minibuffer']!r}, echo area {s['echo']!r},"
+        f" buffer {s['buffer']!r}, recursion depth {s['recursion_depth']},"
+        f" keyboard macro {'running' if s['keyboard_macro'] else 'none'}, processes "
+        + (", ".join(f"{p['name']} ({p['status']})" for p in s["processes"]) or "none")
+        for s in records["state"]]
+    return problems
 
 
 def registry_problems(verdicts: list[Verdict], *, complete: bool) -> list[str]:

@@ -1,4 +1,5 @@
 ;;; l1-journey-13-ace-window.el --- Journey 13: M-o selects another window -*- lexical-binding: t -*-
+;; scenario-display: graphic
 
 ;;; Commentary:
 ;; Plan 094, journey 13, and U11 of the 085 mutation baseline.  With
@@ -10,7 +11,8 @@
 ;; window, on the right.  Plain `other-window' would select c.txt.
 ;; With two windows ace-window switches without asking, which is why
 ;; the journey needs three.  Without labels, the mutation, M-o cannot
-;; select a window.
+;; select a window.  ace-window labels the windows of visible frames
+;; only: a session without frames has none (plan 106).
 
 ;;; Code:
 

@@ -51,11 +51,17 @@ ones already stubbed and signal the error."
                ;; The OS query is the boundary; auto-dark's own change
                ;; handling then switches the themes, as when the user
                ;; switches the desktop appearance.
-               (let ((query (lambda () value)))
+               ;; The restore reports the appearance from before: without
+               ;; a way to read the system's, as in a session without
+               ;; D-Bus, auto-dark would keep the stubbed one (plan 106).
+               (let* ((before (auto-dark--current-system-mode))
+                      (shown value)
+                      (query (lambda () shown)))
                  (advice-add 'auto-dark--current-system-mode :override query)
                  (push (lambda ()
-                         (advice-remove 'auto-dark--current-system-mode query)
-                         (auto-dark--check-and-set-dark-mode))
+                         (setq shown before)
+                         (auto-dark--check-and-set-dark-mode)
+                         (advice-remove 'auto-dark--current-system-mode query))
                        restores)
                  (auto-dark--check-and-set-dark-mode)))
               (:record-browse-url

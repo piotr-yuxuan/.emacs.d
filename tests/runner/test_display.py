@@ -193,7 +193,9 @@ class PrivateDisplayTest(unittest.TestCase):
         before = set(children(os.getpid()))
         with sessions.private_display() as display:
             self.assertRegex(display, r"\A:\d+\Z")
-            self.assertNotEqual(display, USER["DISPLAY"])
+            # Not the caller's display, if it has one: a runner without an
+            # X server rightly gets :0.
+            self.assertNotEqual(display, os.environ.get("DISPLAY"))
             started = {pid: args for pid, args in children(os.getpid()).items()
                        if pid not in before}
             servers = [pid for pid, args in started.items() if "-displayfd" in args]

@@ -93,6 +93,22 @@
     (expect (alist-get 'file (test-session-test--spec lines "a fails"))
             :to-equal specs-file))
 
+  (it "writes a spec-started line right before each spec's line (plan 106)"
+    (let ((reported (seq-filter (lambda (line)
+                                  (member (alist-get 'type line) '("spec-started" "spec")))
+                                lines)))
+      (expect (mapcar (lambda (line) (alist-get 'type line)) reported)
+              :to-equal (apply #'append (make-list (/ (length reported) 2)
+                                                   '("spec-started" "spec"))))
+      (expect (seq-every-p (lambda (pair)
+                             (equal (mapcar (lambda (line) (list (alist-get 'name line)
+                                                                 (alist-get 'file line)))
+                                            pair)
+                                    (make-list 2 (list (alist-get 'name (car pair))
+                                                       (alist-get 'file (car pair))))))
+                           (seq-partition reported 2))
+              :to-be t)))
+
   (it "reports each status, and the failure text of what did not pass"
     (expect (alist-get 'status (test-session-test--spec lines "a passes")) :to-equal "passed")
     (expect (alist-get 'failure (test-session-test--spec lines "a passes")) :to-be nil)
@@ -178,7 +194,11 @@
     (expect (mapcar (lambda (line) (list (alist-get 'name line) (alist-get 'status line)))
                     (seq-filter (lambda (line) (equal (alist-get 'type line) "spec"))
                                 lines))
-            :to-equal '(("d is chosen" "failed"))))
+            :to-equal '(("d is chosen" "failed")))
+    (expect (mapcar (lambda (line) (alist-get 'name line))
+                    (seq-filter (lambda (line) (equal (alist-get 'type line) "spec-started"))
+                                lines))
+            :to-equal '("d is chosen")))
 
   (it "does not run the body of any other spec"
     (expect (file-exists-p marker) :to-be nil)))
@@ -289,11 +309,49 @@
 
   (it "turns a quit that escapes the specs into a harness-error, then finishes"
     (expect (mapcar (lambda (line) (alist-get 'type line)) lines)
-            :to-equal '("spec" "spec" "harness-error" "skip-entries" "done"))
+            :to-equal '("spec-started" "spec" "spec-started" "spec" "spec-started"
+                        "harness-error" "skip-entries" "done"))
     (let ((stop (seq-find (lambda (line) (equal (alist-get 'type line) "harness-error"))
                           lines)))
       (expect (alist-get 'spec stop) :to-equal "w quits")
       (expect (alist-get 'error stop) :to-equal "Quit"))))
+
+(defvar test-session-test--state nil
+  "The result file of the state line tests.")
+
+(defun test-session-test-write-state ()
+  "Write the state line to the file `test-session-test--state' names."
+  (interactive)
+  (my/test-session-write-state test-session-test--state))
+
+(describe "The state line (plan 106)"
+  :var (line process shown)
+  (before-all
+    (setq test-session-test--state (make-temp-file "session-test-state-" nil ".jsonl")
+          process (start-process "session-test-sleep" nil "sleep" "60"))
+    (with-temp-buffer
+      (switch-to-buffer (current-buffer))
+      (setq shown (buffer-name))
+      (use-local-map (define-keymap "C-c 7 s" #'test-session-test-write-state))
+      (execute-kbd-macro (kbd "C-c 7 s")))
+    (setq line (car (test-session-test--lines test-session-test--state))))
+  (after-all
+    (delete-process process)
+    (delete-file test-session-test--state))
+
+  (it "says that a keyboard macro is running, and which buffer is shown"
+    (expect (alist-get 'type line) :to-equal "state")
+    (expect (alist-get 'keyboard_macro line) :to-be t)
+    (expect (alist-get 'buffer line) :to-equal shown)
+    (expect (alist-get 'recursion_depth line) :to-equal (recursion-depth)))
+
+  (it "lists the live processes with their status"
+    (expect (alist-get 'processes line)
+            :to-contain '((name . "session-test-sleep") (status . "run"))))
+
+  (it "holds the backtrace from the frame that asked for it"
+    (expect (alist-get 'backtrace line) :to-match "test-session-test-write-state")
+    (expect (alist-get 'backtrace line) :to-match "execute-kbd-macro")))
 
 (provide 'test-session-test)
 

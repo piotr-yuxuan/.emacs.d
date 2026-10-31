@@ -12,9 +12,9 @@ Each session owns a fresh directory:
 Packages, native code and tree-sitter grammars are read from the live
 installation (EMACS_LIVE_DIR, ~/.emacs.d by default), with straight.el
 in safe mode, so nothing there is written; a session compiles nothing
-just in time.  The real HOME is kept: L3 needs ~/.m2 and the login
-shell's PATH.  Git reads only tests/runner/gitconfig, and no GIT_*
-variable of the caller.
+just in time, and reaches no session D-Bus.  The real HOME is kept: L3
+needs ~/.m2 and the login shell's PATH.  Git reads only
+tests/runner/gitconfig, and no GIT_* variable of the caller.
 """
 
 from __future__ import annotations
@@ -74,17 +74,21 @@ EARLY_INIT = """\
       server-socket-dir {sockets})
 (with-eval-after-load 'mcp-server
   (setq mcp-server-socket-directory {sockets}))
-(setq native-comp-eln-load-path
-      (append (list {own_eln} {live_eln}) native-comp-eln-load-path))
 ;; End the session once the runner that started it is gone, even when
 ;; the runner was killed without cleaning up: Emacs then has another
-;; parent.  A daemon never exits on its own.
+;; parent.  A daemon never exits on its own.  Armed, and the harness
+;; loaded, before anything that may fail: an error ends this file, and
+;; a daemon lives on after it.
 (run-with-timer
  1 1 (lambda ()
        (let ((parent (alist-get 'ppid (process-attributes (emacs-pid)))))
          (when (and parent (/= parent {runner}))
            (kill-emacs 1)))))
 (load {session_el} nil t t)
+;; An Emacs without native compilation, as neomacs, has no such path.
+(when (featurep 'native-compile)
+  (setq native-comp-eln-load-path
+        (append (list {own_eln} {live_eln}) native-comp-eln-load-path)))
 (load {early_init} nil t t)
 ;; The configuration compiles each package to native code as it loads
 ;; it, here into the session's cache, deleted with the session: with a
@@ -281,6 +285,10 @@ def prepare(directory: Path, display: str | None) -> Session:
         GIT_CEILING_DIRECTORIES=os.pathsep.join(
             str(path) for path in sorted((LIVE / "straight" / "repos").glob("*"))),
         TMPDIR=str(directory / "tmp"),
+        # No session D-Bus, as on a CI runner: the owner's would hand the
+        # session the desktop's appearance, and so its theme (plan 106).
+        # Unset, libdbus would fall back to $XDG_RUNTIME_DIR/bus.
+        DBUS_SESSION_BUS_ADDRESS=f"unix:path={directory / 'no-bus'}",
     )
     return Session(directory, init, socket, directory / "results.jsonl",
                    directory / "emacs.log", environment)
@@ -480,9 +488,13 @@ def run_scenario(scenario: Scenario, directory: Path, reaper: Reaper, *,
         except (SessionError, OSError, subprocess.CalledProcessError) as caught:
             error = str(caught)
         finally:
+            # A session that did not finish says first what it was doing.
+            state = (f"(ignore-errors (my/test-session-write-state"
+                     f" {elisp_string(session.results)}))" if error else "")
             save = SAVE_MESSAGES.format(path=elisp_string(directory / "messages.txt"))
             with contextlib.suppress(SessionError):
-                client(session, ["--eval", save], time.monotonic() + 5)
+                client(session, ["--eval", f"(progn {state} {save})"],
+                       time.monotonic() + 5)
             reaper.stop(process)
     return Outcome([str(path)], read_lines(session.results), error,
                    str(session.socket), display, directory, time.monotonic() - started)

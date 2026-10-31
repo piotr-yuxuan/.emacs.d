@@ -354,8 +354,18 @@ fail or cannot start, restore the lockfile versions and rebuild."
   (load-theme 'sanityinc-tomorrow-night t nil))
 
 (defun my/auto-dark ()
-  "Enable auto-dark-mode and set theme hooks."
-  (auto-dark-mode t))
+  "Enable auto-dark-mode where it can read the system's appearance.
+Elsewhere, as without a desktop portal on D-Bus or on a CI runner,
+auto-dark only logs an error at each start and changes nothing: the
+night theme stays, without the warning.  Without a method, auto-dark
+returns its warning's text: a method is one its defcustom lists."
+  (require 'auto-dark)
+  (require 'warnings)
+  (let ((method (let ((warning-suppress-log-types '((auto-dark))))
+                  (auto-dark--determine-detection-method))))
+    (when (memq method (get 'auto-dark-detection-method 'custom-options))
+      (setq auto-dark-detection-method method)
+      (auto-dark-mode t))))
 
 (use-package auto-dark
   :custom
@@ -444,6 +454,9 @@ FRAME defaults to the selected frame."
 
 (add-hook 'enable-theme-functions #'my/italic-comments)
 (add-hook 'disable-theme-functions #'my/italic-comments)
+;; The night theme loaded before these hooks; where auto-dark does not
+;; start, no theme changes after them.
+(my/italic-comments)
 
 ;; Braille patterns (U+2800–U+28FF): prepend Iosevka Nerd Font Mono so it stays
 ;; authoritative.  Iosevka covers Braille natively; the explicit entry prevents

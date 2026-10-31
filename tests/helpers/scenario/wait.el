@@ -12,12 +12,17 @@
 ;;                            entry buffer;
 ;;   (:lsp-indexed)           every workspace of the entry buffer is
 ;;                            initialized and reports no work in
-;;                            progress.
+;;                            progress;
+;;   (:freedesktop-trash)     Emacs trashes files into the freedesktop
+;;                            trash, which a session moves under its
+;;                            own XDG_DATA_HOME.
 ;;
 ;; A spec waiting for a server whose executable is missing is skipped
 ;; with the message "missing executable NAME"; the runner accepts that
 ;; skip only when an expected-skip entry with the reason
-;; (:missing-executable "NAME") holds.
+;; (:missing-executable "NAME") holds.  Where Emacs trashes through the
+;; system instead, as on macOS into the user's own Trash, a spec that
+;; needs the freedesktop trash is skipped before its keys (plan 106).
 
 ;;; Code:
 
@@ -47,23 +52,31 @@ Cold language servers can take a minute to index a project.")
   (dolist (condition conditions)
     (unless (pcase condition
               (`(:lsp-attached ,server) (assq server my/scenario-lsp-servers))
-              ('(:lsp-indexed) t))
+              ('(:lsp-indexed) t)
+              ('(:freedesktop-trash) t))
       (error "Scenario :wait-for: unknown condition %S" condition))))
 
 (defun my/scenario-wait-skip-unless-available (conditions)
-  "Skip the running spec when CONDITIONS need a missing executable."
-  (pcase-dolist (`(,kind ,server) conditions)
-    (when (eq kind :lsp-attached)
-      (dolist (executable (cdr (assq server my/scenario-lsp-servers)))
-        (unless (executable-find executable)
-          (buttercup-skip "missing executable %s" executable))))))
+  "Skip the running spec when CONDITIONS need what this session lacks:
+an executable, or the freedesktop trash."
+  (dolist (condition conditions)
+    (pcase condition
+      (`(:lsp-attached ,server)
+       (dolist (executable (cdr (assq server my/scenario-lsp-servers)))
+         (unless (executable-find executable)
+           (buttercup-skip "missing executable %s" executable))))
+      ('(:freedesktop-trash)
+       ;; The test `move-file-to-trash' makes before the freedesktop one.
+       (when (fboundp 'system-move-file-to-trash)
+         (buttercup-skip "Emacs trashes through the system"))))))
 
 (defun my/scenario-wait (conditions)
   "Wait, as an idle user, until each of CONDITIONS holds in turn.
 Signal an error when they do not all hold within
 `my/scenario-wait-seconds'."
   (let ((deadline (+ (float-time) my/scenario-wait-seconds)))
-    (dolist (condition conditions)
+    ;; The trash holds or skipped the spec already: nothing to wait for.
+    (dolist (condition (remove '(:freedesktop-trash) conditions))
       (unless (my/scenario-idle
                (max 1 (round (* 1000 (- deadline (float-time)))))
                (lambda ()

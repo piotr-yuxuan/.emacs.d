@@ -25,11 +25,15 @@
 ;; it is known:
 ;;
 ;;   {"type": "load-error", "file": F, "error": TEXT}
+;;   {"type": "spec-started", "file": F, "name": FULL-NAME}
 ;;   {"type": "spec", "file": F, "name": FULL-NAME,
 ;;    "status": "passed" | "failed" | "pending", "disabled": BOOL,
 ;;    "failure": TEXT | null, "commands": [{"command": C, "keys": K}],
 ;;    "skip_entries": [ID], "warnings": TEXT | null}
 ;;   {"type": "harness-error", "spec": FULL-NAME | null, "error": TEXT}
+;;   {"type": "state", "minibuffer": TEXT | null, "echo": TEXT | null,
+;;    "buffer": NAME, "recursion_depth": N, "keyboard_macro": BOOL,
+;;    "processes": [{"name": N, "status": S}], "backtrace": TEXT}
 ;;   {"type": "skip-entries", "entries": [{"id": ID, "regexp": R,
 ;;    "reason": TEXT, "holds": BOOL | null, "error": TEXT | null}]}
 ;;   {"type": "done", "server_socket": PATH | null, "editor": E,
@@ -42,6 +46,12 @@
 ;; spec's line instead, so buttercup has nothing left to print; should
 ;; `buttercup-run' signal all the same, a harness-error line names the
 ;; last spec started, and the session still reports that it is done.
+;;
+;; A spec that never ends leaves its spec-started line without a spec
+;; line.  Once its deadline has passed, the runner asks the session,
+;; through its server, for a state line: what the spec waits for, a
+;; prompt, a keyboard macro or a process, and the backtrace that leads
+;; there (plan 106).
 ;;
 ;; Expected-skip entries live in `tests/expected-skips/*.el', one file
 ;; per plan.  Each top-level form is (SPEC-REGEXP REASON), where REASON
@@ -310,11 +320,20 @@ format."
        (lambda (spec) (equal (buttercup-spec-full-name spec) only))
        t))
     (let* ((last-spec nil)
+           (file-of (lambda (spec)
+                      (cdr (assq (car (last (buttercup-suite-or-spec-parents spec)))
+                                 suite-files))))
            (buttercup-reporter
             (lambda (event spec)
               (pcase event
-                ('spec-started (setq my/test-session--commands nil
-                                     last-spec (buttercup-spec-full-name spec)))
+                ('spec-started
+                 (setq my/test-session--commands nil
+                       last-spec (buttercup-spec-full-name spec))
+                 (when (or (not only) (equal last-spec only))
+                   (my/test-session--write
+                    result-path `((type . "spec-started")
+                                  (file . ,(or (funcall file-of spec) :null))
+                                  (name . ,last-spec)))))
                 ('spec-done
                  (let ((warnings
                         (with-current-buffer (get-buffer-create
@@ -325,10 +344,7 @@ format."
                      (my/test-session--write
                       result-path
                       (my/test-session-spec-record
-                       spec
-                       (cdr (assq (car (last (buttercup-suite-or-spec-parents spec)))
-                                  suite-files))
-                       entries (reverse my/test-session--commands)
+                       spec (funcall file-of spec) entries (reverse my/test-session--commands)
                        (and (not (string-empty-p warnings)) warnings))))))))))
       (condition-case err
           ;; Buttercup binds `debug-on-error' and its own debugger around
@@ -349,6 +365,36 @@ format."
      `((type . "skip-entries")
        (entries . ,(vconcat (mapcar #'my/test-session-entry-record entries)))))
     (my/test-session--write result-path (my/test-session-done-record))))
+
+(defun my/test-session-write-state (result-path)
+  "Append to RESULT-PATH what this session is doing now, as a state line.
+The runner calls it through the server once a deadline has passed, so
+it runs inside whatever the session waits in: a prompt, a keyboard
+macro, a process.  The backtrace shows the frames that lead there,
+printed shallow enough to stay readable.  See the commentary for the
+line format."
+  ;; Required here, not at load: a session that never hangs need not load it.
+  (require 'backtrace)
+  (let ((minibuffer (active-minibuffer-window))
+        (print-length 8)
+        (print-level 3))
+    (my/test-session--write
+     result-path
+     `((type . "state")
+       (minibuffer . ,(if minibuffer
+                          (with-current-buffer (window-buffer minibuffer)
+                            (buffer-substring-no-properties (point-min) (point-max)))
+                        :null))
+       (echo . ,(or (current-message) :null))
+       (buffer . ,(buffer-name (window-buffer (selected-window))))
+       (recursion_depth . ,(recursion-depth))
+       (keyboard_macro . ,(if executing-kbd-macro t :false))
+       (processes . ,(vconcat (mapcar (lambda (process)
+                                        `((name . ,(process-name process))
+                                          (status . ,(symbol-name (process-status process)))))
+                                      (process-list))))
+       (backtrace . ,(backtrace-to-string))))
+    t))
 
 (provide 'test-session)
 

@@ -219,6 +219,20 @@
       (expect (my/scenario-wait-skip-unless-available '((:lsp-attached ruff)))
               :not :to-throw)))
 
+  (it "skips a spec that needs the freedesktop trash where Emacs trashes through the system"
+    (cl-letf (((symbol-function 'system-move-file-to-trash) #'ignore))
+      (expect (condition-case skip
+                  (my/scenario-wait-skip-unless-available '((:freedesktop-trash)))
+                (buttercup-pending (cdr skip)))
+              :to-equal "Emacs trashes through the system")))
+
+  (it "runs a spec that needs the freedesktop trash where Emacs uses it, without waiting"
+    (cl-letf (((symbol-function 'system-move-file-to-trash) nil))
+      (let ((my/scenario-wait-seconds 0.3))
+        (expect (my/scenario-wait-skip-unless-available '((:freedesktop-trash)))
+                :not :to-throw)
+        (expect (my/scenario-wait '((:freedesktop-trash))) :not :to-throw))))
+
   (it "waits until every workspace is initialized and idle"
     (require 'lsp-mode)
     (let* ((busy (make-hash-table :test #'equal))

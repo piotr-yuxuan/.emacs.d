@@ -2,7 +2,9 @@
 # full.yml call with their profile.  The matrix crosses Linux, with the
 # packages of the NixOS machine from the flake of .github/ci, and macOS,
 # with the Emacs of the Mac's Brewfile, with GNU Emacs and neomacs.  A
-# neomacs job never fails the run: its summary says how far it got.
+# neomacs job ends green whatever it finds: each of its steps continues
+# on error, and its summary says how far it got.  The packages' sources
+# are cached once for every job, their builds once per Emacs.
 name: Suite
 
 on:
@@ -62,6 +64,7 @@ jobs:
 
       - name: Install neomacs on Linux
         if: matrix.system == 'linux' && matrix.emacs == 'neomacs'
+        continue-on-error: ${{ matrix.emacs == 'neomacs' }}
         shell: bash -eo pipefail {0}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -74,11 +77,13 @@ jobs:
 
       - name: Install neomacs on macOS
         if: matrix.system == 'macos' && matrix.emacs == 'neomacs'
+        continue-on-error: ${{ matrix.emacs == 'neomacs' }}
         shell: bash
         run: brew install --cask neomacs-core/tap/neomacs
 
       - name: Put neomacs first on PATH as emacs
         if: matrix.emacs == 'neomacs'
+        continue-on-error: ${{ matrix.emacs == 'neomacs' }}
         shell: bash -eo pipefail {0}
         run: |
           mkdir -p "$RUNNER_TEMP/neomacs-bin"
@@ -87,12 +92,16 @@ jobs:
           echo "$RUNNER_TEMP/neomacs-bin" >> "$GITHUB_PATH"
 
       - name: Show the Emacs under test
+        id: emacs
         timeout-minutes: 5
+        continue-on-error: ${{ matrix.emacs == 'neomacs' }}
         run: |
           mkdir -p "$RUNNER_TEMP/logs"
           # Whole output first: head would end the pipe early.
           emacs --version > "$RUNNER_TEMP/version.txt"
           head -n 1 "$RUNNER_TEMP/version.txt" | tee "$RUNNER_TEMP/emacs-version"
+          # The byte code depends on the version; a cache key holds no comma.
+          echo "key=$(tr -c 'A-Za-z0-9.\n' '-' < "$RUNNER_TEMP/emacs-version")" >> "$GITHUB_OUTPUT"
           command -v emacs emacsclient
           if [ "$WANTED_EMACS" = neomacs ]; then
             test "$(command -v emacs)" = "$RUNNER_TEMP/neomacs-bin/emacs"
@@ -100,8 +109,29 @@ jobs:
             grep -q '^GNU Emacs' "$RUNNER_TEMP/emacs-version"
           fi
 
+      # straight checks out a pin when it clones only: a cache made from
+      # another lock file would leave repositories off their pins, so the
+      # keys match exactly, with no fallback.
+      - name: Restore the packages' sources
+        id: repos
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: straight/repos
+          key: straight-repos-${{ hashFiles('straight/versions/default.el') }}
+
+      - name: Restore the packages' builds for this Emacs
+        id: builds
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            straight/build
+            straight/build-cache.el
+          key: straight-build-${{ matrix.system }}-${{ matrix.emacs }}-${{ steps.emacs.outputs.key }}-${{ hashFiles('straight/versions/default.el') }}
+
       - name: Bootstrap every package from the lock file
+        id: bootstrap
         timeout-minutes: 30
+        continue-on-error: ${{ matrix.emacs == 'neomacs' }}
         run: |
           # Forges other than GitHub drop a clone now and then; straight
           # resumes where it stopped, so try again before giving up.
@@ -112,11 +142,33 @@ jobs:
           exit 1
 
       - name: Check that each installed repository sits at its pin
+        id: pins
         timeout-minutes: 5
+        continue-on-error: ${{ matrix.emacs == 'neomacs' }}
         run: emacs --batch --load .github/check-pins.el
 
+      # Saved here, before jinx's module joins the builds, and whatever the
+      # tests find: a red run still has its packages for the next one.
+      - name: Save the packages' sources
+        if: steps.pins.outcome == 'success' && steps.repos.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: straight/repos
+          key: ${{ steps.repos.outputs.cache-primary-key }}
+
+      - name: Save the packages' builds for this Emacs
+        if: steps.pins.outcome == 'success' && steps.builds.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            straight/build
+            straight/build-cache.el
+          key: ${{ steps.builds.outputs.cache-primary-key }}
+
       - name: Install the grammars and build jinx's module
+        id: modules
         timeout-minutes: 10
+        continue-on-error: ${{ matrix.emacs == 'neomacs' }}
         run: |
           # The bootstrap may have made the directory already: link each
           # grammar into it.
@@ -130,6 +182,7 @@ jobs:
       - name: Fetch what CIDER's jack-in injects
         if: inputs.profile == 'full'
         timeout-minutes: 15
+        continue-on-error: ${{ matrix.emacs == 'neomacs' }}
         run: |
           # Journey 14 refuses to load rather than download: put the
           # versions this CIDER and clj-refactor inject in ~/.m2 first,
@@ -146,6 +199,7 @@ jobs:
 
       - name: Check that sessions find the flake's programs
         timeout-minutes: 5
+        continue-on-error: ${{ matrix.emacs == 'neomacs' }}
         run: |
           # A session takes PATH from a login shell (exec-path-from-shell),
           # whose profiles put /usr/bin and Homebrew first on macOS: end
@@ -161,24 +215,31 @@ jobs:
           if grep -v ' /nix/store/' "$RUNNER_TEMP/found"; then exit 1; fi
 
       - name: Run the static checks
+        id: static
         timeout-minutes: 5
+        continue-on-error: ${{ matrix.emacs == 'neomacs' }}
         run: tests/run static
 
       - name: Run tests/run ${{ inputs.profile }}
+        id: tests
         # Below the job's own timeout, so that a hang fails the step, which
         # a neomacs job's continue-on-error then absorbs.
         timeout-minutes: ${{ inputs.profile == 'full' && 75 || 30 }}
+        continue-on-error: ${{ matrix.emacs == 'neomacs' }}
         env:
           PROFILE: ${{ inputs.profile }}
         run: '{ time tests/run "$PROFILE"; } 2>&1 | tee "$RUNNER_TEMP/logs/$PROFILE.log"'
 
       - name: Run the session checks
+        id: session
         if: inputs.profile == 'full'
         timeout-minutes: 10
+        continue-on-error: ${{ matrix.emacs == 'neomacs' }}
         run: '{ time tests/integrity/session/run; } 2>&1 | tee "$RUNNER_TEMP/logs/session.log"'
 
       - name: Show the sessions the runner kept
-        if: failure()
+        # A neomacs job does not fail, and its kept sessions matter too.
+        if: always()
         shell: bash
         run: |
           { grep -ho 'kept /[^ ]*' "$RUNNER_TEMP"/logs/*.log 2>/dev/null || true; } |
@@ -192,11 +253,22 @@ jobs:
       - name: Summarise
         if: always()
         shell: bash
+        env:
+          # Each step's own outcome, before a neomacs job continues past it.
+          OUTCOMES: >-
+            bootstrap ${{ steps.bootstrap.outcome }},
+            pins ${{ steps.pins.outcome }},
+            modules ${{ steps.modules.outcome }},
+            static ${{ steps.static.outcome }},
+            tests ${{ steps.tests.outcome }},
+            session checks ${{ steps.session.outcome }}
         run: |
           {
             echo "### ${{ matrix.system }}, ${{ matrix.emacs }}"
             echo
             echo "Emacs: $(cat "$RUNNER_TEMP/emacs-version" 2>/dev/null || echo 'not reached')"
+            echo
+            echo "Steps: $OUTCOMES"
             for log in "$RUNNER_TEMP"/logs/*.log; do
               [ -f "$log" ] || continue
               echo
