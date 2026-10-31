@@ -262,6 +262,18 @@
         (cancel-timer once)
         (cancel-timer repeating))))
 
+  (it "is not settled while a timer runs below it, waiting (plan 106)"
+    (let ((timer-idle-list nil)
+          (seen 'unset))
+      (my/test-session-note-idle-timers)
+      (run-at-time 0 nil (lambda ()
+                           ;; As a timer's D-Bus call does: wait, and let
+                           ;; the server's request run inside the wait.
+                           (setq seen (my/test-session-settled-p))))
+      (sit-for 0.1)
+      (expect seen :to-be nil)
+      (expect (my/test-session-settled-p) :to-be-truthy)))
+
   (it "counts a noted timer that ran and armed itself again as run"
     (let* ((timer-idle-list nil)
            (rearming (run-with-idle-timer 3600 nil #'ignore)))

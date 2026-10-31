@@ -51,6 +51,12 @@ Plan 098 starts the MCP server, whose tools load Org and through it
 the specs, so these are judged against the features of the end of
 startup.")
 
+(defconst my/t1-system-modes
+  '((auto-dark-mode
+     . "on only where the system tells its appearance; a session has no D-Bus (plan 106)"))
+  "Global modes the configuration turns on only where the system allows:
+\(MODE . REASON).  The check of the modes left on skips them.")
+
 (defconst my/t1-document-keymaps
   '(("docs/EMACS-PYTHON-WORKBOOK.org" org-mode-map prog-mode-map python-base-mode-map)
     ("docs/gtd-getting-started.org" org-mode-map org-capture-mode-map)
@@ -155,7 +161,10 @@ A document names the keymaps of the modes it is about on a
       (buttercup-suppress-warning-capture
         (expect (my/t1-press '((:keys "M-x") (:type "ignore") (:keys "<return>")))
                 :to-equal nil)
-        (my/t1-judge 'global-mode-off (my/t1-global-modes-off forms) entries)))
+        (my/t1-judge 'global-mode-off
+                     (seq-remove (lambda (mode) (assq (intern mode) my/t1-system-modes))
+                                 (my/t1-global-modes-off forms))
+                     entries)))
 
     (it "adds functions only to hooks that run"
       ;; With the remaps of startup: force-loading clojure-ts-mode, which

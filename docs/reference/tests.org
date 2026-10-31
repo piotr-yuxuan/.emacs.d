@@ -128,17 +128,20 @@ Each runs four jobs:
 | macOS 15            | GNU Emacs, the cask of the Mac's Brewfile | none             | yes           |
 | macOS 15            | neomacs, its latest cask                  | none             | never         |
 
-- The programs besides Emacs come from the flake of =.github/ci=,
-  whose nixpkgs is that of the NixOS machine, moved by hand; it leaves
-  out zig, so gterm's scenarios skip.
+- The programs besides Emacs come from the configuration's flake, the
+  =tests= list of [[file:../../nix/programs.nix][nix/programs.nix]], in the shell of each matrix entry;
+  its nixpkgs is that of the NixOS machine, moved by hand.  The list
+  leaves out zig, so gterm's scenarios skip.
 - Each job restores the packages' sources, cached once for every job
   and keyed by the lock file, and their builds, cached once per system,
   Emacs and version; it saves them once their pins check, whatever the
   tests then find.  A new lock file starts from no cache.
-- Before the tests, each job installs the packages from the lock file,
-  checks their pins, links the flake's tree-sitter grammars into the
-  checkout, builds jinx's module, and checks that a session finds the
-  flake's programs first on =PATH=.
+- Before the tests, each job runs the setup, [[file:../../nix/setup.sh][nix/setup.sh]], in two
+  phases: =--strict packages= installs the packages from the lock file
+  and fails on one off its pin; then, with the caches saved, =modules=
+  links the flake's tree-sitter grammars, builds jinx's module and, in
+  =full=, fetches what CIDER injects.  Then it checks that a session
+  finds the flake's programs first on =PATH=.
 - A neomacs job measures how far neomacs gets: each of its steps
   continues on error, so the job ends green, and its summary gives the
   outcome of each step and the last line of each =tests/run=.

@@ -32,14 +32,15 @@ repository.
 - [[file:how-to/clojure.org][Work on a Clojure project]]: navigation, paredit, CIDER, tests.
 - [[file:how-to/org-tasks.org][Working with Org tasks]]: capture, the daily agenda, reviews.
 - [[file:how-to/update-packages.org][Update the packages safely]].
+- [[file:how-to/try-the-configuration.org][Try the configuration without installing it]], with Nix.
 - [[file:how-to/add-a-scenario-test.org][Add a scenario test]].
 
 * Reference
 
 - [[file:reference/keys.org][Key bindings]]: every key the configuration binds, generated from the
   keymaps; do not edit it by hand.
-- [[file:reference/dependencies.org][External dependencies]]: every program and font, with its nixpkgs
-  attribute.
+- [[file:reference/dependencies.org][External dependencies]]: what Emacs needs, and the lists of programs
+  and fonts in =nix/programs.nix=.
 - [[file:reference/local-el.org][local.el variables]]: what each machine sets.
 - [[file:reference/tests.org][Tests]]: commands, tiers, file headers and environment variables.
 

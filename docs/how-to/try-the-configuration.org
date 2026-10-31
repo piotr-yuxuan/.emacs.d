@@ -1,0 +1,71 @@
+#+TITLE: Try the configuration without installing it
+#+OPTIONS: toc:nil num:nil
+
+With Nix, one command starts this configuration in an Emacs of its
+own, beside whatever Emacs you have, and changes neither.  It runs on
+=x86_64-linux= and =aarch64-darwin=, the systems the configuration's
+flake knows.
+
+* Start a trial
+
+#+BEGIN_SRC zsh
+nix run github:piotr-yuxuan/.emacs.d
+#+END_SRC
+
+If your Nix has not enabled flakes, add
+=--extra-experimental-features 'nix-command flakes'= after =nix=.
+
+The command:
+
+1. copies the configuration into a new temporary directory;
+2. runs its setup there, [[file:../../nix/setup.sh][nix/setup.sh]], with the flake's Emacs: every
+   package at the version of the lockfile, the tree-sitter grammars,
+   jinx's module;
+3. starts that Emacs on the directory, with the programs the tests use
+   first on =PATH=.
+
+The first trial clones every package: many minutes.  The Emacs is
+=emacs-pgtk= on Linux and nixpkgs's =emacs= on macOS.
+
+* Keep a trial between runs
+
+Name the directory, and the next run reuses its packages:
+
+#+BEGIN_SRC zsh
+EMACS_TRY_DIRECTORY=~/emacs-try nix run github:piotr-yuxuan/.emacs.d
+#+END_SRC
+
+Each run copies the configuration's files over the directory's again;
+its packages stay.  A file the configuration has since removed stays
+too: after a large update, start from a new directory.
+
+* Give Emacs arguments
+
+Arguments after =--= go to Emacs.  For example, in a terminal:
+
+#+BEGIN_SRC zsh
+nix run github:piotr-yuxuan/.emacs.d -- -nw
+#+END_SRC
+
+* What a trial writes
+
+- the Nix store, and =~/.cache/nix=, as any =nix run= does;
+- the trial's directory, under =$TMPDIR= unless you name one: its
+  name starts with =emacs-try.=, the command prints it, and it holds
+  every package, cloned and compiled: about two gigabytes.  Nothing removes
+  it but you or the system's cleaning of =$TMPDIR=.
+
+It leaves =~/.emacs.d= alone, and the server of your own Emacs: the
+trial's server is named =try=.  It does not fetch CIDER's dependencies
+into =~/.m2=; a jack-in fetches them when you start a Clojure REPL.
+
+* Limits
+
+- Only the programs the tests use come with the trial: git, ripgrep,
+  the language servers of Python, Clojure, Java, shell scripts,
+  OpenTofu and Markdown, the spell checker.  A feature whose program is
+  missing stays off; [[file:../../nix/programs.nix][nix/programs.nix]] lists them all.
+- On Linux the trial brings its fonts.  macOS draws only installed
+  fonts, so there the default face is Menlo, unless Iosevka Nerd Font
+  is installed.
+- To remove a trial, delete its directory.

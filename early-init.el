@@ -34,6 +34,13 @@ during normal emacs operations.")
 ;; Asynchronous package compilation
 (setq native-comp-jit-compilation t)
 
+;; Native code goes under the directory Emacs was started on: Emacs
+;; keeps ~/.emacs.d/eln-cache/ even under --init-directory, so a trial
+;; or a setup of another clone would write into this one's (plan 107).
+(when (fboundp 'startup-redirect-eln-cache)
+  (startup-redirect-eln-cache
+   (expand-file-name "eln-cache/" user-emacs-directory)))
+
 ;; Suppress the *Compile-Log* buffer that byte-compile would otherwise open.
 (setq byte-compile-verbose nil)
 

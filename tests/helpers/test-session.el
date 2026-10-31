@@ -130,11 +130,21 @@ Each is noted with its idle time, as (TIMER . TIME)."
   "Return non-nil once every noted idle timer has run or been cancelled.
 A timer that ran and armed itself again has another idle time, so it
 counts as run: jit-lock's stealth timer does that for as long as the
-load average is high, as it is while the tests run."
-  (not (seq-some (pcase-lambda (`(,timer . ,time))
-                   (and (memq timer timer-idle-list)
-                        (equal (timer--time timer) time)))
-                 my/test-session--idle-timers)))
+load average is high, as it is while the tests run.
+
+A timer still running, below the server's request, is not settled: it
+left `timer-idle-list' when it started, and while it waits, as the MCP
+server's start does in a D-Bus call with a timeout of 25 s, the specs
+would run inside that wait, until its timeout throws out of them all
+\(plan 106)."
+  (and (not (catch 'running
+              (mapbacktrace (lambda (_evald function &rest _)
+                              (when (eq function 'timer-event-handler)
+                                (throw 'running t))))))
+       (not (seq-some (pcase-lambda (`(,timer . ,time))
+                        (and (memq timer timer-idle-list)
+                             (equal (timer--time timer) time)))
+                      my/test-session--idle-timers))))
 
 (defun my/test-session--write (path object)
   "Append OBJECT to PATH as one line of JSON.

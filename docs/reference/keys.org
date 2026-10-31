@@ -269,5 +269,5 @@ Do not edit; regenerate it.
 
 * Forms the readers could not resolve
 
-- init.el:3269: define-key in gterm: map gterm-mode-map, key (kbd (format "C-%c" c)) not resolved
-- init.el:3269: define-key in gterm: map gterm-mode-map, key (kbd (format "M-%c" c)) not resolved
+- init.el:3282: define-key in gterm: map gterm-mode-map, key (kbd (format "C-%c" c)) not resolved
+- init.el:3282: define-key in gterm: map gterm-mode-map, key (kbd (format "M-%c" c)) not resolved

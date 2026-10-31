@@ -34,9 +34,19 @@ These keystrokes are far more helpful than Google.
 
 [[file:docs/tutorials/getting-started.org][Getting started]] installs this configuration on NixOS or on macOS:
 the Emacs build, the programs it calls, the first start and the
-tests.  [[file:docs/reference/dependencies.org][External dependencies]] lists every program and font it uses,
-with its nixpkgs attribute, and [[file:docs/README.org][the documentation index]] lists the
-other guides.
+tests.  The programs and fonts it needs are listed in [[file:nix/programs.nix][nix/programs.nix]],
+each with what uses it: the configuration's flake installs them, and
+its setup, [[file:nix/setup.sh][nix/setup.sh]], prepares a clone: the packages at the
+versions of the lockfile, the tree-sitter grammars, jinx's module and
+what CIDER injects.  [[file:docs/reference/dependencies.org][External dependencies]] says what Emacs itself
+needs, and [[file:docs/README.org][the documentation index]] lists the other guides.
+
+To try the configuration without installing anything, with Nix
+([[file:docs/how-to/try-the-configuration.org][how]]):
+
+#+BEGIN_SRC zsh :tangle no
+nix run github:piotr-yuxuan/.emacs.d
+#+END_SRC
 
 :FIXME: Don't forget the dependencies of Rust-based emacs!
 https://github.com/eval-exec/neomacs
@@ -600,6 +610,13 @@ during normal emacs operations.")
 
 ;; Asynchronous package compilation
 (setq native-comp-jit-compilation t)
+
+;; Native code goes under the directory Emacs was started on: Emacs
+;; keeps ~/.emacs.d/eln-cache/ even under --init-directory, so a trial
+;; or a setup of another clone would write into this one's (plan 107).
+(when (fboundp 'startup-redirect-eln-cache)
+  (startup-redirect-eln-cache
+   (expand-file-name "eln-cache/" user-emacs-directory)))
 
 ;; Suppress the *Compile-Log* buffer that byte-compile would otherwise open.
 (setq byte-compile-verbose nil)

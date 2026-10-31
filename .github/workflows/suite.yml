@@ -1,6 +1,6 @@
 # The steps that test the published configuration, which ci.yml and
 # full.yml call with their profile.  The matrix crosses Linux, with the
-# packages of the NixOS machine from the flake of .github/ci, and macOS,
+# packages of the NixOS machine from the configuration's flake, and macOS,
 # with the Emacs of the Mac's Brewfile, with GNU Emacs and neomacs.  A
 # neomacs job ends green whatever it finds: each of its steps continues
 # on error, and its summary says how far it got.  The packages' sources
@@ -49,7 +49,7 @@ jobs:
         # in a pipe fails its step.  nix develop moves TMPDIR into a longer
         # directory; macOS's is long already, and a session's socket path
         # must stay short (tests/runner/sessions.py): use /tmp.
-        shell: nix develop ./.github/ci#${{ matrix.shell }} --command env TMPDIR=/tmp bash -eo pipefail {0}
+        shell: nix develop .#${{ matrix.shell }} --command env TMPDIR=/tmp bash -eo pipefail {0}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -128,36 +128,24 @@ jobs:
             straight/build-cache.el
           key: straight-build-${{ matrix.system }}-${{ matrix.emacs }}-${{ steps.emacs.outputs.key }}-${{ hashFiles('straight/versions/default.el') }}
 
-      - name: Bootstrap every package from the lock file
-        id: bootstrap
-        timeout-minutes: 30
+      # The setup of the configuration's flake (nix/setup.sh), with the
+      # matrix's Emacs: first the packages, then the modules, so that the
+      # caches are saved without jinx's module, whatever the tests find.
+      - name: Install the packages from the lock file, at their pins
+        id: packages
+        timeout-minutes: 35
         continue-on-error: ${{ matrix.emacs == 'neomacs' }}
-        run: |
-          # Forges other than GitHub drop a clone now and then; straight
-          # resumes where it stopped, so try again before giving up.
-          for attempt in 1 2 3; do
-            emacs --batch --init-directory="$GITHUB_WORKSPACE" --load early-init.el --load init.el && exit 0
-            echo "Bootstrap attempt $attempt failed"
-          done
-          exit 1
+        run: nix/setup.sh --strict packages .
 
-      - name: Check that each installed repository sits at its pin
-        id: pins
-        timeout-minutes: 5
-        continue-on-error: ${{ matrix.emacs == 'neomacs' }}
-        run: emacs --batch --load .github/check-pins.el
-
-      # Saved here, before jinx's module joins the builds, and whatever the
-      # tests find: a red run still has its packages for the next one.
       - name: Save the packages' sources
-        if: steps.pins.outcome == 'success' && steps.repos.outputs.cache-hit != 'true'
+        if: steps.packages.outcome == 'success' && steps.repos.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: straight/repos
           key: ${{ steps.repos.outputs.cache-primary-key }}
 
       - name: Save the packages' builds for this Emacs
-        if: steps.pins.outcome == 'success' && steps.builds.outputs.cache-hit != 'true'
+        if: steps.packages.outcome == 'success' && steps.builds.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: |
@@ -165,37 +153,19 @@ jobs:
             straight/build-cache.el
           key: ${{ steps.builds.outputs.cache-primary-key }}
 
-      - name: Install the grammars and build jinx's module
+      - name: Install the grammars, jinx's module and CIDER's dependencies
         id: modules
-        timeout-minutes: 10
+        timeout-minutes: 20
         continue-on-error: ${{ matrix.emacs == 'neomacs' }}
+        env:
+          PROFILE: ${{ inputs.profile }}
         run: |
-          # The bootstrap may have made the directory already: link each
-          # grammar into it.
-          mkdir -p "$EMACS_LIVE_DIR/tree-sitter"
-          ln -sf "$TREESIT_GRAMMARS"/* "$EMACS_LIVE_DIR/tree-sitter/"
-          emacs --batch --init-directory="$GITHUB_WORKSPACE" --load early-init.el --load init.el \
-            --eval '(progn (require (quote jinx)) (jinx--load-module)
-                     (unless (treesit-language-available-p (quote python))
-                       (error "The Python grammar does not load")))'
-
-      - name: Fetch what CIDER's jack-in injects
-        if: inputs.profile == 'full'
-        timeout-minutes: 15
-        continue-on-error: ${{ matrix.emacs == 'neomacs' }}
-        run: |
-          # Journey 14 refuses to load rather than download: put the
-          # versions this CIDER and clj-refactor inject in ~/.m2 first,
-          # the one the journey reads, which Java may not take for home.
-          emacs --batch --init-directory="$GITHUB_WORKSPACE" --load early-init.el --load init.el \
-            --eval '(progn (require (quote cider)) (require (quote clj-refactor))
-                     (princ (format "{:mvn/local-repo \"%s\" :deps {nrepl/nrepl {:mvn/version \"%s\"} cider/cider-nrepl {:mvn/version \"%s\"} refactor-nrepl/refactor-nrepl {:mvn/version \"%s\"}}}"
-                                    (expand-file-name "~/.m2/repository/")
-                                    cider-injected-nrepl-version cider-injected-middleware-version
-                                    cljr-injected-middleware-version)))' > "$RUNNER_TEMP/jack-in.edn"
-          cat "$RUNNER_TEMP/jack-in.edn"
-          cd tests/fixtures/journey-cider
-          clojure -Sdeps "$(cat "$RUNNER_TEMP/jack-in.edn")" -P
+          # Journey 14, which needs CIDER's dependencies, runs in full only.
+          if [ "$PROFILE" = full ]; then
+            nix/setup.sh modules .
+          else
+            nix/setup.sh --no-cider modules .
+          fi
 
       - name: Check that sessions find the flake's programs
         timeout-minutes: 5
@@ -256,8 +226,7 @@ jobs:
         env:
           # Each step's own outcome, before a neomacs job continues past it.
           OUTCOMES: >-
-            bootstrap ${{ steps.bootstrap.outcome }},
-            pins ${{ steps.pins.outcome }},
+            packages ${{ steps.packages.outcome }},
             modules ${{ steps.modules.outcome }},
             static ${{ steps.static.outcome }},
             tests ${{ steps.tests.outcome }},

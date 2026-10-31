@@ -1,10 +1,10 @@
 ;;; check-pins.el --- Each installed package repository sits at its pin -*- lexical-binding: t -*-
 
 ;;; Commentary:
-;; Run by the CI workflow from the root of the configuration, once
+;; Run by nix/setup.sh from the root of the configuration, once
 ;; straight.el has installed the packages there:
 ;;
-;;   emacs --batch --load .github/check-pins.el
+;;   emacs --batch --load nix/check-pins.el
 ;;
 ;; Every repository under straight/repos/ must be checked out at the
 ;; commit that the lock file, straight/versions/default.el, records

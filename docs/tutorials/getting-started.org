@@ -32,23 +32,26 @@ emacs --version
 
 * 2. Install the programs it calls
 
-[[file:../reference/dependencies.org][The dependency list]] names every program, what uses it and its nixpkgs
-attribute.  Start with the core ones and the fonts; add the language
-servers of the languages you work in.
+[[file:../../nix/programs.nix][nix/programs.nix]] lists every program and font the configuration
+calls, each with what uses it; [[file:../reference/dependencies.org][the dependency reference]] says how the
+file is organised.
 
-- On NixOS, with Home Manager:
+- On NixOS, take the configuration's flake as an input of your system's
+  flake, and install its programs with Home Manager:
   #+BEGIN_SRC nix
+  # In your flake's inputs:
+  emacs-configuration.url = "github:piotr-yuxuan/.emacs.d";
+
+  # In your Home Manager configuration:
   fonts.fontconfig.enable = true;
-  home.packages = with pkgs; [
-    git ripgrep fd delta difftastic python3 gcc gnumake pkg-config gnupg zsh fzf
-    enchant hunspell hunspellDicts.en_GB-ise hunspellDicts.fr-any
-    nerd-fonts.iosevka nerd-fonts.symbols-only noto-fonts-cjk-sans
-    xorg.xvfb
+  home.packages = [
+    inputs.emacs-configuration.packages.${pkgs.stdenv.hostPlatform.system}.programs
   ];
-  # jinx, the spell checker, compiles against enchant's headers.
-  home.sessionVariables.PKG_CONFIG_PATH = "${pkgs.enchant.dev}/lib/pkgconfig";
   #+END_SRC
-- On macOS:
+  To build them with your own nixpkgs instead, take the lists:
+  =with (inputs.emacs-configuration.lib.programs pkgs); tests ++ others ++ fonts=.
+- On macOS, with Homebrew, start with the core programs; add those of
+  your languages from =nix/programs.nix=:
   #+BEGIN_SRC zsh
   brew install git ripgrep fd git-delta difftastic python enchant hunspell pkgconf fzf
   #+END_SRC
@@ -70,28 +73,44 @@ Open =~/.emacs.d/local.el= in any editor and set at least your name
 and email address.  [[file:../reference/local-el.org][The local.el reference]] lists the other settings;
 leave them commented for now.
 
-* 4. Start Emacs for the first time
+* 4. Prepare it, then start Emacs
+
+The setup takes the steps between a clone and a first start: it
+installs every package at the version of the lockfile,
+=~/.emacs.d/straight/versions/default.el=, checks that each sits
+there, installs the tree-sitter grammars, builds the module of jinx,
+the spell checker, and, where =clojure= is installed, fetches into
+=~/.m2= what CIDER adds to a Clojure REPL.  It uses the Emacs on =PATH=, the one you will start:
+byte code belongs to the Emacs that compiled it.
+
+- On NixOS, with the flake's programs and grammars:
+  #+BEGIN_SRC zsh
+  cd ~/.emacs.d
+  nix run .#setup
+  #+END_SRC
+- On macOS, with what Homebrew installed; Emacs compiles the grammars:
+  #+BEGIN_SRC zsh
+  cd ~/.emacs.d
+  nix/setup.sh
+  #+END_SRC
+
+This takes many minutes, most of them cloning packages.  It ends with
+a report of any package off its pin, which a fresh clone has none of.
+A module built against the flake's libraries may not load in an Emacs
+from another nixpkgs: if jinx then fails, run the setup from the Emacs
+of that nixpkgs.
+
+Then start Emacs:
 
 #+BEGIN_SRC zsh
 emacs
 #+END_SRC
 
-The first start downloads straight.el, then clones every package at
-the version of the lockfile, =~/.emacs.d/straight/versions/default.el=,
-and builds it.  This takes many minutes; the echo area at the bottom
-names each package.  When it is done you see the dashboard: the Emacs
-logo and "Welcome to Emacs", in a dark or light theme that follows
-your system's.
-
-Quit with =C-x C-c=, and start Emacs again: the second start takes a
-second or two.
-
-Then, in Emacs, install the tree-sitter grammars once:
-
-1. Press =M-x=, type =treesit-auto-install-all= and press =RET=.
-2. A buffer lists the missing grammars.  Answer =y= to /Install missing
-   grammars?/.  Each grammar is downloaded and compiled into
-   =~/.emacs.d/tree-sitter/=.
+You see the dashboard: the Emacs logo and "Welcome to Emacs", in a dark
+or light theme that follows your system's.  This first start compiles
+the packages to native code in the background, so it is slower than
+the next ones.  Quit with =C-x C-c=, and start Emacs again: the second
+start takes a second or two.
 
 * 5. Run Emacs as a daemon
 
