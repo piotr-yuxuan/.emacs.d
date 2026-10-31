@@ -11,7 +11,10 @@ from __future__ import annotations
 
 import contextlib
 import io
+import os
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -166,6 +169,27 @@ class SummarizeTest(unittest.TestCase):
         """A missing isolation check shows in the totals."""
         _, output = self.summarize([verdict({"a": "passed"})], [], "full", 33)
         self.assertIn("full: 1 sessions, 33 run alone,", output)
+
+
+TASKSET = shutil.which("taskset")
+RUNNER_CPUS = 4  # a hosted Ubuntu runner
+
+
+@unittest.skipUnless(TASKSET and hasattr(os, "process_cpu_count")
+                     and len(os.sched_getaffinity(0)) > RUNNER_CPUS,
+                     "needs taskset, Python 3.13, and more than four usable CPUs")
+class PoolTest(unittest.TestCase):
+    """Plan 105: a run sizes its pools from the CPUs it may use."""
+
+    def test_four_cpus_give_the_pools_of_a_four_cpu_runner(self) -> None:
+        """Under taskset -c 0-3: two sessions at a time, one L3 file."""
+        result = subprocess.run(
+            [TASKSET, "-c", ",".join(map(str, sorted(os.sched_getaffinity(0))[:RUNNER_CPUS])),
+             sys.executable, "-c",
+             "import runner.__main__ as run; print(run.WIDE_POOL, run.NARROW_POOL)"],
+            cwd=Path(run.__file__).resolve().parents[1], capture_output=True,
+            text=True, timeout=60, check=True)
+        self.assertEqual(result.stdout.split(), ["2", "1"])
 
 
 if __name__ == "__main__":

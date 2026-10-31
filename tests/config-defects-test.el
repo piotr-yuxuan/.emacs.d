@@ -15,7 +15,6 @@
 (defvar my/nixd-flake)
 (defvar my/nixd-flake-host)
 (defvar lsp-nix-nixd-nixos-options-expr)
-(defvar lsp-nix-nixd-home-manager-options-expr)
 (defvar config-defects-test-vellum-file)
 (defvar lsp-java-server-install-dir)
 (defvar lsp-java-jdt-ls-prefer-native-command)
@@ -157,7 +156,7 @@ they are also in `config-defects-test--calls', newest first."
               :to-equal my/vellum-directory))))
 
 (describe "CF-04: nixd completes the options of the flake local.el names"
-  (it "builds the NixOS and Home Manager option sets once lsp-nix loads"
+  (it "builds the NixOS option set once lsp-nix loads"
     ;; lsp-nix loads when the first Nix buffer starts a server, long
     ;; after local.el; the fixture local.el sets the flake, as a user's.
     (expect (featurep 'lsp-nix) :to-be nil)
@@ -167,11 +166,10 @@ they are also in `config-defects-test--calls', newest first."
                               config-defects-test--root)
             nil t)
       (require 'lsp-nix))
+    ;; A git+file reference copies only the tracked files to the store,
+    ;; and Nix accepts it only with its space percent-encoded.
     (expect lsp-nix-nixd-nixos-options-expr
-            :to-equal "(builtins.getFlake \"/flakes/fleet/\").nixosConfigurations.fixture-host.options")
-    (expect lsp-nix-nixd-home-manager-options-expr
-            :to-equal (format "(builtins.getFlake \"/flakes/fleet/\").nixosConfigurations.fixture-host.config.home-manager.users.%s.options"
-                              (user-login-name)))))
+            :to-equal "(builtins.getFlake \"git+file:///flakes/my%20fleet/\").nixosConfigurations.fixture-host.options")))
 
 (describe "CF-15: lsp-java runs the jdtls launcher on PATH"
   (it "sees the installation's server, in a directory lsp-java may delete"

@@ -20,11 +20,12 @@ FILE = "/repo/tests/scenarios/l1-a.el"
 
 
 def spec(name: str, status: str = "passed", *, disabled: bool = False,
-         entries: tuple[str, ...] = ()) -> dict[str, object]:
+         entries: tuple[str, ...] = (), warnings: str | None = None,
+         ) -> dict[str, object]:
     """Return a spec line as a session writes it."""
     return {"type": "spec", "file": FILE, "name": name, "status": status,
             "disabled": disabled, "failure": None if status == "passed" else "why",
-            "commands": [], "skip_entries": list(entries)}
+            "commands": [], "skip_entries": list(entries), "warnings": warnings}
 
 
 def entry(entry_id: str, *, holds: bool | None, error: str | None = None,
@@ -189,6 +190,37 @@ class SessionProblemTest(unittest.TestCase):
         records, _ = accounting.parse_report([json.dumps(spec("a one"))])
         verdict = accounting.judge(records, [FILE], SOCKET, DISPLAY)
         self.assertEqual(len(verdict.problems), 1)
+
+
+STOP = {"type": "harness-error", "spec": "a",
+        "error": "Device 1 is not a termcap terminal device"}
+
+
+class WarningAndStopTest(unittest.TestCase):
+    """Plan 105: a warning is recorded, not judged; a stopped harness fails."""
+
+    def test_a_warning_is_recorded_and_fails_nothing(self) -> None:
+        """The warning goes to the verdict's warnings, not its problems."""
+        verdict = judge(spec("a", warnings="Warning (probe): text"))
+        self.assertEqual((verdict.problems, verdict.warnings),
+                         ([], ["a: Warning (probe): text"]))
+
+    def test_a_harness_error_fails_naming_the_last_spec(self) -> None:
+        """The error and the last spec started are the session's problem."""
+        verdict = judge(spec("a"), STOP)
+        self.assertEqual(verdict.problems, [
+            "the harness stopped after a: Device 1 is not a termcap terminal device"])
+        self.assertTrue(verdict.stopped)
+
+    def test_a_stopped_session_leaves_no_entry_stale_for_want_of_specs(self) -> None:
+        """Its specs never ran: an entry that matched none is not stale."""
+        entries = (entry("090.el:1", holds=False),)
+        stopped = judge(spec("a"), STOP, entries=entries)
+        whole = judge(spec("a"), entries=entries)
+        self.assertEqual(
+            (accounting.registry_problems([whole, stopped], complete=True),
+             accounting.registry_problems([whole], complete=True)),
+            ([], ["expected-skip entry 090.el:1 is stale: it matches no spec"]))
 
 
 class IsolationTest(unittest.TestCase):

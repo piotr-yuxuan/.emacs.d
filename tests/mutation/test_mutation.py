@@ -177,7 +177,7 @@ class RunnerOutputTest(unittest.TestCase):
         lines = [json.dumps(record) for record in (
             {"type": "spec", "file": "j.el", "name": "J-03: a search [search]",
              "status": "failed", "disabled": False, "failure": "no match\nsecond line",
-             "commands": [], "skip_entries": []},
+             "commands": [], "skip_entries": [], "warnings": None},
             {"type": "skip-entries", "entries": []},
             {"type": "done", "server_socket": socket, "editor": f"x {socket}",
              "visual": f"x {socket}", "emacs_socket_name": None, "display": None,

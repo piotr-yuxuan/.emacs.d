@@ -56,8 +56,11 @@ PROFILES = ("static", "fast", "full")
 LOGIC_SECONDS = 300
 PYTHON_SECONDS = 120
 STATIC_SECONDS = 120
-WIDE_POOL = max(2, (os.cpu_count() or 2) // 2)
-NARROW_POOL = max(1, (os.cpu_count() or 2) // 8)  # L3 files start language servers
+# The CPUs this process may use: taskset narrows them, which
+# os.cpu_count() ignores (os.process_cpu_count is Python 3.13).
+CPUS = getattr(os, "process_cpu_count", os.cpu_count)() or 2
+WIDE_POOL = max(2, CPUS // 2)
+NARROW_POOL = max(1, CPUS // 8)  # L3 files start language servers
 ISOLATION_SAMPLE = 3  # scenario files whose specs full also runs one by one
 NOT_LOGIC = frozenset({"scenarios", "fixtures", "tmp"})
 TESTS = sessions.TESTS
@@ -174,6 +177,9 @@ def report(label: str, future: concurrent.futures.Future[sessions.Outcome],
                      f"{len(verdict.expected)} skipped ({outcome.seconds:.1f} s)\n")
     for problem in verdict.problems:
         sys.stdout.write(f"        {name(problem)}\n")
+    # Recorded, not judged: the directory, and its results, may go.
+    for warning in verdict.warnings:
+        sys.stdout.write(f"        warning {' '.join(name(warning).split())}\n")
     if verdict.problems:
         sys.stdout.write(f"        kept {outcome.directory}\n")
     else:
@@ -270,6 +276,8 @@ def main(arguments: list[str]) -> int:
         sys.stderr.write(f"No {profile} test matches {pattern!r}.\n")
         return 1
     problems = list(selected.problems)
+    sys.stdout.write(f"note  {WIDE_POOL} sessions at a time, {NARROW_POOL} for L3"
+                     f" files, on {CPUS} usable CPUs\n")
     if selected.python_tests:
         found = run_python_tests(selected.python_tests)
         sys.stdout.write(f"{'FAIL' if found else 'ok':5} runner self-tests (Python)\n")

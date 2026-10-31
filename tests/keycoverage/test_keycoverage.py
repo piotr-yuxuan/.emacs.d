@@ -57,7 +57,8 @@ def spec_line(status: str, commands: list[object]) -> str:
     """Return a spec result line as tests/helpers/test-session.el writes it."""
     return json.dumps({"type": "spec", "file": "f.el", "name": f"S {status}",
                        "status": status, "disabled": False, "failure": None,
-                       "commands": commands, "skip_entries": []})
+                       "commands": commands, "skip_entries": [],
+                       "warnings": None})
 
 
 class BindingTableTest(unittest.TestCase):

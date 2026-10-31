@@ -3,7 +3,8 @@
 The expectations come from plan 085: a session's git reads only the
 runner's configuration, never the repository of the caller; when a
 session stops, every process it started stops too; and a run that dies,
-cleanly or not, leaves no process behind.
+cleanly or not, leaves no process behind.  Plan 102 adds one: a session
+compiles nothing just in time.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 SCENARIO = "l1-session-first-file"  # one short scenario file, as a filter
+WARNING_SCENARIO = "l1-session-warning-gui"  # its first spec logs a warning
 MACOS_TMPDIR = 48  # the length of a standard macOS TMPDIR, /var/folders/xx/<30>/T
 
 # What git exports to a hook that runs in a linked worktree.
@@ -64,6 +66,20 @@ class PrepareTest(unittest.TestCase):
             {"GIT_CONFIG_GLOBAL": str(sessions.GITCONFIG), "GIT_CONFIG_NOSYSTEM": "1",
              "GIT_CEILING_DIRECTORIES": os.pathsep.join(
                  [str(repositories / "alpha"), str(repositories / "beta")])})
+
+    def test_a_session_compiles_nothing_just_in_time(self) -> None:
+        """Once the configuration's early-init.el has run, JIT compilation is off.
+
+        That early-init.el turns it on; the session's own early-init.el
+        must have the last word.
+        """
+        session = self.directory / "s"
+        environment = sessions.prepare(session, None).environment
+        result = subprocess.run(
+            [sessions.EMACS, "--batch", "-l", str(session / "init" / "early-init.el"),
+             "--eval", "(princ native-comp-jit-compilation)"],
+            env=environment, capture_output=True, text=True, timeout=60, check=True)
+        self.assertEqual(result.stdout, "nil")
 
 
 
@@ -144,6 +160,24 @@ class ReaperTest(unittest.TestCase):
             reaper.stop(process)
         self.assertEqual((killpg.call_args_list, kill.call_args_list), ([], []))
 
+
+@unittest.skipUnless(sessions.XVFB and os.environ.get("EMACS_TEST_GUI") != "0",
+                     "needs graphical frames on Xvfb")
+class WarningTest(unittest.TestCase):
+    """Plan 105: a warning on a graphical frame ends nothing, and is shown."""
+
+    def test_the_file_runs_on_and_the_runner_shows_the_warning(self) -> None:
+        """Both specs pass, well before the deadline, and the warning is printed."""
+        start = time.monotonic()
+        result = subprocess.run(
+            [sys.executable, "-m", "runner", "fast", WARNING_SCENARIO],
+            cwd=sessions.TESTS, capture_output=True, text=True,
+            timeout=sessions.SCENARIO_SECONDS + 60, check=False)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("2 passed", result.stdout)
+        self.assertIn("warning SL-WARNING: ", result.stdout)
+        self.assertIn("a probe warning", result.stdout)
+        self.assertLess(time.monotonic() - start, sessions.SCENARIO_SECONDS / 2)
 
 
 class SignalledRunTest(unittest.TestCase):

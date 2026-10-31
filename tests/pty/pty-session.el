@@ -35,14 +35,6 @@
 (setq explicit-shell-file-name (executable-find "zsh")
       eat-shell explicit-shell-file-name)
 
-;; The first use of a terminal package in a session compiles it to
-;; native code in the background, and the compiler logs warnings, often
-;; while a spec runs.  Buttercup prints a spec's warnings with
-;; `send-string-to-terminal', which signals an error on a graphical
-;; terminal, and that error ends the whole session.  Native-compiler
-;; warnings say nothing about the terminals, so they are not logged.
-(add-to-list 'warning-suppress-log-types '(native-compiler))
-
 (provide 'pty-session)
 
 ;;; pty-session.el ends here

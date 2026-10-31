@@ -1,0 +1,208 @@
+# The steps that test the published configuration, which ci.yml and
+# full.yml call with their profile.  The matrix crosses Linux, with the
+# packages of the NixOS machine from the flake of .github/ci, and macOS,
+# with the Emacs of the Mac's Brewfile, with GNU Emacs and neomacs.  A
+# neomacs job never fails the run: its summary says how far it got.
+name: Suite
+
+on:
+  workflow_call:
+    inputs:
+      profile:
+        description: "fast, or full followed by the session checks"
+        required: true
+        type: string
+      timeout-minutes:
+        required: true
+        type: number
+
+permissions:
+  contents: read
+
+jobs:
+  suite:
+    name: ${{ matrix.system }}, ${{ matrix.emacs }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    continue-on-error: ${{ matrix.emacs == 'neomacs' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {system: linux, emacs: gnu, runner: ubuntu-24.04, shell: linux, gui: ""}
+          - {system: linux, emacs: neomacs, runner: ubuntu-24.04, shell: linux-neomacs, gui: "0"}
+          - {system: macos, emacs: gnu, runner: macos-15, shell: darwin, gui: "0"}
+          - {system: macos, emacs: neomacs, runner: macos-15, shell: darwin, gui: "0"}
+    env:
+      # The bootstrap installs the packages in the checkout, and the
+      # tests read them from there.
+      EMACS_LIVE_DIR: ${{ github.workspace }}
+      # Graphical frames on Linux's private Xvfb displays only: macOS has
+      # none, and neomacs's daemon refuses graphical frames.
+      EMACS_TEST_GUI: ${{ matrix.gui }}
+      WANTED_EMACS: ${{ matrix.emacs }}
+    defaults:
+      run:
+        # The flake's programs come first on PATH, and a failing command
+        # in a pipe fails its step.  nix develop moves TMPDIR into a longer
+        # directory; macOS's is long already, and a session's socket path
+        # must stay short (tests/runner/sessions.py): use /tmp.
+        shell: nix develop ./.github/ci#${{ matrix.shell }} --command env TMPDIR=/tmp bash -eo pipefail {0}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b
+
+      - name: Install the Emacs of the Brewfile
+        if: matrix.system == 'macos'
+        shell: bash
+        run: brew install --cask jimeh/emacs-builds/emacs-app
+
+      - name: Install neomacs on Linux
+        if: matrix.system == 'linux' && matrix.emacs == 'neomacs'
+        shell: bash -eo pipefail {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$RUNNER_TEMP"
+          gh release download --repo eval-exec/neomacs --pattern '*_amd64.deb' --pattern SHA256SUMS
+          sha256sum --check --ignore-missing SHA256SUMS
+          sudo apt-get update
+          sudo apt-get install --yes ./neomacs_*_amd64.deb
+
+      - name: Install neomacs on macOS
+        if: matrix.system == 'macos' && matrix.emacs == 'neomacs'
+        shell: bash
+        run: brew install --cask neomacs-core/tap/neomacs
+
+      - name: Put neomacs first on PATH as emacs
+        if: matrix.emacs == 'neomacs'
+        shell: bash -eo pipefail {0}
+        run: |
+          mkdir -p "$RUNNER_TEMP/neomacs-bin"
+          printf '#!/bin/sh\nexec neomacs "$@"\n' > "$RUNNER_TEMP/neomacs-bin/emacs"
+          chmod +x "$RUNNER_TEMP/neomacs-bin/emacs"
+          echo "$RUNNER_TEMP/neomacs-bin" >> "$GITHUB_PATH"
+
+      - name: Show the Emacs under test
+        timeout-minutes: 5
+        run: |
+          mkdir -p "$RUNNER_TEMP/logs"
+          # Whole output first: head would end the pipe early.
+          emacs --version > "$RUNNER_TEMP/version.txt"
+          head -n 1 "$RUNNER_TEMP/version.txt" | tee "$RUNNER_TEMP/emacs-version"
+          command -v emacs emacsclient
+          if [ "$WANTED_EMACS" = neomacs ]; then
+            test "$(command -v emacs)" = "$RUNNER_TEMP/neomacs-bin/emacs"
+          else
+            grep -q '^GNU Emacs' "$RUNNER_TEMP/emacs-version"
+          fi
+
+      - name: Bootstrap every package from the lock file
+        timeout-minutes: 30
+        run: |
+          # Forges other than GitHub drop a clone now and then; straight
+          # resumes where it stopped, so try again before giving up.
+          for attempt in 1 2 3; do
+            emacs --batch --init-directory="$GITHUB_WORKSPACE" --load early-init.el --load init.el && exit 0
+            echo "Bootstrap attempt $attempt failed"
+          done
+          exit 1
+
+      - name: Check that each installed repository sits at its pin
+        timeout-minutes: 5
+        run: emacs --batch --load .github/check-pins.el
+
+      - name: Install the grammars and build jinx's module
+        timeout-minutes: 10
+        run: |
+          # The bootstrap may have made the directory already: link each
+          # grammar into it.
+          mkdir -p "$EMACS_LIVE_DIR/tree-sitter"
+          ln -sf "$TREESIT_GRAMMARS"/* "$EMACS_LIVE_DIR/tree-sitter/"
+          emacs --batch --init-directory="$GITHUB_WORKSPACE" --load early-init.el --load init.el \
+            --eval '(progn (require (quote jinx)) (jinx--load-module)
+                     (unless (treesit-language-available-p (quote python))
+                       (error "The Python grammar does not load")))'
+
+      - name: Fetch what CIDER's jack-in injects
+        if: inputs.profile == 'full'
+        timeout-minutes: 15
+        run: |
+          # Journey 14 refuses to load rather than download: put the
+          # versions this CIDER and clj-refactor inject in ~/.m2 first,
+          # the one the journey reads, which Java may not take for home.
+          emacs --batch --init-directory="$GITHUB_WORKSPACE" --load early-init.el --load init.el \
+            --eval '(progn (require (quote cider)) (require (quote clj-refactor))
+                     (princ (format "{:mvn/local-repo \"%s\" :deps {nrepl/nrepl {:mvn/version \"%s\"} cider/cider-nrepl {:mvn/version \"%s\"} refactor-nrepl/refactor-nrepl {:mvn/version \"%s\"}}}"
+                                    (expand-file-name "~/.m2/repository/")
+                                    cider-injected-nrepl-version cider-injected-middleware-version
+                                    cljr-injected-middleware-version)))' > "$RUNNER_TEMP/jack-in.edn"
+          cat "$RUNNER_TEMP/jack-in.edn"
+          cd tests/fixtures/journey-cider
+          clojure -Sdeps "$(cat "$RUNNER_TEMP/jack-in.edn")" -P
+
+      - name: Check that sessions find the flake's programs
+        timeout-minutes: 5
+        run: |
+          # A session takes PATH from a login shell (exec-path-from-shell),
+          # whose profiles put /usr/bin and Homebrew first on macOS: end
+          # each login profile with this PATH.
+          for profile in ~/.zprofile ~/.bash_profile; do
+            printf 'export PATH=%q\n' "$PATH" >> "$profile"
+          done
+          emacs --init-directory="$GITHUB_WORKSPACE" --daemon=paths
+          emacsclient --socket-name=paths --eval \
+            "(with-temp-file \"$RUNNER_TEMP/found\" (dolist (p (split-string \"$CI_PROGRAMS\")) (insert p \" \" (or (executable-find p) \"none\") \"\n\")))"
+          emacsclient --socket-name=paths --eval '(kill-emacs)'
+          cat "$RUNNER_TEMP/found"
+          if grep -v ' /nix/store/' "$RUNNER_TEMP/found"; then exit 1; fi
+
+      - name: Run the static checks
+        timeout-minutes: 5
+        run: tests/run static
+
+      - name: Run tests/run ${{ inputs.profile }}
+        # Below the job's own timeout, so that a hang fails the step, which
+        # a neomacs job's continue-on-error then absorbs.
+        timeout-minutes: ${{ inputs.profile == 'full' && 75 || 30 }}
+        env:
+          PROFILE: ${{ inputs.profile }}
+        run: '{ time tests/run "$PROFILE"; } 2>&1 | tee "$RUNNER_TEMP/logs/$PROFILE.log"'
+
+      - name: Run the session checks
+        if: inputs.profile == 'full'
+        timeout-minutes: 10
+        run: '{ time tests/integrity/session/run; } 2>&1 | tee "$RUNNER_TEMP/logs/session.log"'
+
+      - name: Show the sessions the runner kept
+        if: failure()
+        shell: bash
+        run: |
+          { grep -ho 'kept /[^ ]*' "$RUNNER_TEMP"/logs/*.log 2>/dev/null || true; } |
+            cut -d ' ' -f 2 |
+            while read -r session; do
+              echo "::group::$session"
+              tail -n 40 "$session/messages.txt" "$session/emacs.log" 2>/dev/null || true
+              echo "::endgroup::"
+            done
+
+      - name: Summarise
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### ${{ matrix.system }}, ${{ matrix.emacs }}"
+            echo
+            echo "Emacs: $(cat "$RUNNER_TEMP/emacs-version" 2>/dev/null || echo 'not reached')"
+            for log in "$RUNNER_TEMP"/logs/*.log; do
+              [ -f "$log" ] || continue
+              echo
+              echo "$(basename "$log" .log):"
+              echo '```'
+              grep -E '^(fast|full):|^(ok|FAIL) +integrity|^real' "$log" || tail -n 3 "$log"
+              echo '```'
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

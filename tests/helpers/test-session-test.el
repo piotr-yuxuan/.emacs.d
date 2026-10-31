@@ -256,6 +256,45 @@
             (expect (my/test-session-settled-p) :to-be-truthy))
         (cancel-timer rearming)))))
 
+(describe "The session reporter, with warnings and escapes (plan 105)"
+  :var (directory lines)
+  (before-all
+    (setq directory (make-temp-file "session-test-" t))
+    (let ((file (test-session-test--write directory "warnings.el" ";; -*- lexical-binding: t -*-
+(describe \"w\"
+  (it \"warns\" (display-warning 'probe \"a probe warning\") (expect t :to-be t))
+  (it \"warns with a raw byte\"
+    (display-warning 'probe (string ?A #x3fff80)) (expect t :to-be t))
+  (it \"quits\" (signal 'quit nil))
+  (it \"never runs\" (expect t :to-be t)))
+"))
+          (skips (expand-file-name "skips/" directory))
+          (result (expand-file-name "result.jsonl" directory)))
+      (make-directory skips)
+      ;; As in a session, a caller may run with `debug-on-error' on.
+      (let ((my/test-session-expected-skips-directory skips)
+            (debug-on-error t))
+        (my/test-session-run-files (list file) result))
+      (setq lines (test-session-test--lines result))))
+  (after-all
+    (delete-directory directory t))
+
+  (it "writes a spec's warnings into its line"
+    (expect (alist-get 'warnings (test-session-test--spec lines "w warns"))
+            :to-match "Warning (probe): a probe warning"))
+
+  (it "writes a raw byte as U+FFFD instead of failing the line"
+    (expect (alist-get 'warnings (test-session-test--spec lines "w warns with a raw byte"))
+            :to-match "A�"))
+
+  (it "turns a quit that escapes the specs into a harness-error, then finishes"
+    (expect (mapcar (lambda (line) (alist-get 'type line)) lines)
+            :to-equal '("spec" "spec" "harness-error" "skip-entries" "done"))
+    (let ((stop (seq-find (lambda (line) (equal (alist-get 'type line) "harness-error"))
+                          lines)))
+      (expect (alist-get 'spec stop) :to-equal "w quits")
+      (expect (alist-get 'error stop) :to-equal "Quit"))))
+
 (provide 'test-session-test)
 
 ;;; test-session-test.el ends here

@@ -28,12 +28,20 @@
 ;;   {"type": "spec", "file": F, "name": FULL-NAME,
 ;;    "status": "passed" | "failed" | "pending", "disabled": BOOL,
 ;;    "failure": TEXT | null, "commands": [{"command": C, "keys": K}],
-;;    "skip_entries": [ID]}
+;;    "skip_entries": [ID], "warnings": TEXT | null}
+;;   {"type": "harness-error", "spec": FULL-NAME | null, "error": TEXT}
 ;;   {"type": "skip-entries", "entries": [{"id": ID, "regexp": R,
 ;;    "reason": TEXT, "holds": BOOL | null, "error": TEXT | null}]}
 ;;   {"type": "done", "server_socket": PATH | null, "editor": E,
 ;;    "visual": V, "emacs_socket_name": S, "display": D,
 ;;    "wayland_display": W, "frame_displays": [D]}
+;;
+;; Buttercup prints the warnings a spec logs after the spec, with
+;; `send-string-to-terminal', which signals on a graphical terminal and
+;; ends `buttercup-run' (plan 105).  The reporter takes them into the
+;; spec's line instead, so buttercup has nothing left to print; should
+;; `buttercup-run' signal all the same, a harness-error line names the
+;; last spec started, and the session still reports that it is done.
 ;;
 ;; Expected-skip entries live in `tests/expected-skips/*.el', one file
 ;; per plan.  Each top-level form is (SPEC-REGEXP REASON), where REASON
@@ -44,6 +52,7 @@
 
 ;;; Code:
 
+(require 'cl-lib)
 (require 'seq)
 
 (defvar straight-base-dir)
@@ -53,6 +62,7 @@
 (defvar buttercup-suites)
 (defvar buttercup-color)
 (defvar buttercup-reporter)
+(defvar buttercup-warning-buffer-name)
 (declare-function buttercup-run "buttercup")
 (declare-function buttercup-mark-skipped "buttercup")
 (declare-function buttercup-spec-full-name "buttercup")
@@ -117,9 +127,19 @@ load average is high, as it is while the tests run."
                  my/test-session--idle-timers)))
 
 (defun my/test-session--write (path object)
-  "Append OBJECT to PATH as one line of JSON."
-  (let ((coding-system-for-write 'utf-8-unix))
-    (write-region (concat (json-serialize object) "\n") nil path t 'silent)))
+  "Append OBJECT to PATH as one line of JSON.
+A raw byte, which a process, a server or a warning may pass on, has no
+JSON form: each becomes U+FFFD, so that the line is written all the
+same (plan 105)."
+  (cl-labels ((safe (value)
+                (cond ((stringp value)
+                       (concat (mapcar (lambda (char) (if (> char #x10FFFF) #xFFFD char))
+                                       (string-to-multibyte value))))
+                      ((vectorp value) (vconcat (mapcar #'safe value)))
+                      ((consp value) (cons (safe (car value)) (safe (cdr value))))
+                      (t value))))
+    (let ((coding-system-for-write 'utf-8-unix))
+      (write-region (concat (json-serialize (safe object)) "\n") nil path t 'silent))))
 
 (defun my/test-session--record-command ()
   "Record the command about to run, and its keys, for the running spec.
@@ -183,12 +203,12 @@ Signal an error for a REASON this harness does not know."
      (eq system-type platform))
     (_ (error "Unknown expected-skip reason %S" reason))))
 
-(defun my/test-session-spec-record (spec file entries commands)
+(defun my/test-session-spec-record (spec file entries commands warnings)
   "Return the result line of the finished buttercup SPEC, as an alist.
 FILE is the test file that defined SPEC, or nil; ENTRIES are the
 expected-skip entries of `my/test-session-skip-entries'; COMMANDS are
-the commands SPEC ran, oldest first.  See the commentary for the line
-format."
+the commands SPEC ran, oldest first; WARNINGS is the text of the
+warnings it logged, or nil.  See the commentary for the line format."
   (let ((name (buttercup-spec-full-name spec))
         (status (buttercup-spec-status spec))
         (failure (buttercup-spec-failure-description spec))
@@ -210,7 +230,8 @@ format."
                                (let ((regexp (plist-get entry :regexp)))
                                  (and regexp (string-match-p regexp name)
                                       (plist-get entry :id))))
-                             entries))))))
+                             entries)))
+      (warnings . ,(or warnings :null)))))
 
 (defun my/test-session-entry-record (entry)
   "Return the expected-skip ENTRY evaluated in this session, as an alist.
@@ -288,22 +309,41 @@ format."
       (buttercup-mark-skipped
        (lambda (spec) (equal (buttercup-spec-full-name spec) only))
        t))
-    (let ((buttercup-reporter
-           (lambda (event spec)
-             (pcase event
-               ('spec-started (setq my/test-session--commands nil))
-               ((and 'spec-done
-                     (guard (or (not only)
-                                (equal (buttercup-spec-full-name spec) only))))
-                (my/test-session--write
-                 result-path
-                 (my/test-session-spec-record
-                  spec
-                  (cdr (assq (car (last (buttercup-suite-or-spec-parents spec)))
-                             suite-files))
-                  entries (reverse my/test-session--commands))))))))
-      (let ((my/test-session--commands nil))
-        (buttercup-run t)))
+    (let* ((last-spec nil)
+           (buttercup-reporter
+            (lambda (event spec)
+              (pcase event
+                ('spec-started (setq my/test-session--commands nil
+                                     last-spec (buttercup-spec-full-name spec)))
+                ('spec-done
+                 (let ((warnings
+                        (with-current-buffer (get-buffer-create
+                                              buttercup-warning-buffer-name)
+                          (prog1 (string-trim (buffer-string)) (erase-buffer)))))
+                   (when (or (not only)
+                             (equal (buttercup-spec-full-name spec) only))
+                     (my/test-session--write
+                      result-path
+                      (my/test-session-spec-record
+                       spec
+                       (cdr (assq (car (last (buttercup-suite-or-spec-parents spec)))
+                                  suite-files))
+                       entries (reverse my/test-session--commands)
+                       (and (not (string-empty-p warnings)) warnings))))))))))
+      (condition-case err
+          ;; Buttercup binds `debug-on-error' and its own debugger around
+          ;; each spec and hook; outside them, a caller's t must not send
+          ;; an escape to the ordinary debugger, nor past this handler.
+          (let ((my/test-session--commands nil)
+                (debug-on-error nil))
+            (buttercup-run t))
+        ;; `debug' lets buttercup's own debugger, bound around each spec,
+        ;; take a failing spec first, as it does when nothing handles
+        ;; the error; only what escapes the specs comes here.
+        ((debug error quit)
+         (my/test-session--write
+          result-path `((type . "harness-error") (spec . ,(or last-spec :null))
+                        (error . ,(error-message-string err)))))))
     (my/test-session--write
      result-path
      `((type . "skip-entries")

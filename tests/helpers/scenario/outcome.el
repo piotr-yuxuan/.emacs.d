@@ -19,6 +19,12 @@
 ;;   :before-window  the window selected just before the keys;
 ;;   :errors         the errors the user saw, as condition data;
 ;;   :samples        an alist (NAME . SNAPSHOT) of (:sample NAME) steps.
+;;
+;; An outcome that needs no context and reads only what the user sees
+;; now may also be judged during the keys, by (:idle-until CLAUSE MS):
+;; its file marks it with (put KEYWORD 'my/scenario-during-keys t).
+;; Most outcomes cannot be: they read the context, or what redisplay
+;; drew, which a keyboard macro does not redraw.
 
 ;;; Code:
 

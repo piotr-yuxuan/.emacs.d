@@ -3,7 +3,8 @@
 A session writes JSON lines (see tests/helpers/test-session.el).  They are
 parsed here at the boundary, then judged:
 - a failed spec, a disabled spec (xit, xdescribe), a load error, an
-  unreadable line, or a session that never finished is a problem;
+  unreadable line, a harness error, or a session that never finished is
+  a problem; the warnings a spec logged are not;
 - a skipped spec is expected only when an expected-skip entry matches
   it and the entry's reason holds in that session;
 - an entry whose reason holds is stale when specs it matches ran and
@@ -40,8 +41,10 @@ SCHEMAS = {
         "failure": OPTIONAL_TEXT,
         "commands": list,
         "skip_entries": list,
+        "warnings": OPTIONAL_TEXT,
     },
     "load-error": {"file": str, "error": str},
+    "harness-error": {"spec": OPTIONAL_TEXT, "error": str},
     "skip-entries": {"entries": list},
     "done": {
         "server_socket": OPTIONAL_TEXT,
@@ -147,6 +150,8 @@ class Verdict:
     matched: set[str]  # ids of the expected-skip entries some spec matched
     entries: dict[str, Record]  # id -> entry, as the session evaluated it
     statuses: dict[str, str]  # spec name -> status
+    warnings: list[str] = dataclasses.field(default_factory=list)  # spec: text
+    stopped: bool = False  # the harness stopped before the end of its specs
 
 
 def judge(records: dict[str, list[Record]], files: list[str], socket: str,
@@ -159,6 +164,9 @@ def judge(records: dict[str, list[Record]], files: list[str], socket: str,
     """
     load_errors = records["load-error"]
     problems = [f"{r['file']}: failed to load: {r['error']}" for r in load_errors]
+    stops = records["harness-error"]
+    problems += [f"the harness stopped after {r['spec'] or 'no spec'}: {r['error']}"
+                 for r in stops]
     entries = {e["id"]: e for r in records["skip-entries"] for e in r["entries"]}
     holding = {i for i, e in entries.items() if e["holds"]}
     specs = records["spec"]
@@ -184,7 +192,9 @@ def judge(records: dict[str, list[Record]], files: list[str], socket: str,
     passed = sum(s["status"] == "passed" for s in specs)
     matched = {i for s in specs for i in s["skip_entries"]}
     statuses = {s["name"]: s["status"] for s in specs}
-    return Verdict(problems, passed, expected, matched, entries, statuses)
+    warnings = [f"{s['name']}: {s['warnings']}" for s in specs if s["warnings"]]
+    return Verdict(problems, passed, expected, matched, entries, statuses,
+                   warnings, stopped=bool(stops))
 
 
 def registry_problems(verdicts: list[Verdict], *, complete: bool) -> list[str]:
@@ -192,13 +202,16 @@ def registry_problems(verdicts: list[Verdict], *, complete: bool) -> list[str]:
 
     An entry that cannot be read or evaluated is a problem.  When the
     run is COMPLETE, every test file ran, so an entry that matched no
-    spec at all is stale too.
+    spec at all is stale too, unless a session stopped before the end
+    of its specs: that session already fails, and its specs never ran.
+    An entry cannot be traced to its session, so a stopped session
+    hides the stale entries of the others too, in a run that fails.
     """
     entries = {i: e for v in verdicts for i, e in v.entries.items()}
     matched = set().union(*(v.matched for v in verdicts))
     problems = [f"expected-skip entry {i}: {e['error']}"
                 for i, e in sorted(entries.items()) if e["error"]]
-    if complete:
+    if complete and not any(v.stopped for v in verdicts):
         problems += [f"expected-skip entry {i} is stale: it matches no spec"
                      for i in sorted(entries.keys() - matched)
                      if not entries[i]["error"]]

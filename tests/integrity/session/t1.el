@@ -79,6 +79,12 @@ A document names the keymaps of the modes it is about on a
                            (my/t1-error-lines (my/t1-buffer-lines (messages-buffer))))
                    entries))
 
+    (it "compiles nothing just in time, as the runner asks (plan 102)"
+      ;; early-init.el turns JIT native compilation on, the runner's
+      ;; early-init turns it off after it, and nothing in the rest of
+      ;; startup may turn it on again.
+      (expect (bound-and-true-p native-comp-jit-compilation) :to-be nil))
+
     (it "has not loaded the features meant to load on first use"
       (my/t1-judge 'loaded-at-startup
                    (my/t1-loaded-features my/t1-lazy-features features) entries))

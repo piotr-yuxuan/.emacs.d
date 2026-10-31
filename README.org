@@ -5212,8 +5212,10 @@ is on =PATH=, e.g. via =home/base.nix=).  On a NixOS machine,
 =local.el= names the machine's flake in =my/nixd-flake=, and its
 =nixosConfigurations= entry in =my/nixd-flake-host= when that is not
 the host name.  nixd then completes and documents every =services.…=
-and =programs.…= option of that system and of the login user's Home
-Manager configuration.
+and =programs.…= option of that system.  The flake must be a git
+checkout: nixd reads it as a =git+file:= flake, so Nix copies to the
+store only the files git tracks.  A plain path would copy the whole directory, untracked
+work data included, each time nixd starts.
 
 =alejandra= formats on save via apheleia (see *Formatting*).  =C-c n r=
 opens a =nix repl= session for interactive introspection.
@@ -5241,7 +5243,7 @@ reducing visual noise.
   (nix-prettify-global-mode 1))
 
 (defcustom my/nixd-flake nil
-  "Directory of the NixOS flake whose options nixd completes, or nil.
+  "Git checkout of the NixOS flake whose options nixd completes, or nil.
 Set it in `local.el'."
   :type '(choice (const :tag "None" nil) directory)
   :group 'my)
@@ -5258,12 +5260,13 @@ Set it in `local.el'."
         lsp-nix-nixd-nixpkgs-expr "import <nixpkgs> {}"
         lsp-nix-nixd-formatting-command ["alejandra"])
   (when my/nixd-flake
-    (let ((system (format "(builtins.getFlake %S).nixosConfigurations.%s"
-                          (expand-file-name my/nixd-flake) my/nixd-flake-host)))
-      (setq lsp-nix-nixd-nixos-options-expr (concat system ".options")
-            lsp-nix-nixd-home-manager-options-expr
-            (format "%s.config.home-manager.users.%s.options"
-                    system (user-login-name))))))
+    ;; Nix rejects a space in a git+file reference: percent-encode the path.
+    (require 'url-util)
+    (setq lsp-nix-nixd-nixos-options-expr
+          (format "(builtins.getFlake \"git+file://%s\").nixosConfigurations.%s.options"
+                  (url-hexify-string (expand-file-name my/nixd-flake)
+                                     url-path-allowed-chars)
+                  my/nixd-flake-host))))
 #+END_SRC
 
 *** Web tooling: Tailwind, HTMX, Alpine.JS

@@ -4,7 +4,7 @@
 ;; loads the user's local.el, then loads lsp-nix.  The flake need not
 ;; exist: nixd evaluates the expressions, Emacs only builds them.
 
-(setq my/nixd-flake "/flakes/fleet/"
+(setq my/nixd-flake "/flakes/my fleet/"
       my/nixd-flake-host "fixture-host")
 
 ;;; local.el ends here

@@ -21,7 +21,7 @@ All but the last belong to the customization group =my=:
 | =my/org-dashboard-directory=          | =org-dashboard/= of =~/.emacs.d=               | the dashboard's web files                                                                 |
 | =my/org-dashboard-data-file=          | =tmp/org-dashboard/tasks.json= of =~/.emacs.d= | where =M-x my/org-dashboard-export= writes the tasks                                      |
 | =my/vellum-directory=                 | nil                                            | directory of the vellum LaTeX class; nil exports with Org's own classes                   |
-| =my/nixd-flake=                       | nil                                            | NixOS flake whose options nixd completes in Nix buffers                                   |
+| =my/nixd-flake=                       | nil                                            | git checkout of the NixOS flake whose options nixd completes in Nix buffers               |
 | =my/nixd-flake-host=                  | the host name                                  | the flake's =nixosConfigurations= entry for this machine                                  |
 | =my/treesit-fold-mode-language-alist= | Emacs Lisp, Clojure, Nix, shell and others     | tree-sitter language of each major mode that folds without a =-ts-mode=                   |
 

@@ -110,6 +110,17 @@ and an idle timer at 5 s; each marks the prompt when it fires."
  :then ((:sampled "waited" :minibuffer "\\`Probe: x\\[timer\\]\\[idle\\]\\'")
         (:buffer-text "x[timer][idle]")))
 
+;; The idle timer at 0.2 s marks the prompt [idle] only if the step
+;; really idles; the one at 5 s marks it [late] only if it waits on
+;; once its outcome holds.
+(scenario
+ :describe "SL-IDLE-UNTIL: waiting ends as soon as the outcome holds"
+ :given ((:name "prompt" :file "notes.txt"))
+ :when ((:keys "C-c 9 r") (:type "x")
+        (:idle-until (:minibuffer-matches "\\[idle\\]") 30000)
+        (:keys "<return>"))
+ :then ((:buffer-text "x[timer][idle]")))
+
 (scenario
  :describe "SL-NO-COMMAND: a probe between two keys runs no command"
  :given ((:name "repeat" :file "notes.txt"))
@@ -221,7 +232,17 @@ the row failed: Refusing to die")
     (expect (scenario-language-test--failure
              '(:name "r" :file "notes.txt" :text "a-!-b") '((:open))
              '((:line-at-point "\\`b\\'")))
-            :to-equal "(:line-at-point \"\\\\`b\\\\'\"): line 1 at point is \"ab\"")))
+            :to-equal "(:line-at-point \"\\\\`b\\\\'\"): line 1 at point is \"ab\""))
+
+  (it "when an (:idle-until ...) outcome does not hold in time, naming it"
+    (expect (scenario-language-test--failure
+             '(:name "r" :file "notes.txt")
+             '((:keys "C-c 9 r") (:type "x")
+               (:idle-until (:minibuffer-matches "\\[late\\]") 400)
+               (:keys "<return>"))
+             '((:buffer-text "")))
+            :to-match
+            "(:idle-until (:minibuffer-matches .*) 400): the minibuffer shows")))
 
 (provide 'l1-scenario-language)
 

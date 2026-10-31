@@ -23,14 +23,6 @@
 ;;; Code:
 
 (require 'scenario)
-(require 'warnings)
-
-;; The first LaTeX, Nix and Rust buffers of a session compile AUCTeX,
-;; nix-mode and rust-mode to native code in the background.  Buttercup
-;; prints the compiler's warnings with `send-string-to-terminal', which
-;; fails on a graphical terminal and ends the session, as
-;; tests/pty/pty-session.el explains; they say nothing about keys.
-(add-to-list 'warning-suppress-log-types '(native-compiler))
 
 (scenario
  :describe "CF-12: C-<right> moves forward a word outside Lisp, changing nothing"

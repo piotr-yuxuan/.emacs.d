@@ -262,9 +262,12 @@ Header comments at the top of a scenario file:
   `(:lsp-root ".")` (`tests/helpers/scenario/system.el`).
 - `:when` is one key sequence (`tests/helpers/keystrokes.el`):
   `(:keys "C-x b")` with GUI key names (`<return>`, not `RET`),
-  `(:type "text")`, `(:open)`, `(:idle MS)`, `(:sample NAME)`, and
-  `(:redisplay-while-typing)` (Emacs redisplays with the next key
-  pending, so jit-lock defers; graphical files only).  A
+  `(:type "text")`, `(:open)`, `(:idle MS)`, `(:idle-until OUTCOME
+  MS)` (waits until an outcome marked as usable during the keys, such
+  as `(:minibuffer-matches REGEXP)`, holds; fails after MS),
+  `(:sample NAME)`, and `(:redisplay-while-typing)` (Emacs redisplays
+  with the next key pending, so jit-lock defers; graphical files
+  only).  A
   prompt receives the keys that follow it; the keys must not end
   inside a prompt.  An error, or a quit outside a prompt, ends the
   keys: the step that raises it must be the last one, probes such as

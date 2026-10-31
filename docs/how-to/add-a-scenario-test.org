@@ -43,6 +43,13 @@ the file headers.
    - =:when= lists the keys, as =C-h k= writes them but with the
      graphical name of the Return key, as in =(:keys "C-x b <return>")=.
      =(:type "text")= types text.
+   - When the keys must wait for a program, such as the matches of a
+     search, wait on what the user waits for, with
+     =(:idle-until (:minibuffer-matches "REGEXP") 10000)=, rather than
+     for a fixed time with =(:idle 2000)=: a busy machine answers late,
+     and the wait ends as soon as the answer shows.  Keep =(:idle MS)=
+     for a pause the behaviour itself needs, such as the delay of a
+     timer.
    - =:then= lists the outcomes the user must see.
 3. Pick the outcomes from the vocabulary.  Print it from the root of
    the checkout with:

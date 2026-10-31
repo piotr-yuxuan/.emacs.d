@@ -24,11 +24,17 @@ names of =tests/run fast= and =tests/run full=.
 
 * Exit status
 
-| Status | Meaning                                                                                       |
-|--------+-----------------------------------------------------------------------------------------------|
-|      0 | everything passed                                                                             |
-|      1 | a failure, a load error, an unexpected skip, a stale expected-skip entry or a missed deadline |
-|      2 | a usage error, such as no Xvfb without ~EMACS_TEST_GUI=0~                                     |
+| Status | Meaning                                                                                                        |
+|--------+----------------------------------------------------------------------------------------------------------------|
+|      0 | everything passed                                                                                              |
+|      1 | a failure, a load error, an unexpected skip, a stale expected-skip entry, a harness error or a missed deadline |
+|      2 | a usage error, such as no Xvfb without ~EMACS_TEST_GUI=0~                                                      |
+
+A run starts with a =note= line that names its pools: how many
+sessions at a time, how many L3 files, on how many usable CPUs (those
+=taskset= leaves it).  Under a session's line, a =warning= line gives
+each warning a spec logged: recorded, not judged.  A =harness error=
+is an error that escaped the specs; the session still reports its end.
 
 * Tiers
 
@@ -44,7 +50,10 @@ names of =tests/run fast= and =tests/run full=.
 Each scenario file runs in its own fresh =emacs --fg-daemon=, in a
 client frame on a private Xvfb display: test frames never reach your
 screen.  The logic tests share one batch session.  Files run in
-parallel, L3 files in a smaller pool.
+parallel, L3 files in a smaller pool.  A session loads the native code
+of =EMACS_LIVE_DIR= where it exists and byte code elsewhere: it
+compiles nothing just in time, so the cold cache of a new Emacs build
+slows no run.
 
 * Scenario file headers
 
@@ -56,13 +65,14 @@ parallel, L3 files in a smaller pool.
 
 * Environment variables
 
-| Variable              | Effect                                                                                |
-|-----------------------+---------------------------------------------------------------------------------------|
-| ~EMACS_TEST_GUI=0~    | no graphical frame; graphic-only files become expected skips.  Needed on macOS        |
-| =EMACS_LIVE_DIR=      | where packages, native code and grammars are read, read-only; =~/.emacs.d= by default |
-| ~UPDATE_GOLDEN=1~     | the golden tests approve what they see, rewriting =tests/golden/=                     |
-| ~PTY_MATRIX_GAPS=1~   | also runs the terminal scenarios of known gaps                                        |
-| ~PTY_MATRIX_TIMING=1~ | also runs the terminal throughput timings; for an idle machine                        |
+| Variable                   | Effect                                                                                 |
+|----------------------------+----------------------------------------------------------------------------------------|
+| ~EMACS_TEST_GUI=0~         | no graphical frame; graphic-only files become expected skips.  Needed on macOS         |
+| =EMACS_LIVE_DIR=           | where packages, native code and grammars are read, read-only; =~/.emacs.d= by default  |
+| ~UPDATE_GOLDEN=1~          | the golden tests approve what they see, rewriting =tests/golden/=                      |
+| ~PTY_MATRIX_GAPS=1~        | also runs the terminal scenarios of known gaps                                         |
+| ~PTY_MATRIX_TIMING=1~      | also runs the terminal throughput timings; for an idle machine                         |
+| ~SCENARIO_IDLE_UNTIL_MS=1~ | bounds every =(:idle-until ...)= at 1 ms: each must then fail, or it waits for nothing |
 
 * Files
 
@@ -91,3 +101,34 @@ its path, with =messages.txt=, =results.jsonl= and =emacs.log= inside.
   download or build them.
 - git and ripgrep; the L3 files also use the language servers of
   [[file:dependencies.org][the dependencies]], and skip when one is missing.
+
+* Continuous integration
+
+The public repository runs two workflows, which share the steps of
+=.github/workflows/suite.yml=:
+
+| Workflow                     | When                                    | Runs                                                     |
+|------------------------------+-----------------------------------------+----------------------------------------------------------|
+| =.github/workflows/ci.yml=   | every push and pull request             | =tests/run static=, then =tests/run fast=                |
+| =.github/workflows/full.yml= | every push, on demand, Monday 05:00 UTC | =tests/run static=, =tests/run full=, the session checks |
+
+Each runs four jobs:
+
+| System              | Emacs                                     | Graphical frames | Fails the run |
+|---------------------+-------------------------------------------+------------------+---------------|
+| Linux, Ubuntu 24.04 | GNU Emacs 31.1 (pgtk) from nixpkgs        | on Xvfb          | yes           |
+| Linux, Ubuntu 24.04 | neomacs, its latest release               | none             | no            |
+| macOS 15            | GNU Emacs, the cask of the Mac's Brewfile | none             | yes           |
+| macOS 15            | neomacs, its latest cask                  | none             | no            |
+
+- The programs besides Emacs come from the flake of =.github/ci=,
+  whose nixpkgs is that of the NixOS machine, moved by hand; it leaves
+  out zig, so gterm's scenarios skip.
+- Before the tests, each job installs the packages from the lock file,
+  checks their pins, links the flake's tree-sitter grammars into the
+  checkout, builds jinx's module, and checks that a session finds the
+  flake's programs first on =PATH=.
+- A neomacs job measures how far neomacs gets: it never fails the run,
+  and its summary gives the last line of each =tests/run=.
+- GitHub stops the schedule of a public repository after 60 days
+  without a push.

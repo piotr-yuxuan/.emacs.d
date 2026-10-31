@@ -14,6 +14,11 @@
 ;;   (:type "text")    printable characters, one event each;
 ;;   (:open)           nothing: the row only opens its entry buffer;
 ;;   (:idle MS)        the user waits MS milliseconds;
+;;   (:idle-until OUTCOME MS)
+;;                     the user waits until OUTCOME, a clause of an
+;;                     outcome marked as usable during the keys, holds;
+;;                     the scenario fails when MS milliseconds pass
+;;                     first;
 ;;   (:redisplay-while-typing)
 ;;                     Emacs redisplays while the user's next key is
 ;;                     already pending, as when the user types fast:
@@ -25,7 +30,8 @@
 ;; Steps are data and are validated when the scenario expands.  There
 ;; is no evaluation escape.
 ;;
-;; `:idle', `:redisplay-while-typing' and `:sample' are probes: each
+;; `:idle', `:idle-until', `:redisplay-while-typing' and `:sample' are
+;; probes: each
 ;; appends the private event `scenario-probe', which
 ;; `key-translation-map' translates to no key at all by calling
 ;; `my/scenario-probe'.  A probe therefore runs while
@@ -54,6 +60,7 @@
 
 (require 'cl-lib)
 (require 'scenario/display)
+(require 'scenario/outcome)
 
 (defconst my/scenario-probe-event 'scenario-probe
   "The event that runs the next pending probe of the keys being pressed.")
@@ -89,6 +96,17 @@ press other keys with :keys" text))
           (unless (and (natnump ms) (<= 1 ms 60000))
             (error "Scenario step (:idle %S): milliseconds from 1 to 60000" ms))
           (cons (vector my/scenario-probe-event) (list :idle ms))))
+    (:idle-until
+     . ,(lambda (clause ms)
+          "Wait as (:idle MS) does, until CLAUSE holds; see `my/scenario-idle-until'."
+          (my/scenario-check-clause clause)
+          (unless (get (car clause) 'my/scenario-during-keys)
+            (error "Scenario step (:idle-until %S %S): %S cannot be judged \
+during the keys" clause ms (car clause)))
+          (unless (and (natnump ms) (<= 1 ms 60000))
+            (error "Scenario step (:idle-until %S %S): milliseconds from 1 to 60000"
+                   clause ms))
+          (cons (vector my/scenario-probe-event) (list :idle-until clause ms))))
     (:redisplay-while-typing
      . ,(lambda ()
           "Redisplay while the next key is pending, as when the user types fast."
@@ -169,6 +187,32 @@ runs idle timers."
           (timer-event-handler due))))
     satisfied))
 
+(defvar my/scenario-idle-until-ms
+  (let ((ms (string-to-number (or (getenv "SCENARIO_IDLE_UNTIL_MS") ""))))
+    (and (natnump ms) (> ms 0) ms))
+  "When a number, the bound in milliseconds of every (:idle-until ...).
+SCENARIO_IDLE_UNTIL_MS=1 shows that each such step waits for an
+outcome that does not hold yet: every one of them must then fail.")
+
+(defun my/scenario-idle-until (clause ms)
+  "Wait as `my/scenario-idle' does until the outcome CLAUSE holds.
+Judge CLAUSE at most ten times a second, with no context: only
+outcomes marked as usable during the keys may be given.  When MS
+milliseconds, or `my/scenario-idle-until-ms', pass first, record an
+error that names CLAUSE and what it found."
+  (let* ((bound (or my/scenario-idle-until-ms ms))
+         (next 0.0)
+         (holds (lambda ()
+                  (when (>= (float-time) next)
+                    (setq next (+ (float-time) 0.1))
+                    (null (my/scenario-outcome-verdict clause nil))))))
+    ;; The last poll may be up to 0.1 s old: judge once more at the bound.
+    (unless (my/scenario-idle bound holds)
+      (when-let* ((verdict (my/scenario-outcome-verdict clause nil)))
+        (my/scenario--record-error
+         `(error ,(format "(:idle-until %S %d): %s" clause bound verdict))
+         "" nil)))))
+
 (defun my/scenario--record-error (data context caller)
   "Record DATA as an error the user saw, and display it.
 CONTEXT and CALLER are as for `command-error-function'.  When the
@@ -194,6 +238,7 @@ Bound in `key-translation-map', which passes the PROMPT of the key
 being read."
   (pcase (pop my/scenario--probes)
     (`(:idle ,ms) (my/scenario-idle ms))
+    (`(:idle-until ,clause ,ms) (my/scenario-idle-until clause ms))
     ('(:redisplay-while-typing)
      (unless (display-graphic-p)
        (error "(:redisplay-while-typing) needs a graphical frame: declare \

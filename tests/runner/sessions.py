@@ -11,9 +11,10 @@ Each session owns a fresh directory:
 
 Packages, native code and tree-sitter grammars are read from the live
 installation (EMACS_LIVE_DIR, ~/.emacs.d by default), with straight.el
-in safe mode, so nothing there is written.  The real HOME is kept: L3
-needs ~/.m2 and the login shell's PATH.  Git reads only
-tests/runner/gitconfig, and no GIT_* variable of the caller.
+in safe mode, so nothing there is written; a session compiles nothing
+just in time.  The real HOME is kept: L3 needs ~/.m2 and the login
+shell's PATH.  Git reads only tests/runner/gitconfig, and no GIT_*
+variable of the caller.
 """
 
 from __future__ import annotations
@@ -85,6 +86,11 @@ EARLY_INIT = """\
            (kill-emacs 1)))))
 (load {session_el} nil t t)
 (load {early_init} nil t t)
+;; The configuration compiles each package to native code as it loads
+;; it, here into the session's cache, deleted with the session: with a
+;; cold live cache, every session compiled most packages again.  Load
+;; the live native code where it exists, byte code elsewhere.
+(setq native-comp-jit-compilation nil)
 """
 
 INIT = """\

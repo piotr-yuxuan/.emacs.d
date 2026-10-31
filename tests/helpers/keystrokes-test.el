@@ -13,6 +13,7 @@
 
 (require 'buttercup)
 (require 'keystrokes)
+(require 'outcomes)
 
 (describe "The :when grammar"
 
@@ -74,6 +75,33 @@
 
   (it "rejects two samples with one name"
     (expect (my/scenario-compile-steps '((:sample "s") (:keys "a") (:sample "s")))
+            :to-throw 'error)))
+
+(describe "The :idle-until step (plan 105)"
+
+  (it "compiles to a probe that carries its outcome and its bound"
+    (expect (my/scenario-compile-steps
+             '((:idle-until (:minibuffer-matches "x") 500)))
+            :to-equal
+            '([scenario-probe scenario-probe]
+              (:idle-until (:minibuffer-matches "x") 500) (:end))))
+
+  (it "accepts only an outcome marked as usable during the keys"
+    (expect (my/scenario-compile-steps '((:idle-until (:buffer-text "x") 500)))
+            :to-throw 'error))
+
+  (it "rejects an unknown outcome, a wrong clause and a wrong bound"
+    (expect (my/scenario-compile-steps '((:idle-until (:no-such-outcome) 500)))
+            :to-throw 'error)
+    (expect (my/scenario-compile-steps '((:idle-until (:minibuffer-matches) 500)))
+            :to-throw 'error)
+    (expect (my/scenario-compile-steps '((:idle-until (:minibuffer-matches "x") 0)))
+            :to-throw 'error)
+    (expect (my/scenario-compile-steps '((:idle-until (:minibuffer-matches "x"))))
+            :to-throw 'error)
+    (expect (my/scenario-compile-steps '((:idle-until (:minibuffer-matches "x") 70000)))
+            :to-throw 'error)
+    (expect (my/scenario-compile-steps '((:idle-until (:minibuffer-matches "x") 1.5)))
             :to-throw 'error)))
 
 (provide 'keystrokes-test)

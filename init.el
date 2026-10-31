@@ -2813,7 +2813,7 @@ buffer-locally, leave the override `nil' so `indent-bars'' built-in
   (nix-prettify-global-mode 1))
 
 (defcustom my/nixd-flake nil
-  "Directory of the NixOS flake whose options nixd completes, or nil.
+  "Git checkout of the NixOS flake whose options nixd completes, or nil.
 Set it in `local.el'."
   :type '(choice (const :tag "None" nil) directory)
   :group 'my)
@@ -2830,12 +2830,13 @@ Set it in `local.el'."
         lsp-nix-nixd-nixpkgs-expr "import <nixpkgs> {}"
         lsp-nix-nixd-formatting-command ["alejandra"])
   (when my/nixd-flake
-    (let ((system (format "(builtins.getFlake %S).nixosConfigurations.%s"
-                          (expand-file-name my/nixd-flake) my/nixd-flake-host)))
-      (setq lsp-nix-nixd-nixos-options-expr (concat system ".options")
-            lsp-nix-nixd-home-manager-options-expr
-            (format "%s.config.home-manager.users.%s.options"
-                    system (user-login-name))))))
+    ;; Nix rejects a space in a git+file reference: percent-encode the path.
+    (require 'url-util)
+    (setq lsp-nix-nixd-nixos-options-expr
+          (format "(builtins.getFlake \"git+file://%s\").nixosConfigurations.%s.options"
+                  (url-hexify-string (expand-file-name my/nixd-flake)
+                                     url-path-allowed-chars)
+                  my/nixd-flake-host))))
 
 (use-package lsp-tailwindcss
   :after lsp-mode

@@ -1,0 +1,38 @@
+# Plan 104, step 1: what the Cocoa frames of an Emacs daemon are like
+# on the hosted macOS runner.  Temporary: plan 104 removes it once its
+# decisions rest on what it printed.  Run it again from the Actions
+# tab, without an export.
+name: macOS frame probe
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Install the Emacs of the Brewfile
+        run: brew install --cask jimeh/emacs-builds/emacs-app
+
+      - name: Probe two daemons' frames
+        shell: bash -eo pipefail {0}
+        run: python3 .github/macos-probe.py | tee "$RUNNER_TEMP/probe.jsonl"
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo '### macOS frame probe'
+            echo '```'
+            cat "$RUNNER_TEMP/probe.jsonl" 2>/dev/null || echo 'no output'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

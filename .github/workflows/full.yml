@@ -1,0 +1,26 @@
+# The whole suite: the steps of suite.yml with tests/run full (the L3
+# scenarios and the isolation pass besides the fast tiers), then the
+# session checks.  It runs on every push, on demand, and every Monday,
+# which catches a new build of the macOS cask: GitHub stops the
+# schedule of a public repository after 60 days without a push.
+name: Full suite
+
+on:
+  push:
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  full:
+    uses: ./.github/workflows/suite.yml
+    with:
+      profile: full
+      timeout-minutes: 150
