@@ -171,6 +171,74 @@ class SummarizeTest(unittest.TestCase):
         self.assertIn("full: 1 sessions, 33 run alone,", output)
 
 
+class FlushedOutput(io.StringIO):
+    """An output that keeps what a kill at this moment would leave behind."""
+
+    flushed = ""
+
+    def flush(self) -> None:
+        """Keep what has been written so far."""
+        self.flushed = self.getvalue()
+
+
+class PythonTestsTest(unittest.TestCase):
+    """Plan 108: a run killed by its limit keeps the self-tests' text."""
+
+    def run_main(self, run_tests: mock.Mock) -> tuple[int, str]:
+        """Run main over a plan of one self-test module, with RUN_TESTS for it.
+
+        Return its status and what had reached the output, flushed, when
+        the sessions were about to start.
+        """
+        output = FlushedOutput()
+        seen = []
+
+        def start_sessions(*_: object) -> list[object]:
+            seen.append(output.flushed)
+            return []
+
+        with tempfile.TemporaryDirectory() as live, \
+                contextlib.redirect_stdout(output), \
+                mock.patch.object(sessions, "LIVE", Path(live)), \
+                mock.patch.object(sessions, "emacs_features", return_value=[]), \
+                mock.patch.object(sessions, "choose_display", return_value=False), \
+                mock.patch.object(run, "plan", return_value=run.Plan(
+                    [Path("test_example.py")], [], [], [], [])), \
+                mock.patch.object(run.subprocess, "run", run_tests), \
+                mock.patch.object(run.tempfile, "mkdtemp", return_value=live), \
+                mock.patch.object(run, "execute", start_sessions):
+            bootstrap = Path(live, "straight/repos/straight.el/bootstrap.el")
+            bootstrap.parent.mkdir(parents=True)
+            bootstrap.touch()
+            status = run.main(["fast"])
+        self.assertEqual(len(seen), 1)
+        return status, seen[0]
+
+    def test_a_failure_is_in_the_output_before_any_session_starts(self) -> None:
+        """Its FAIL line, then its text."""
+        status, seen = self.run_main(mock.Mock(return_value=subprocess.CompletedProcess(
+            [], 1, "", "FAIL: test_something\nwhy it failed\n")))
+        self.assertEqual(status, 1)
+        self.assertIn("FAIL  runner self-tests (Python)\n"
+                      "FAIL: test_something\nwhy it failed\n", seen)
+
+    def test_a_timeout_names_the_limit_and_the_test_it_stopped_in(self) -> None:
+        """What the self-tests wrote before their limit is in the output too."""
+        status, seen = self.run_main(mock.Mock(side_effect=subprocess.TimeoutExpired(
+            [], run.PYTHON_SECONDS, stderr=b"test_something ... ")))
+        self.assertEqual(status, 1)
+        self.assertIn(f"exceeded {run.PYTHON_SECONDS} s", seen)
+        self.assertIn("test_something ... ", seen)
+
+    def test_a_pass_prints_one_line_and_fails_nothing(self) -> None:
+        """No text, and no problem for the summary."""
+        status, seen = self.run_main(mock.Mock(return_value=subprocess.CompletedProcess(
+            [], 0, "", "test_something ... ok\n")))
+        self.assertEqual(status, 0)
+        self.assertIn("ok    runner self-tests (Python)\n", seen)
+        self.assertNotIn("test_something", seen)
+
+
 TASKSET = shutil.which("taskset")
 RUNNER_CPUS = 4  # a hosted Ubuntu runner
 

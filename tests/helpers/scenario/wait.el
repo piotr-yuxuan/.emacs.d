@@ -31,6 +31,7 @@
 (require 'keystrokes)
 
 (declare-function lsp-workspaces "lsp-mode")
+(declare-function lsp--progress-status "lsp-mode")
 (declare-function lsp--workspace-server-id "lsp-mode")
 (declare-function lsp--workspace-status "lsp-mode")
 (declare-function lsp--workspace-work-done-tokens "lsp-mode")
@@ -41,9 +42,11 @@
     (ruff "ruff"))
   "Language servers a scenario may wait for, with the executables they need.")
 
-(defvar my/scenario-wait-seconds 120
+(defvar my/scenario-wait-seconds 200
   "Seconds a scenario waits, in all, for its `:wait-for' conditions.
-Cold language servers can take a minute to index a project.")
+Cold language servers can take a minute to index a project, and
+clojure-lsp's first start on a fresh macOS runner took over two.  This
+leaves the file's next rows room within the runner's 300 s for L3.")
 
 (defun my/scenario-wait-check (conditions)
   "Signal an error unless CONDITIONS is a valid `:wait-for' list."
@@ -96,8 +99,9 @@ Signal an error when they do not all hold within
                                               (lsp--workspace-work-done-tokens
                                                workspace)))))
                                (lsp-workspaces))))))))
-        (error "Scenario :wait-for %S did not hold within %s seconds"
-               condition my/scenario-wait-seconds)))))
+        (error "Scenario :wait-for %S did not hold within %s seconds; at work: %s"
+               condition my/scenario-wait-seconds
+               (and (fboundp 'lsp--progress-status) (lsp--progress-status)))))))
 
 (provide 'scenario/wait)
 

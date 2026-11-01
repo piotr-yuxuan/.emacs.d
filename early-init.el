@@ -37,7 +37,9 @@ during normal emacs operations.")
 ;; Native code goes under the directory Emacs was started on: Emacs
 ;; keeps ~/.emacs.d/eln-cache/ even under --init-directory, so a trial
 ;; or a setup of another clone would write into this one's (plan 107).
-(when (fboundp 'startup-redirect-eln-cache)
+;; The feature, not the function: an Emacs without native code may
+;; define the function, which then reads a variable it lacks.
+(when (featurep 'native-compile)
   (startup-redirect-eln-cache
    (expand-file-name "eln-cache/" user-emacs-directory)))
 

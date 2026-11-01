@@ -138,15 +138,26 @@ def run_static(pattern: str) -> int:
 
 
 def run_python_tests(paths: list[Path]) -> list[str]:
-    """Run the runner's own unittest modules PATHS; return their problems."""
+    """Run the runner's unittest modules PATHS; print the result; return the problems.
+
+    Their text goes out at once, flushed: a run that its limit kills never
+    reaches the summary.  Verbose, so that a run stopped here names the
+    test it stopped in.
+    """
     modules = [f"runner.{path.stem}" for path in paths]
     try:
         result = subprocess.run(
-            [sys.executable, "-m", "unittest", "-q", *modules], cwd=TESTS,
+            [sys.executable, "-m", "unittest", "-v", *modules], cwd=TESTS,
             capture_output=True, text=True, timeout=PYTHON_SECONDS, check=False)
-    except subprocess.TimeoutExpired:
-        return [f"the Python self-tests exceeded {PYTHON_SECONDS} s"]
-    return [result.stderr.strip()] if result.returncode else []
+    except subprocess.TimeoutExpired as error:
+        # Bytes whatever `text' says: subprocess gives them as they came.
+        written = (error.stderr or b"").decode(errors="replace")
+        text = f"exceeded {PYTHON_SECONDS} s, in:\n{written}\n"
+    else:
+        text = f"{result.stderr.strip()}\n" if result.returncode else ""
+    sys.stdout.write(f"{'FAIL' if text else 'ok':5} runner self-tests (Python)\n{text}")
+    sys.stdout.flush()
+    return ["the Python self-tests: see the start of this output"] if text else []
 
 
 @dataclasses.dataclass(frozen=True)
@@ -279,9 +290,7 @@ def main(arguments: list[str]) -> int:
     sys.stdout.write(f"note  {WIDE_POOL} sessions at a time, {NARROW_POOL} for L3"
                      f" files, on {CPUS} usable CPUs\n")
     if selected.python_tests:
-        found = run_python_tests(selected.python_tests)
-        sys.stdout.write(f"{'FAIL' if found else 'ok':5} runner self-tests (Python)\n")
-        problems += found
+        problems += run_python_tests(selected.python_tests)
     root = Path(tempfile.mkdtemp(prefix="emacs-test-"))
     reaper = sessions.Reaper()
     logic = functools.partial(sessions.run_logic, selected.logic, root / "logic",

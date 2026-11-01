@@ -119,6 +119,10 @@ The public repository runs two workflows, which share the steps of
 | =.github/workflows/ci.yml=   | every push and pull request             | =tests/run static=, then =tests/run fast=                |
 | =.github/workflows/full.yml= | every push, on demand, Monday 05:00 UTC | =tests/run static=, =tests/run full=, the session checks |
 
+=full.yml='s GNU Emacs jobs run =l3-clojure-lsp-format.el= once before the
+suite: a machine's first clojure-lsp analyses the JDK's sources into its
+user's cache.  That run never fails the job.
+
 Each runs four jobs:
 
 | System              | Emacs                                     | Graphical frames | Fails the run |
@@ -144,6 +148,8 @@ Each runs four jobs:
   finds the flake's programs first on =PATH=.
 - A neomacs job measures how far neomacs gets: each of its steps
   continues on error, so the job ends green, and its summary gives the
-  outcome of each step and the last line of each =tests/run=.
+  outcome of each step and the last line of each =tests/run=.  Linux's
+  also builds jinx's module outside the Nix shell, with the system's
+  compiler and enchant, and prints its error and =ldd=.
 - GitHub stops the schedule of a public repository after 60 days
   without a push.

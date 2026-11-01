@@ -153,6 +153,33 @@ jobs:
             straight/build-cache.el
           key: ${{ steps.builds.outputs.cache-primary-key }}
 
+      # neomacs's package comes from outside the Nix shell, so its module
+      # gets the system's compiler and enchant here, where the modules step
+      # below, and then the sessions, find the file.  jinx loads any file it
+      # finds, the restored cache's or a session's: remove it first.
+      - name: Build jinx's module with neomacs and the system's compiler
+        id: jinx
+        if: matrix.system == 'linux' && matrix.emacs == 'neomacs'
+        timeout-minutes: 5
+        continue-on-error: ${{ matrix.emacs == 'neomacs' }}
+        shell: bash -eo pipefail {0}
+        run: |
+          sudo apt-get install --yes libenchant-2-dev pkg-config
+          rm -f straight/build/jinx/jinx-mod.so
+          status=0
+          emacs --batch -Q -L straight/build/compat -L straight/build/jinx --eval '
+            (condition-case failure
+                (progn (require (quote jinx))
+                       (jinx--load-module)
+                       (message "jinx: the module loads"))
+              (error
+               (when-let* ((compilation (get-buffer "*jinx module compilation*")))
+                 (message "%s" (with-current-buffer compilation (buffer-string))))
+               (message "jinx: %s" (error-message-string failure))
+               (kill-emacs 1)))' || status=$?
+          ldd straight/build/jinx/jinx-mod.so || true
+          exit "$status"
+
       - name: Install the grammars, jinx's module and CIDER's dependencies
         id: modules
         timeout-minutes: 20
@@ -189,6 +216,16 @@ jobs:
         timeout-minutes: 5
         continue-on-error: ${{ matrix.emacs == 'neomacs' }}
         run: tests/run static
+
+      # A machine's first clojure-lsp analyses the JDK's sources into the
+      # user's cache, which took over 120 s on macOS's runner.  Pay for it
+      # here, once, not in whichever row comes first.  The suite reports a
+      # failure: this step never fails the job.
+      - name: Warm clojure-lsp's cache of the JDK
+        if: inputs.profile == 'full' && matrix.emacs == 'gnu'
+        timeout-minutes: 8
+        continue-on-error: true
+        run: tests/run full l3-clojure-lsp-format
 
       - name: Run tests/run ${{ inputs.profile }}
         id: tests
@@ -227,6 +264,7 @@ jobs:
           # Each step's own outcome, before a neomacs job continues past it.
           OUTCOMES: >-
             packages ${{ steps.packages.outcome }},
+            jinx ${{ steps.jinx.outcome }},
             modules ${{ steps.modules.outcome }},
             static ${{ steps.static.outcome }},
             tests ${{ steps.tests.outcome }},

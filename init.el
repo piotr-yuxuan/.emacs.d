@@ -2891,7 +2891,17 @@ Set it in `local.el'."
   :custom
   ;; Space-separated enchant locale codes checked simultaneously.
   ;; Latin uses aspell-la; Chinese has no hunspell dict (handled below).
-  (jinx-languages "en_GB fr_FR pl_PL es_ES la"))
+  (jinx-languages "en_GB fr_FR pl_PL es_ES la")
+  :config
+  ;; Without a working module jinx signals in each buffer it turns on in,
+  ;; and at startup that ends `emacs-startup-hook'.  It costs spell
+  ;; checking alone.
+  (define-advice jinx--on (:around (turn-on) my/without-module)
+    (condition-case failure
+        (funcall turn-on)
+      (error
+       (message "Spell checking is off: %s" (error-message-string failure))
+       (global-jinx-mode -1)))))
 
 (defun my/flycheck-chain-prose-checkers ()
   "Chain the defined prose checkers after the checker a buffer selects.

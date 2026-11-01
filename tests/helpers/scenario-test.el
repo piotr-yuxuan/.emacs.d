@@ -243,7 +243,9 @@
                                           :work-done-tokens (make-hash-table)))
            (workspaces nil)
            (my/scenario-wait-seconds 0.3))
-      (puthash "token" t busy)
+      (puthash "token" (lsp-make-work-done-progress-begin
+                        :kind "begin" :title "Analyzing")
+               busy)
       (cl-letf (((symbol-function 'lsp-workspaces) (lambda () workspaces)))
         (expect (my/scenario-wait '((:lsp-indexed))) :to-throw 'error)
         (setq workspaces (list ready indexing))
@@ -251,7 +253,21 @@
         (setq workspaces (list ready starting))
         (expect (my/scenario-wait '((:lsp-indexed))) :to-throw 'error)
         (setq workspaces (list ready))
-        (expect (my/scenario-wait '((:lsp-indexed))) :not :to-throw)))))
+        (expect (my/scenario-wait '((:lsp-indexed))) :not :to-throw))))
+
+  (it "names the work still in progress when it gives up"
+    (require 'lsp-mode)
+    (let* ((busy (make-hash-table :test #'equal))
+           (indexing (make-lsp--workspace :status 'initialized :work-done-tokens busy))
+           (my/scenario-wait-seconds 0.3))
+      (puthash "token" (lsp-make-work-done-progress-begin
+                        :kind "begin" :title "Analyzing JDK source")
+               busy)
+      (cl-letf (((symbol-function 'lsp-workspaces) (lambda () (list indexing))))
+        (expect (condition-case failure
+                    (my/scenario-wait '((:lsp-indexed)))
+                  (error (error-message-string failure)))
+                :to-match "Analyzing JDK source")))))
 
 (describe "The vocabulary"
 

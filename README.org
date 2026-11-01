@@ -614,7 +614,9 @@ during normal emacs operations.")
 ;; Native code goes under the directory Emacs was started on: Emacs
 ;; keeps ~/.emacs.d/eln-cache/ even under --init-directory, so a trial
 ;; or a setup of another clone would write into this one's (plan 107).
-(when (fboundp 'startup-redirect-eln-cache)
+;; The feature, not the function: an Emacs without native code may
+;; define the function, which then reads a variable it lacks.
+(when (featurep 'native-compile)
   (startup-redirect-eln-cache
    (expand-file-name "eln-cache/" user-emacs-directory)))
 
@@ -5404,7 +5406,17 @@ them per-directory via =.dir-locals.el=.
   :custom
   ;; Space-separated enchant locale codes checked simultaneously.
   ;; Latin uses aspell-la; Chinese has no hunspell dict (handled below).
-  (jinx-languages "en_GB fr_FR pl_PL es_ES la"))
+  (jinx-languages "en_GB fr_FR pl_PL es_ES la")
+  :config
+  ;; Without a working module jinx signals in each buffer it turns on in,
+  ;; and at startup that ends `emacs-startup-hook'.  It costs spell
+  ;; checking alone.
+  (define-advice jinx--on (:around (turn-on) my/without-module)
+    (condition-case failure
+        (funcall turn-on)
+      (error
+       (message "Spell checking is off: %s" (error-message-string failure))
+       (global-jinx-mode -1)))))
 #+END_SRC
 
 ** Grammar checking via LTeX language server
