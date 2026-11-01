@@ -1,5 +1,6 @@
 ;;; l3-diagnostics-flymake-mutation.el --- Flymake back in shell buffers -*- lexical-binding: t; -*-
 ;; scenario-tier: l3
+;; scenario-display: graphic
 
 ;;; Commentary:
 ;; Plan 090, the mutation test of DD-07.  This file puts Flymake back
@@ -9,7 +10,9 @@
 ;; Flymake, so the trusted scenario would fail with a count of 2.
 ;; flymake-shellcheck is no longer installed, so Flymake runs the
 ;; shellcheck backend that `sh-mode' installs itself.  A count of 1
-;; here means the diagnostic outcomes no longer see Flymake.
+;; here means the diagnostic outcomes no longer see Flymake.  Flymake
+;; starts once a window displays the buffer, which takes a frame (plan
+;; 106).
 
 ;;; Code:
 

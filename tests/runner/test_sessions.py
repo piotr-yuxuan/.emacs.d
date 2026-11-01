@@ -243,14 +243,19 @@ class LinkedTmpdirTest(unittest.TestCase):
     """Plan 106: under a linked TMPDIR, as macOS's /tmp is, files are found."""
 
     def test_a_first_file_scenario_passes_under_a_linked_tmpdir(self) -> None:
-        """The runner finds the first file that the session visited."""
+        """The runner finds the first file the session visited; the socket fits.
+
+        The link is as long as a standard macOS TMPDIR, and its true path
+        longer by /private, as /var/folders is there.
+        """
         base = Path(tempfile.mkdtemp(prefix="r", dir="/tmp"))
         self.addCleanup(shutil.rmtree, base)
-        (base / "real").mkdir()
-        (base / "link").symlink_to(base / "real")
+        name = "T".rjust(MACOS_TMPDIR - len(str(base)) - 1, "x")
+        (base / "private" / name).mkdir(parents=True)
+        (base / name).symlink_to(base / "private" / name)
         result = subprocess.run(
             [sys.executable, "-m", "runner", "fast", SCENARIO], cwd=sessions.TESTS,
-            env={**os.environ, "TMPDIR": str(base / "link"), "EMACS_TEST_GUI": "0"},
+            env={**os.environ, "TMPDIR": str(base / name), "EMACS_TEST_GUI": "0"},
             capture_output=True, text=True,
             timeout=sessions.SCENARIO_SECONDS + 60, check=False)
         self.assertEqual(result.returncode, 0, result.stdout)

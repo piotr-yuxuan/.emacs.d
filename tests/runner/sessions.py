@@ -284,7 +284,10 @@ def prepare(directory: Path, display: str | None) -> Session:
         # must find no repository there, so the live tree stays unwritten.
         GIT_CEILING_DIRECTORIES=os.pathsep.join(
             str(path) for path in sorted((LIVE / "straight" / "repos").glob("*"))),
-        TMPDIR=str(directory / "tmp"),
+        # A true path, for what Emacs compares, as a language server's root;
+        # the directory itself may stay a link, as macOS's /var/folders is,
+        # since its true path can be too long for the sockets inside it.
+        TMPDIR=str((directory / "tmp").resolve()),
         # No session D-Bus, as on a CI runner: the owner's would hand the
         # session the desktop's appearance, and so its theme (plan 106).
         # Unset, libdbus would fall back to $XDG_RUNTIME_DIR/bus.
@@ -467,7 +470,8 @@ def run_scenario(scenario: Scenario, directory: Path, reaper: Reaper, *,
                                env=session.environment, check=True, capture_output=True)
                 opened = [str(directory / "sandbox" / fixture)]
             arguments = ["--no-wait", *opened]
-            shown = [f"(get-file-buffer {elisp_string(file)})" for file in opened]
+            # Not get-file-buffer: Emacs may name the file by its true path.
+            shown = [f"(find-buffer-visiting {elisp_string(file)})" for file in opened]
             if display:
                 arguments += ["--create-frame"]
                 shown += ["(frame-live-p my/test-session-frame)"]

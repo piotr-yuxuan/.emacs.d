@@ -282,9 +282,7 @@ def main(arguments: list[str]) -> int:
         found = run_python_tests(selected.python_tests)
         sys.stdout.write(f"{'FAIL' if found else 'ok':5} runner self-tests (Python)\n")
         problems += found
-    # Emacs names a visited file by its true path; under a linked TMPDIR,
-    # as macOS's /tmp is, the runner would not find it by the linked one.
-    root = Path(tempfile.mkdtemp(prefix="emacs-test-")).resolve()
+    root = Path(tempfile.mkdtemp(prefix="emacs-test-"))
     reaper = sessions.Reaper()
     logic = functools.partial(sessions.run_logic, selected.logic, root / "logic",
                               reaper, seconds=LOGIC_SECONDS)

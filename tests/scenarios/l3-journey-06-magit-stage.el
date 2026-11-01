@@ -1,5 +1,6 @@
 ;;; l3-journey-06-magit-stage.el --- Journey 6: C-x g stages a hunk and starts a commit -*- lexical-binding: t -*-
 ;; scenario-tier: l3
+;; scenario-display: graphic
 
 ;;; Commentary:
 ;; Plan 094, journey 6, and U08 of the 085 mutation baseline.  The
@@ -12,7 +13,9 @@
 ;; When s does not stage, the mutation, c c finds nothing staged and
 ;; asks whether to commit everything.  git is a real process, so the
 ;; file is L3; the runner gives it a fixture identity and no signing
-;; (tests/runner/gitconfig).
+;; (tests/runner/gitconfig).  git edits the message through emacsclient,
+;; which a session without frames has no frame to show on: "Unknown
+;; terminal type" (plan 106).
 
 ;;; Code:
 
