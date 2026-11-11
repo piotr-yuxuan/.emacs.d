@@ -2300,14 +2300,12 @@ buffer-locally, leave the override `nil' so `indent-bars'' built-in
 (keymap-set prog-mode-map "C-c r" #'apheleia-format-buffer)
 
 (use-package ws-butler
-  ;; The MELPA recipe points to a nongnu monorepo without an explicit :files
-  ;; spec, which causes straight to build an empty directory.  The recipe
-  ;; below fixes that by pinning to the same local clone and naming the one
-  ;; file that needs to be linked into the build directory.
-  :straight (ws-butler
-             :local-repo "nongnu"
-             :branch "elpa/ws-butler"
-             :files ("ws-butler.el"))
+  ;; Its upstream repository, not the MELPA recipe's branch of NonGNU
+  ;; ELPA's monorepo: cloning that one, every branch of 600 MB, for
+  ;; one file, timed out against Savannah on the public CI.  The branch
+  ;; is named: straight would inherit the MELPA recipe's.
+  :straight (ws-butler :type git :host github :repo "lewang/ws-butler"
+                       :branch "master")
   :hook ((prog-mode . ws-butler-mode)
          (text-mode . ws-butler-mode)))
 
