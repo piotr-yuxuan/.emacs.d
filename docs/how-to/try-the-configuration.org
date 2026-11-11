@@ -20,7 +20,7 @@ The command:
 1. copies the configuration into a new temporary directory;
 2. runs its setup there, [[file:../../nix/setup.sh][nix/setup.sh]], with the flake's Emacs: every
    package at the version of the lockfile, the tree-sitter grammars,
-   jinx's module;
+   jinx's module, ghostel's module;
 3. starts that Emacs on the directory, with the programs the tests use
    first on =PATH=.
 

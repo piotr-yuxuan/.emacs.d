@@ -11,9 +11,10 @@
 #   packages  install every package at the version of the lock file,
 #             then check that each sits at its pin: a report, or a
 #             failure with --strict
-#   modules   the tree-sitter grammars, jinx's module, and what CIDER
-#             injects at jack-in, fetched into ~/.m2 (not with --no-cider;
-#             without clojure, a report, or a failure with --strict)
+#   modules   the tree-sitter grammars, jinx's module, ghostel's module,
+#             downloaded from its releases, and what CIDER injects at
+#             jack-in, fetched into ~/.m2 (not with --no-cider; without
+#             clojure, a report, or a failure with --strict)
 #   all       both, the default
 #
 # DIRECTORY is the configuration, the current directory by default.
@@ -89,7 +90,11 @@ modules() {
                        (treesit-auto-install-all))'
   fi
   root enchant "${JINX_ENCHANT:-}"
+  # A failed download of ghostel's module returns normally.
   in_emacs --eval '(progn (require (quote jinx)) (jinx--load-module)
+                     (require (quote ghostel)) (ghostel--load-module t)
+                     (unless (featurep (quote ghostel-module))
+                       (error "The module of ghostel did not download or load"))
                      (unless (treesit-language-available-p (quote python))
                        (error "The Python grammar does not load")))'
   if [ -n "$cider" ] && ! command -v clojure > /dev/null; then

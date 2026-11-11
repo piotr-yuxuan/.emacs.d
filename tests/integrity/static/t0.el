@@ -19,10 +19,7 @@
   "The checkout whose configuration T0 checks.")
 
 (defconst my/integrity-t0-unresolved-allowed
-  '(("define-key in gterm: map gterm-mode-map, key (kbd (format \"C-%c\" c)) not resolved"
-     . "a dolist sends Ctrl and a letter to the terminal; the keys are generated")
-    ("define-key in gterm: map gterm-mode-map, key (kbd (format \"M-%c\" c)) not resolved"
-     . "a dolist sends Meta and a letter to the terminal; the keys are generated"))
+  '()
   "Forms the readers cannot resolve, each with the reason it needs no check.
 An alist of (DESCRIPTION . REASON), DESCRIPTION as
 `my/integrity-unresolved' gives it.")

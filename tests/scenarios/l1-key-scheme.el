@@ -10,7 +10,7 @@
 ;; l1-paredit-elisp.el and l1-clojure-paredit.el check.  C-- is the
 ;; negative argument again, and expreg contracts on C-M-=.  C-c k is
 ;; the test runner and C-c d the debugger of a language, so pytest
-;; leaves C-c t to mistty, which l3-pty-mistty.el starts with it, and
+;; leaves C-c t to ghostel, which l3-pty-ghostel.el starts with it, and
 ;; cargo-mode leaves C-c a to the agenda.
 ;;
 ;; Pressing C-c k t starts pytest through a shell, and C-c d d probes
@@ -82,11 +82,18 @@
 
 ;; A Python map binding C-c t would print its own name after "found in".
 (scenario
- :describe "DD-02: C-c t runs mistty in a Python buffer"
+ :describe "DD-02: C-c t runs ghostel in a Python buffer"
  :given ((:name "python" :file "app.py" :text "print(1)-!-\n"))
  :when ((:keys "C-h k C-c t C-x o"))
  :then ((:buffer-name "\\`\\*Help\\*\\'")
-        (:buffer-matches "\\`C-c t runs the command mistty (found in global-map)")))
+        (:buffer-matches "\\`C-c t runs the command ghostel (found in global-map)")))
+
+(scenario
+ :describe "DD-02: C-c v p runs imprimeur-mode in an Org buffer"
+ :given ((:name "org" :file "notes.org" :text "* Notes-!-\n"))
+ :when ((:keys "C-h k C-c v p C-x o"))
+ :then ((:buffer-name "\\`\\*Help\\*\\'")
+        (:buffer-matches "\\`C-c v p runs the command imprimeur-mode (found in global-map)")))
 
 ;; Running kaocha needs a REPL, so the Clojure scenarios ask Emacs what
 ;; the keys run, with C-h k, in the session's first Clojure buffer.

@@ -12,10 +12,6 @@
 (require 'scenario/outcome)
 (require 'outcomes)
 
-(defvar gterm-module-path)
-(defvar outcomes-terminal-test--map nil
-  "A keymap for the self-test of `:key-sequence-bound'.")
-
 (defun outcomes-terminal-test--verdict (clause &optional context)
   "Return the verdict of CLAUSE with CONTEXT, after checking it as `scenario' does."
   (my/scenario-check-clause clause)
@@ -50,6 +46,14 @@ timer turns flycheck on, which can happen during a wait."
     (outcomes-terminal-test--in-buffer "prompt> echo late\n"
       (expect (outcomes-terminal-test--verdict '(:terminal-shows "^late$"))
               :to-match "prompt> echo late")))
+
+  (it ":terminal-now-shows judges the screen at once, and may be awaited during the keys"
+    (outcomes-terminal-test--in-buffer "prompt> \n  1/1 (0)\n> "
+      (expect (outcomes-terminal-test--verdict '(:terminal-now-shows "[0-9]+/[0-9]+"))
+              :to-be nil)
+      (expect (outcomes-terminal-test--verdict '(:terminal-now-shows "^late$"))
+              :to-match "the screen ends with \"prompt> "))
+    (expect (get :terminal-now-shows 'my/scenario-during-keys) :to-be t))
 
   (it ":terminal-shows waits SECONDS instead of the default when given"
     (outcomes-terminal-test--in-buffer "prompt> echo slow\n"
@@ -134,26 +138,6 @@ timer turns flycheck on, which can happen during a wait."
     (expect (outcomes-terminal-test--verdict
              '(:skip-unless-executables "sh" "outcomes-terminal-test-missing"))
             :to-throw 'buttercup-pending))
-
-  (it ":skip-unless-gterm-module skips the spec only without the module file"
-    (let ((gterm-module-path (make-temp-file "terminal-test-module")))
-      (unwind-protect
-          (expect (outcomes-terminal-test--verdict '(:skip-unless-gterm-module))
-                  :to-be nil)
-        (delete-file gterm-module-path))
-      (expect (outcomes-terminal-test--verdict '(:skip-unless-gterm-module))
-              :to-throw 'buttercup-pending)))
-
-  (it ":key-sequence-bound tells a two-event binding from a one-event one"
-    (let ((outcomes-terminal-test--map (make-sparse-keymap)))
-      (define-key outcomes-terminal-test--map (vector 'control ?a) #'ignore)
-      (define-key outcomes-terminal-test--map (kbd "C-b") #'ignore)
-      (expect (outcomes-terminal-test--verdict
-               '(:key-sequence-bound outcomes-terminal-test--map [control 97] ignore))
-              :to-be nil)
-      (expect (outcomes-terminal-test--verdict
-               '(:key-sequence-bound outcomes-terminal-test--map [control 98] ignore))
-              :to-match "runs nil")))
 
   (it ":round-trips-below allows one slow round trip in ten, none four times as slow"
     (let* ((file (make-temp-file "terminal-test-latency"))

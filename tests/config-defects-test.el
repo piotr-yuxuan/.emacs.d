@@ -37,12 +37,14 @@
 (defvar config-defects-test--calls nil
   "The boundaries the last stubbed update called, newest first.")
 
-(defun config-defects-test--update (unpulled tested &optional root rebuilt)
+(defun config-defects-test--update (unpulled tested &optional root rebuilt unreleased)
   "Run `my/straight-safe-update' with stubbed boundaries; return their calls.
 The pull fails for the recipes UNPULLED, or signals it as (SYMBOL .
 DATA).  TESTED is the exit status of the test run, or the error its
 start signals.  ROOT is `user-emacs-directory', by default the checkout
 under test.  REBUILT, when non-nil, is the signal of the first rebuild.
+UNRELEASED is what the release step returns: ghostel's recipe when it
+cannot reach its newest release tag.
 The calls are the boundary keys, in order, once the update has ended;
 they are also in `config-defects-test--calls', newest first."
   (setq config-defects-test--calls nil)
@@ -52,9 +54,13 @@ they are also in `config-defects-test--calls', newest first."
                         (if (and unpulled (symbolp (car unpulled)))
                             (signal (car unpulled) (cdr unpulled))
                           unpulled))
+                :release (lambda ()
+                           (push :release config-defects-test--calls)
+                           unreleased)
                 :rebuild (lambda ()
                            (push :rebuild config-defects-test--calls)
-                           (when (and rebuilt (equal config-defects-test--calls '(:rebuild :pull)))
+                           (when (and rebuilt (equal config-defects-test--calls
+                                                     '(:rebuild :release :pull)))
                              (signal (car rebuilt) (cdr rebuilt))))
                 :test (lambda (_runner done)
                         (push :test config-defects-test--calls)
@@ -72,20 +78,24 @@ they are also in `config-defects-test--calls', newest first."
 
   (it "freezes the lockfile only when the tests pass"
     (expect (config-defects-test--update nil 0)
-            :to-equal '(:pull :rebuild :test :freeze)))
+            :to-equal '(:pull :release :rebuild :test :freeze)))
 
   (it "thaws and rebuilds when the tests fail"
     (expect (config-defects-test--update nil 1)
-            :to-equal '(:pull :rebuild :test :thaw :rebuild))
+            :to-equal '(:pull :release :rebuild :test :thaw :rebuild))
     ;; A test run killed by a signal reports the signal number.
     (expect (config-defects-test--update nil 15)
-            :to-equal '(:pull :rebuild :test :thaw :rebuild)))
+            :to-equal '(:pull :release :rebuild :test :thaw :rebuild)))
 
   (it "thaws and rebuilds, without testing, when a pull fails"
     ;; straight-pull-all returns the recipes it could not pull; the
     ;; others have merged their new commits.
     (expect (config-defects-test--update '((:package "magit")) 0)
-            :to-equal '(:pull :thaw :rebuild)))
+            :to-equal '(:pull :release :thaw :rebuild)))
+
+  (it "thaws and rebuilds, without testing, when ghostel cannot reach its newest release"
+    (expect (config-defects-test--update nil 0 nil nil '((:package "ghostel")))
+            :to-equal '(:pull :release :thaw :rebuild)))
 
   (it "thaws and rebuilds when the pull signals or is quit"
     (expect (config-defects-test--update '(error "Merge failed") 0)
@@ -95,9 +105,9 @@ they are also in `config-defects-test--calls', newest first."
 
   (it "thaws and rebuilds when the rebuild after the pull signals or is quit"
     (expect (config-defects-test--update nil 0 nil '(error "Could not find package foo"))
-            :to-equal '(:pull :rebuild :thaw :rebuild))
+            :to-equal '(:pull :release :rebuild :thaw :rebuild))
     (expect (config-defects-test--update nil 0 nil '(quit))
-            :to-equal '(:pull :rebuild :thaw :rebuild)))
+            :to-equal '(:pull :release :rebuild :thaw :rebuild)))
 
   (it "refuses to start while the tests of a previous update run"
     (let ((previous (make-process :name "package-update-tests"
@@ -110,7 +120,7 @@ they are also in `config-defects-test--calls', newest first."
 
   (it "thaws and rebuilds when the tests cannot start"
     (expect (config-defects-test--update nil '(file-missing "Searching for program"))
-            :to-equal '(:pull :rebuild :test :thaw :rebuild)))
+            :to-equal '(:pull :release :rebuild :test :thaw :rebuild)))
 
   (it "changes nothing when there is no test runner to run"
     (let ((root (make-temp-file "config-defects-update-" t)))

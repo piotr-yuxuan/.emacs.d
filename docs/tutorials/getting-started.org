@@ -79,7 +79,8 @@ The setup takes the steps between a clone and a first start: it
 installs every package at the version of the lockfile,
 =~/.emacs.d/straight/versions/default.el=, checks that each sits
 there, installs the tree-sitter grammars, builds the module of jinx,
-the spell checker, and, where =clojure= is installed, fetches into
+the spell checker, downloads the module of ghostel, the terminal, and,
+where =clojure= is installed, fetches into
 =~/.m2= what CIDER adds to a Clojure REPL.  It uses the Emacs on =PATH=, the one you will start:
 byte code belongs to the Emacs that compiled it.
 
@@ -93,6 +94,10 @@ byte code belongs to the Emacs that compiled it.
   cd ~/.emacs.d
   nix/setup.sh
   #+END_SRC
+
+Without it, the grammars still arrive: each start rebuilds them in
+the background, a few seconds after startup, and =*Messages*= says
+when they are in place.
 
 This takes many minutes, most of them cloning packages.  It ends with
 a report of any package off its pin, which a fresh clone has none of.

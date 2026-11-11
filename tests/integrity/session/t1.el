@@ -37,7 +37,7 @@
 (defvar my/gtd-file)
 
 (defconst my/t1-lazy-features
-  '(cider dape docker eat gterm lsp-mode magit mistty mu4e pyim treemacs treesit-auto)
+  '(cider dape docker ghostel lsp-mode magit mu4e pyim treemacs treesit-auto)
   "Features that must load on first use, never at startup.
 Each starts external tools or is large, and README.org defers it;
 mu4e is gone since plan 087.")

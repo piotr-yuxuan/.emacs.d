@@ -14,7 +14,8 @@ explains the command.
 2. Press =C-c P u=.  Emacs pulls every package and rebuilds the
    changed ones; Emacs is busy until that is done.  If straight.el
    cannot pull a repository, it asks what to do: it never discards
-   local changes on its own.
+   local changes on its own.  Ghostel moves to its newest release
+   tag only, since its releases publish its modules.
 3. The buffer =*Package update tests*= opens and runs =tests/run fast=.
    Emacs stays usable meanwhile.  On macOS the tests run without
    graphical frames, so the golden tests are skipped.
@@ -28,6 +29,11 @@ explains the command.
 
 A second =C-c P u= is refused while the tests of the first one run.
 
+When the update rebuilt ghostel, its module went with the old build.
+Restart Emacs: its first =M-x ghostel= downloads the new one, which
+=nix/setup.sh modules= also does at once.  Until then, the terminal
+scenarios fail in =tests/run full=.
+
 * Keep an update that changes the golden records
 
 The golden tests record the face of every token, and the indentation,
@@ -37,6 +43,8 @@ first line that differs.  When the change is what you want:
 
 1. Run =M-x straight-pull-all=, then =M-x straight-check-all=: the
    test sessions use the packages built here and never rebuild them.
+   The pull also moves ghostel past its newest release, where its
+   module may not exist yet; the last step moves it back.
 2. In a shell, approve the new records:
    #+BEGIN_SRC zsh
    cd ~/.emacs.d

@@ -1,17 +1,17 @@
 ;;; outcomes/terminal.el --- Outcomes about terminal buffers -*- lexical-binding: t -*-
 
 ;;; Commentary:
-;; What the user sees in a terminal buffer (eat, mistty, gterm) after
-;; the keys of a PTY scenario of plan 091.  See `scenario/outcome.el'
-;; for the contract.
+;; What the user sees in a terminal buffer after the keys of a PTY
+;; scenario of plans 091 and 110.  See `scenario/outcome.el' for the
+;; contract.
 ;;
 ;; A terminal answers in its own time.  Each outcome about the terminal
 ;; waits, as an idle user does, up to `my/terminal-outcome-seconds' for
 ;; its fact, and then fails with what the terminal shows.  The screen
 ;; is the last `my/terminal-screen-lines' lines of the buffer.
 ;;
-;; The two :skip-unless- outcomes are preconditions, not facts: put
-;; first in `:then', they skip the spec when a program the scenario
+;; The :skip-unless-executables outcome is a precondition, not a fact:
+;; put first in `:then', it skips the spec when a program the scenario
 ;; needs is missing.  The scenario language has no earlier place for a
 ;; precondition other than a language server's.
 
@@ -53,18 +53,30 @@ of entering the test framework's debugger."
                                                 (funcall fact))))))))
     verdict))
 
+(defun my/terminal-screen-mismatch (regexp)
+  "Return nil when the terminal screen matches REGEXP, else what it shows.
+The screen is the end of the current buffer; ^ and $ match at its
+line boundaries."
+  (let ((case-fold-search nil)
+        (screen (my/terminal-screen)))
+    (unless (string-match-p regexp screen)
+      (format "the screen ends with %S" (substring screen (max 0 (- (length screen)
+                                                                      600)))))))
+
 (my/scenario-define-outcome :terminal-shows (_context regexp &optional seconds)
   "The terminal screen shows text matching REGEXP, within the wait.
-The screen is the end of the current buffer; ^ and $ match at its
-line boundaries.  SECONDS, if given, replaces the default wait."
-  (my/terminal-await
-   (lambda ()
-     (let ((case-fold-search nil)
-           (screen (my/terminal-screen)))
-       (unless (string-match-p regexp screen)
-         (format "the screen ends with %S" (substring screen (max 0 (- (length screen)
-                                                                         600)))))))
-   seconds))
+SECONDS, if given, replaces the default wait.  See
+`my/terminal-screen-mismatch'."
+  (my/terminal-await (lambda () (my/terminal-screen-mismatch regexp)) seconds))
+
+(my/scenario-define-outcome :terminal-now-shows (_context regexp)
+  "The terminal screen shows text matching REGEXP now, without a wait.
+For (:idle-until (:terminal-now-shows REGEXP) MS) during the keys: a
+program such as fzf drops the keys typed before it has drawn.  See
+`my/terminal-screen-mismatch'."
+  (my/terminal-screen-mismatch regexp))
+
+(put :terminal-now-shows 'my/scenario-during-keys t)
 
 (my/scenario-define-outcome :terminal-directory (context relative)
   "The current buffer's directory becomes RELATIVE to the entry's, within the wait.
@@ -102,20 +114,6 @@ or be one less: a terminal may keep the last column for its cursor."
            (format "stty size printed %S in a window of %d rows and %d columns"
                    size rows columns)))))))
 
-(defvar gterm-module-path)
-
-(my/scenario-define-outcome :skip-unless-gterm-module (_context)
-  "Skip the spec unless gterm's module is built; the first clause of `:then'.
-Without its module, `gterm' refuses to start with a `user-error'
-\(see tests/scenarios/l1-gterm-no-module.el): the keys stop there,
-and the harness records the error and the keys left unpressed.  This
-clause, evaluated first, skips the spec with the message \"missing
-gterm module PATH\" before 085's harness counts that error.  The
-runner accepts the skip only with an expected-skip entry whose reason
-holds."
-  (unless (and (boundp 'gterm-module-path) (file-exists-p gterm-module-path))
-    (buttercup-skip "missing gterm module %s" (bound-and-true-p gterm-module-path))))
-
 (my/scenario-define-outcome :skip-unless-executables (_context &rest names)
   "Skip the spec unless each executable of NAMES is found; the first clause.
 The keys of a scenario that runs a missing program, such as btop,
@@ -125,35 +123,6 @@ only make the shell say so; the spec then skips with the message
   (dolist (name names)
     (unless (executable-find name)
       (buttercup-skip "missing executable %s" name))))
-
-(my/scenario-define-outcome :key-sequence-bound (_context map keys command)
-  "In the keymap MAP, the key sequence KEYS, a vector, runs COMMAND.
-Written for canaries of upstream bugs that the configuration works
-around, such as a binding of two events where one was meant."
-  (let ((actual (and (boundp map) (keymapp (symbol-value map))
-                     (lookup-key (symbol-value map) keys))))
-    (unless (eq actual command)
-      (format "%S in %S runs %S" keys map actual))))
-
-(my/scenario-define-outcome :function-unadvised (_context function)
-  "FUNCTION, a symbol, carries no advice, also while it is not defined yet."
-  (let ((advice nil))
-    (advice-mapc (lambda (piece _properties) (push piece advice)) function)
-    (when advice
-      (format "%S is advised by %S" function advice))))
-
-(my/scenario-define-outcome :messages-exclude (_context regexp)
-  "No line of the *Messages* buffer, over the whole session, matches REGEXP.
-For what Emacs reports from a process filter, where an error is only
-shown, such as TRAMP's failure to connect."
-  (with-current-buffer (messages-buffer)
-    (save-excursion
-      (goto-char (point-min))
-      (let ((case-fold-search nil))
-        (when (re-search-forward regexp nil t)
-          (format "*Messages* shows %S"
-                  (buffer-substring-no-properties (line-beginning-position)
-                                                  (line-end-position))))))))
 
 (my/scenario-define-outcome :kill-ring-head (_context regexp)
   "The most recent kill, as `yank' would insert it, matches REGEXP."

@@ -1,8 +1,8 @@
 #+TITLE: Set up a shell prompt readable in every terminal
 #+OPTIONS: toc:nil num:nil
 
-The terminals of this configuration (eat, mistty, gterm) show the
-shell's own prompt.  These steps install Starship with its Gruvbox
+The terminal of this configuration, ghostel, shows the shell's own
+prompt.  These steps install Starship with its Gruvbox
 Rainbow preset, which stays readable in the light and the dark theme.
 They change the shell's files, not Emacs; [[file:../explanation/package-choices.org][the package choices]] say why
 Starship.  To set up the rest of the shell for the terminals, see

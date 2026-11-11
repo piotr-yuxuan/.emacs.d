@@ -31,8 +31,7 @@
   "The root of the working tree whose configuration is checked.")
 
 (defconst my/t1-deny-list
-  '((gterm . "loading it compiles its Zig module")
-    (pyim . "its :config declares pyim-basedict, which straight.el would clone")
+  '((pyim . "its :config declares pyim-basedict, which straight.el would clone")
     (pinentry . "the user-visible checks observe whether the configuration loads it (D12)"))
   "Features the force-load leaves alone, each with the reason.")
 
@@ -687,8 +686,7 @@ returns it: such a keymap takes KEYS from the global map everywhere."
 See (elisp) Key Binding Conventions: no package may bind them.")
 
 (defconst my/t1-package-shadows-allowed
-  '((eat-char-mode-map . "eat's char mode sends every key to the terminal")
-    (eat-eshell-char-mode-map . "eat's char mode sends every key to the terminal")
+  '((ghostel-char-mode-map . "ghostel's char mode sends every key to the terminal")
     (xwidget-webkit-isearch-mode-map
      . "active only while a webkit search reads keys; any other key ends the search")
     (rxt--read-pcre-mode-map . "active only in the minibuffer, while pcre2el reads a regexp"))

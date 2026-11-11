@@ -53,16 +53,26 @@ icons, previews and layouts on top.  Treemacs shows a project as a
 tree beside the code; dirvish-side, which did both, was retired.  See
 [[file:../how-to/files-with-dirvish.org][Work with files in Dirvish]].
 
-* Terminals: eat, mistty and gterm
+* Terminal: ghostel
 
-No terminal does everything well (D14, plan 091): eat is fast and
-complete, mistty lets Emacs keys edit the command line, gterm uses
-Ghostty's engine and stays responsive under bulk output.  All three
-stay, with the same shell keys, and the parity matrix of plan 091
-tests each capability in each of them.  See [[file:../how-to/terminals.org][Use a terminal inside
-Emacs]].
+Plan 091 kept three terminals, since none did everything well (D14):
+eat was fast and complete but stalled Emacs under bulk output, mistty
+let Emacs keys edit the command line but was slow and opened in a
+second window, gterm used Ghostty's engine but held only the visible
+screen, without search, and needed a Zig build.  Its parity matrix
+tested each capability in each of them.
 
-The prompt inside them is Starship's, configured outside Emacs.  The
+Ghostel, which plan 110 chose in their place, uses Ghostty's engine
+too, keeps the whole scrollback as buffer text for Emacs's search and
+copy, follows directories and prompts with its own shell integration,
+and ships a prebuilt module for each platform.  The same matrix, run
+on ghostel, needs four keys bound and no gap.  Its module is
+downloaded from ghostel's releases rather than built, so a machine
+needs no Zig; the price is a binary from the project's CI, and a
+release to download for the version in use, which the safe update
+keeps ghostel on.  See [[file:../how-to/terminals.org][Use a terminal inside Emacs]].
+
+The prompt inside it is Starship's, configured outside Emacs.  The
 oh-my-zsh theme bullet-train it replaced is no longer maintained, and
 its fixed colours were unreadable in the dark theme.  Powerlevel10k,
 its usual successor, is in maintenance only, by its author's account.

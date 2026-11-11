@@ -117,7 +117,7 @@
   (it "reports a feature, or a bound command's library, that cannot be loaded"
     (expect (mapcar #'car (my/t1-force-load (my/t1-test-forms "cannot-load-defect")))
             :to-equal '(t1fx-absent-feature t1fx-absent-library))
-    (expect (featurep 'gterm) :to-be nil))
+    (expect (featurep 'pyim) :to-be nil))
 
   (it "stays silent when every feature loads, and loads bound commands and hooked modes"
     (expect (my/t1-force-load (my/t1-test-forms "cannot-load-clean")) :to-equal nil)
@@ -233,7 +233,7 @@
             :to-equal '("t1fx-library t1fx-library-absent" "t1fx-library ignore")))
 
   (it "stays silent on the package's own commands and on skipped packages"
-    (expect (my/t1-foreign-commands (my/t1-test-forms "foreign-command-clean") '(gterm))
+    (expect (my/t1-foreign-commands (my/t1-test-forms "foreign-command-clean") '(pyim))
             :to-equal nil)))
 
 (describe "The repeated-hook check"

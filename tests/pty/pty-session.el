@@ -2,8 +2,8 @@
 
 ;;; Commentary:
 ;; Required by each PTY scenario file (tests/scenarios/l3-pty-*.el) of
-;; plan 091, before its scenarios run.  Every terminal of the session
-;; then starts zsh with the fixture startup files of
+;; plans 091 and 110, before its scenarios run.  The terminal of the
+;; session then starts zsh with the fixture startup files of
 ;; tests/fixtures/pty-zdotdir/, never the user's own, which point
 ;; EDITOR at the user's own Emacs.  The session inherits ZDOTDIR from
 ;; the user's environment, so it is set here, not left unset.
@@ -27,13 +27,20 @@
 (setenv "PTY_FIXTURE_SERVER" (expand-file-name server-name server-socket-dir))
 (setenv "PTY_LATENCY_FILE" (expand-file-name "pty-latency" temporary-file-directory))
 
-;; The fixture startup files are zsh's.  gterm runs `gterm-shell',
-;; zsh; mistty runs `explicit-shell-file-name', and eat `eat-shell',
-;; which defaults to it when eat loads.  Without them, both would run
-;; the user's login shell, whatever it is.
-(defvar eat-shell)
-(setq explicit-shell-file-name (executable-find "zsh")
-      eat-shell explicit-shell-file-name)
+;; The fixture startup files are zsh's: without `ghostel-shell',
+;; ghostel would run the user's login shell, whatever it is.  The
+;; module is never downloaded here: the session reads the live package
+;; tree, which it must not write.  The row's cleanup lets a buffer be
+;; killed without asking, but only the buffer then current: a cell
+;; that fails with a command still running, emacsclient waiting in
+;; another window for instance, would leave ghostel's own query to
+;; wait for an answer until the session's deadline.
+(defvar ghostel-shell)
+(defvar ghostel-module-auto-install)
+(defvar ghostel-query-before-killing)
+(setq ghostel-shell (executable-find "zsh")
+      ghostel-module-auto-install nil
+      ghostel-query-before-killing nil)
 
 (provide 'pty-session)
 

@@ -26,7 +26,7 @@ repository.
 - [[file:how-to/files-with-dirvish.org][Work with files in Dirvish]]: open, move, rename, copy and delete
   files.
 - [[file:how-to/wide-tables.org][Read a table wider than the window]], in Org or Markdown.
-- [[file:how-to/terminals.org][Use a terminal inside Emacs]]: eat, mistty and gterm.
+- [[file:how-to/terminals.org][Use a terminal inside Emacs]]: ghostel.
 - [[file:how-to/shell-prompt.org][Set up a shell prompt readable in every terminal]], with Starship.
 - [[file:how-to/python.org][Work on a Python project]]: navigation, fixes, REPL, tests, debugger.
 - [[file:how-to/clojure.org][Work on a Clojure project]]: navigation, paredit, CIDER, tests.

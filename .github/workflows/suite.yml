@@ -130,7 +130,8 @@ jobs:
 
       # The setup of the configuration's flake (nix/setup.sh), with the
       # matrix's Emacs: first the packages, then the modules, so that the
-      # caches are saved without jinx's module, whatever the tests find.
+      # caches are saved without the modules of jinx and ghostel, whatever
+      # the tests find.
       - name: Install the packages from the lock file, at their pins
         id: packages
         timeout-minutes: 35
@@ -180,7 +181,7 @@ jobs:
           ldd straight/build/jinx/jinx-mod.so || true
           exit "$status"
 
-      - name: Install the grammars, jinx's module and CIDER's dependencies
+      - name: Install the grammars, the modules and CIDER's dependencies
         id: modules
         timeout-minutes: 20
         continue-on-error: ${{ matrix.emacs == 'neomacs' }}
@@ -204,7 +205,9 @@ jobs:
           for profile in ~/.zprofile ~/.bash_profile; do
             printf 'export PATH=%q\n' "$PATH" >> "$profile"
           done
-          emacs --init-directory="$GITHUB_WORKSPACE" --daemon=paths
+          # Its grammars are the flake's: no rebuild in the background.
+          emacs --init-directory="$GITHUB_WORKSPACE" --daemon=paths \
+            --eval '(setq my/treesit-refresh-at-startup nil)'
           emacsclient --socket-name=paths --eval \
             "(with-temp-file \"$RUNNER_TEMP/found\" (dolist (p (split-string \"$CI_PROGRAMS\")) (insert p \" \" (or (executable-find p) \"none\") \"\n\")))"
           emacsclient --socket-name=paths --eval '(kill-emacs)'
@@ -218,14 +221,33 @@ jobs:
         run: tests/run static
 
       # A machine's first clojure-lsp analyses the JDK's sources into the
-      # user's cache, which took over 120 s on macOS's runner.  Pay for it
-      # here, once, not in whichever row comes first.  The suite reports a
-      # failure: this step never fails the job.
+      # user's cache, which took over 120 s on macOS's runner.  The flake
+      # pins clojure-lsp and the JDK, so its lock file keys that cache.
+      - name: Restore clojure-lsp's cache of the JDK
+        id: clojure-lsp
+        if: inputs.profile == 'full'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/clojure-lsp
+          key: clojure-lsp-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+
+      # Without the cache, pay for it here, once, not in whichever row
+      # comes first.  The suite reports a failure: this step never fails
+      # the job.
       - name: Warm clojure-lsp's cache of the JDK
-        if: inputs.profile == 'full' && matrix.emacs == 'gnu'
+        id: warm
+        if: inputs.profile == 'full' && matrix.emacs == 'gnu' && steps.clojure-lsp.outputs.cache-hit != 'true'
         timeout-minutes: 8
         continue-on-error: true
         run: tests/run full l3-clojure-lsp-format
+
+      # Right after the warm-up: a job whose suite fails still saves it.
+      - name: Save clojure-lsp's cache of the JDK
+        if: steps.warm.outcome == 'success'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/clojure-lsp
+          key: ${{ steps.clojure-lsp.outputs.cache-primary-key }}
 
       - name: Run tests/run ${{ inputs.profile }}
         id: tests

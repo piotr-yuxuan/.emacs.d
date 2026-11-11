@@ -1,11 +1,11 @@
 # Fixture interactive shell of the PTY tier (plan 091).  It sources the
 # terminal integration of the user's ~/.zshrc, as
 # docs/how-to/terminals.org documents it under "Prepare the shell,
-# once": eat's integration script, the OSC 133 and
-# OSC 7 hooks, fzf's key bindings and the edit-command-line widget.  It
-# has no prompt theme and no plugins, so every terminal starts the
-# same shell.  The user's block that points VISUAL at the default
-# server is left out on purpose: see .zshenv.
+# once": the OSC 133 and OSC 7 hooks, fzf's key bindings and the
+# edit-command-line widget.  Ghostel adds its own integration when it
+# starts the shell.  It has no prompt theme and no plugins.  The
+# user's block that points VISUAL at the default server is left out on
+# purpose: see .zshenv.
 
 bindkey -e
 
@@ -15,15 +15,11 @@ PS1='%1~ ready> '
 RPS1=''
 
 # A history of one entry, for fzf's C-r to find, in the session's
-# temporary directory.  eat's integration reads the file; zsh never
-# writes it back.
+# temporary directory.  zsh never writes it back.
 HISTFILE=${TMPDIR:-/tmp}/pty-zsh-history
 print -r -- 'echo history-pick' >| $HISTFILE
 HISTSIZE=100
 SAVEHIST=0
-
-# eat's shell integration, when eat started the shell.
-[[ -n ${EAT_SHELL_INTEGRATION_DIR-} ]] && source "$EAT_SHELL_INTEGRATION_DIR/zsh"
 
 # OSC 133 prompt annotations and OSC 7 directory tracking.
 autoload -Uz add-zsh-hook
@@ -43,9 +39,9 @@ autoload -Uz edit-command-line
 zle -N edit-command-line
 bindkey '^X^E' edit-command-line
 
-# pty-throughput: print 200000 lines, as `seq 1 200000' does, while a
-# background loop times one round trip to the session's server every
-# 100 ms.  Each round trip is written to $PTY_LATENCY_FILE in
+# pty-throughput [LINES]: print LINES lines, 200000 by default, as
+# `seq 1 LINES' does, while a background loop times one round trip to
+# the session's server every 100 ms.  Each round trip is written to $PTY_LATENCY_FILE in
 # milliseconds, one per line; the loop stops with the lines, when the
 # shell is gone, or after 600 round trips.  The shell goes when its
 # terminal is killed before seq ends, and the loop, a disowned job,
@@ -66,7 +62,7 @@ pty-throughput() {
     done
   } &!
   local sampler=$! start=$EPOCHREALTIME
-  seq 1 200000
+  seq 1 ${1:-200000}
   local -i seconds=$(( EPOCHREALTIME - start ))
   kill $sampler 2>/dev/null
   print -r -- "throughput-done in ${seconds} s"

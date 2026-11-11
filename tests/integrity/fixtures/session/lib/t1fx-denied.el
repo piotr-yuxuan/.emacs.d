@@ -2,7 +2,7 @@
 
 ;;; Commentary:
 ;; The self-test of the variable library loader denies this library,
-;; as the force-load denies gterm: `t1fx-denied-loaded' is bound only
+;; as the force-load denies pyim: `t1fx-denied-loaded' is bound only
 ;; if something loaded it anyway.
 
 ;;; Code:

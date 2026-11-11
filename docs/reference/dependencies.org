@@ -19,11 +19,16 @@ server of a language, for example, does not start.
 | GNU Emacs, tested   |    31.1 | the build this configuration is tested with: pgtk on NixOS (=emacs-pgtk=)     |
 | Native compilation  |         | faster packages; Emacs built with libgccjit                                   |
 | Tree-sitter support |         | the =-ts-mode= major modes, folding; grammars go to =~/.emacs.d/tree-sitter/= |
+| Dynamic modules     |         | jinx's spell checker, ghostel's terminal                                      |
+| Xwidgets            |         | imprimeur's typeset page in an Emacs window; Chromium shows it otherwise      |
 
 On Emacs 30, Java indents by 4 until JDTLS formats the file.  The
 setup, [[file:../../nix/setup.sh][nix/setup.sh]], installs the tree-sitter grammars: it links
 nixpkgs's when the flake runs it, and otherwise has Emacs compile
-them, which needs git and a C compiler.
+them, which needs git and a C compiler.  Ghostel's module comes from
+ghostel's releases on GitHub, at the first =M-x ghostel= or from the
+setup's =modules= phase, so it needs the network.
+imprimeur and its skins need Emacs 31.1 and pandoc 3.
 
 * The lists of nix/programs.nix
 
@@ -34,8 +39,7 @@ them, which needs git and a C compiler.
 | =fonts=  | the Nerd Font of the default face and its icons, Noto Sans CJK                                                                            | the flake's =programs=, the trial         |
 
 A comment in that file names the programs the flake leaves
-out: zig, which builds gterm's module, TeX Live, a container engine,
-a music player and Starship.
+out: TeX Live, a container engine, a music player and Starship.
 
 * Fonts
 

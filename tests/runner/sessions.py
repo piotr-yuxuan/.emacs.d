@@ -70,6 +70,8 @@ EARLY_INIT = """\
 ;; Written by tests/runner/sessions.py.
 (setq straight-base-dir {live}
       straight-safe-mode t
+      ;; tree-sitter/ is the live one: rebuild nothing there.
+      my/treesit-refresh-at-startup nil
       server-name {server_name}
       server-socket-dir {sockets})
 (with-eval-after-load 'mcp-server

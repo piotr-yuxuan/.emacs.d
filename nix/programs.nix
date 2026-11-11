@@ -43,6 +43,7 @@ in {
 
   # What the configuration uses besides: install those of your languages.
   others = with pkgs; [
+    pandoc # the typeset page of imprimeur
     difftastic # structural diffs
     gnupg # ~/.authinfo.gpg, the forge token
     (hunspell.withDicts (dicts: with dicts; [en_GB-ise fr-any pl_PL es_ES])) # jinx's dictionaries
@@ -77,7 +78,6 @@ in {
   ];
 
   # Not installed by the flake: alternatives, heavy, or optional.
-  #   zig, to build gterm's module (left out so that the tests skip gterm)
   #   texliveFull, for AUCTeX and the LaTeX book: several gigabytes
   #   podman or docker, for C-c D (docker.el)
   #   mpv, vlc, ffmpeg (ffplay) or mplayer, for ready-player

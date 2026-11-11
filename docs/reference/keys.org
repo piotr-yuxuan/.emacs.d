@@ -36,7 +36,7 @@ Do not edit; regenerate it.
 | =C-c F s= | treemacs-select-window | Select the treemacs window if it is visible. |
 | =C-c F t= | treemacs-find-tag | Find and move point to the tag at point in the treemacs view. |
 | =C-c P u= | my/straight-safe-update | Update every package, keeping the update only if the fast tests pass. |
-| =C-c T= | mistty-other-window | Go to the next MisTTY buffer in another window. |
+| =C-c T= | ghostel-project | Start a new Ghostel terminal in the current project's root. |
 | =C-c a= | org-agenda | Dispatch agenda commands to collect entries to the agenda buffer. |
 | =C-c c= | org-capture | Capture something. |
 | =C-c f= | dirvish-fd | Run 'fd' on DIR and go into Dired mode on a buffer of the output. |
@@ -51,7 +51,8 @@ Do not edit; regenerate it.
 | =C-c s f= | consult-find | Search for files with 'find' in DIR. |
 | =C-c s g= | consult-grep | Search with 'grep' for files in DIR where the content matches a regexp. |
 | =C-c s r= | consult-ripgrep | Search with 'rg' for files in DIR with INITIAL input. |
-| =C-c t= | mistty | Go to the next MisTTY buffer, or create a new one. |
+| =C-c t= | ghostel | Start a new Ghostel terminal.  If the buffer already exists, switch to it. |
+| =C-c v p= | imprimeur-mode | Show this buffer typeset in a live page. |
 | =C-c v t= | my/table-view | Show the Org or Markdown table at point in a read-only box of cells. |
 | =C-c z A= | treesit-fold-close-all | Fold all foldable syntax nodes in the buffer. |
 | =C-c z O= | treesit-fold-open-recursively | Open recursively folded syntax NODE that are contained in the node at point. |
@@ -118,15 +119,13 @@ Do not edit; regenerate it.
 | =v= | dirvish-vc-menu | Help menu for features in 'dirvish-vc'. |
 | =y= | dirvish-yank-menu | Yank commands menu. |
 
-* eat-mode-map
+* flycheck-mode-map
 
 | Key | Command | Description |
 |-
-| =C-k= | eat-reset | Perform a terminal reset. |
-| =M-n= | eat-next-shell-prompt | Go to the next shell prompt. |
-| =M-p= | eat-previous-shell-prompt | Go to the previous shell prompt. |
+| =<mouse-3>= | unbound |  |
 
-* eat-semi-char-mode-map
+* ghostel-semi-char-mode-map
 
 | Key | Command | Description |
 |-
@@ -134,24 +133,6 @@ Do not edit; regenerate it.
 | =C-x C-e= | my/terminal-edit-command-line | Edit the shell's command line in Emacs: send C-x C-e. |
 | =M-<left>= | my/terminal-backward-word | Move the shell's cursor back one word: send ESC b. |
 | =M-<right>= | my/terminal-forward-word | Move the shell's cursor forward one word: send ESC f. |
-
-* flycheck-mode-map
-
-| Key | Command | Description |
-|-
-| =<mouse-3>= | unbound |  |
-
-* gterm-mode-map
-
-| Key | Command | Description |
-|-
-| =<backtab>= | my/terminal-send-backtab | package not loaded |
-| =C-<backspace>= | my/terminal-backward-kill-word | package not loaded |
-| =C-c C-e= | my/terminal-edit-command-line | package not loaded |
-| =C-x C-e= | my/terminal-edit-command-line | package not loaded |
-| =M-<left>= | my/terminal-backward-word | package not loaded |
-| =M-<right>= | my/terminal-forward-word | package not loaded |
-| =M-DEL= | my/terminal-backward-kill-word | package not loaded |
 
 * java-mode-map
 
@@ -189,21 +170,6 @@ Do not edit; regenerate it.
 | Key | Command | Description |
 |-
 | =C-c e= | embark-export | Create a type-specific buffer to manage current candidates. |
-
-* mistty-prompt-map
-
-| Key | Command | Description |
-|-
-| =C-j= | mistty-newline | Send one ore more newlines that won't submit the current command. |
-| =C-r= | mistty-send-key | Send the current key sequence to the terminal. |
-| =C-t= | mistty-send-key | Send the current key sequence to the terminal. |
-| =C-x C-e= | my/terminal-edit-command-line | Edit the shell's command line in Emacs: send C-x C-e. |
-| =M-<left>= | my/terminal-backward-word | Move the shell's cursor back one word: send ESC b. |
-| =M-<right>= | my/terminal-forward-word | Move the shell's cursor forward one word: send ESC f. |
-| =M-c= | mistty-send-key | Send the current key sequence to the terminal. |
-| =M-r= | mistty-send-key | Send the current key sequence to the terminal. |
-| =M-s= | mistty-send-key | Send the current key sequence to the terminal. |
-| =RET= | mistty-send-command | Send the current command to the shell. |
 
 * my/debug-map
 
@@ -269,5 +235,3 @@ Do not edit; regenerate it.
 
 * Forms the readers could not resolve
 
-- init.el:3282: define-key in gterm: map gterm-mode-map, key (kbd (format "C-%c" c)) not resolved
-- init.el:3282: define-key in gterm: map gterm-mode-map, key (kbd (format "M-%c" c)) not resolved

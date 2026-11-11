@@ -1,30 +1,23 @@
 #+TITLE: Use a terminal inside Emacs
 #+OPTIONS: toc:nil num:nil
-#+KEYMAPS: eat-mode-map eat-semi-char-mode-map mistty-mode-map mistty-prompt-map gterm-mode-map
+#+KEYMAPS: ghostel-mode-map ghostel-semi-char-mode-map ghostel-readonly-mode-map
 
-Three terminals run your shell in an Emacs buffer.  They share the
-shell keys below; the /Shell terminals/ section of =README.org=
-explains the differences, and the parity matrix of plan 091
-(=tests/scenarios/l3-pty-*.el=) checks them.
-
-* Pick a terminal
-
-| Terminal | Open it           | Best for                                          | Known gaps                                                                         |
-|----------+-------------------+---------------------------------------------------+------------------------------------------------------------------------------------|
-| eat      | =M-x eat-project= | daily work, full-screen programs                  | Emacs stalls under bulk output                                                     |
-| mistty   | =C-c t=           | editing the command line with Emacs keys and undo | slow under bulk output; opens in a second window; starts in the buffer's directory |
-| gterm    | =M-x gterm=       | bulk output, Unicode, full-screen programs        | experimental; no mouse; no search; starts in the buffer's directory                |
+Ghostel runs your shell in an Emacs buffer, on Ghostty's terminal
+engine.  The /Shell terminals/ section of =README.org= explains how it
+is set up, and the parity matrix (=tests/scenarios/l3-pty-ghostel.el=)
+checks the shell keys below.
 
 * Prepare the shell, once
 
-The terminals expect zsh with a few hooks.  Add this block to
-=~/.zshrc=, after =source $ZSH/oh-my-zsh.sh= if you use oh-my-zsh:
+Ghostel brings its own shell integration to zsh, bash, fish and
+nushell: prompt marks and directory tracking need nothing in your
+startup files.  The shell keys below need fzf and zsh's command-line
+editor.  Add this block to =~/.zshrc=, after =source $ZSH/oh-my-zsh.sh=
+if you use oh-my-zsh:
 
 #+BEGIN_SRC zsh
-# eat's prompt marks, for jumping between prompts.
-[[ -n $EAT_SHELL_INTEGRATION_DIR ]] && source "$EAT_SHELL_INTEGRATION_DIR/zsh"
-
-# Prompt marks and directory tracking for every terminal.
+# Prompt marks and directory tracking for the terminals outside Emacs,
+# such as tmux, GNOME Console or Terminal.app; ghostel sends its own.
 autoload -Uz add-zsh-hook
 _emt_precmd()  { printf '\e]133;A\e\\'; }
 _emt_preexec() { printf '\e]133;C\e\\'; }
@@ -37,8 +30,9 @@ _emt_chpwd
 # fzf's keys: C-r history, C-t files, M-c directories.
 source <(fzf --zsh)
 
-# C-x C-e edits the command line in Emacs.
-if [[ -n "$MISTTY" ]]; then
+# C-x C-e edits the command line in Emacs: in the same frame from a
+# terminal inside Emacs, in a new frame from any other.
+if [[ -n "$INSIDE_EMACS" ]]; then
     export VISUAL='emacsclient --reuse-frame'
 else
     export VISUAL='emacsclient --create-frame'
@@ -52,66 +46,61 @@ With Home Manager, =programs.fzf.enable = true;= sets up fzf's keys
 instead of the =source= line.  For a readable prompt, see [[file:shell-prompt.org][Set up a
 shell prompt]].
 
+* Get ghostel's module
+
+Ghostel needs a native module, of the same version as its Lisp.  The
+first =M-x ghostel= downloads it from ghostel's releases on GitHub,
+without asking, into =~/.emacs.d/straight/build/ghostel/=; on a fresh
+clone, the setup's =modules= phase does the same (=nix/setup.sh
+modules=).  An update of ghostel rebuilds that directory and so
+deletes the module: once Emacs restarts, its first =M-x ghostel=
+downloads the new one.
+
+The download needs the network, and goes through the proxy that
+=https_proxy= names.  If it failed, the next =M-x ghostel= tries again.
+Whether it passes the TLS inspection of a managed Mac has not been
+checked.
+
 * Open a terminal
 
-- At the project's root: =M-x eat-project=, or =s-p p=, pick the
-  project, then =e=.
-- In the current buffer's directory: =C-c t= opens mistty in a second
-  window (=C-x 1= then gives it the frame), or goes to the next mistty
-  buffer if one is open; =C-c T= does the same, always in another
-  window.  =M-x eat= opens eat there.
-- gterm: =M-x gterm=, once its module is built (see the last section).
+- In the current buffer's directory: =C-c t=.  When a terminal is
+  open already, =C-c t= goes to it; with a prefix argument, =C-u=
+  first, it opens another.
+- At the project's root: =C-c T=, or =s-p p=, pick the project, then
+  =t=.  Each project has its own terminal.
 
 * Use the shell's keys
-
-These work the same in the three terminals:
 
 - =C-r= picks a command from the history, =C-t= inserts a file path,
   and =M-c= changes to a directory, each with fzf.
 - =M-<left>= and =M-<right>= move by words; =M-<backspace>= and
   =C-<backspace>= delete the word before the cursor.
-- =C-x C-e= opens the command line in an Emacs buffer, in a new frame
-  (in the same frame from mistty, as =VISUAL= says).  Edit it, save
-  with =C-x C-s=, then press =C-x #=: the edited line comes back to
-  the prompt.  Press =RET= to run it.
+- =C-x C-e= opens the command line in an Emacs buffer, in the same
+  frame, as =VISUAL= says.  Edit it, save with =C-x C-s=, then press
+  =C-x #=: the edited line comes back to the prompt.  Press =RET= to
+  run it.
 
 To run a command over several lines, type it as in any shell: =RET=
-after =for w in a b; do= asks for the next line.  In mistty, =C-j=
-also inserts a newline without running the command, and the whole
-command line can be edited with Emacs keys and undo.
+after =for w in a b; do= asks for the next line.
+
+Every other key goes to the shell, but =C-c=, =C-x=, =C-u=, =C-h=,
+=M-x=, =M-:= and =C-\=, which stay Emacs's.  So do =<f8>= and =<f9>=,
+the file tree and the symbol outline; the other function keys reach
+the program in the terminal, as htop expects.  =C-y= pastes from the
+kill ring, and =C-SPC= starts a selection in copy mode, below.
 
 * Find and copy earlier output
 
-- mistty: the output is ordinary buffer text.  Press =C-s=, type, press
-  =RET=, then select and copy with =C-SPC= and =M-w=.
-- eat: press =C-c C-e= first to switch to Emacs mode, then search and
-  copy as above.  =C-c C-j= returns to the terminal.  =C-c C-p= and
-  =C-c C-n= jump to the previous and next prompt in either mode, and
-  =M-p= and =M-n= in Emacs mode.
-- gterm: the buffer holds the visible screen only.  Page back with
-  Shift and Page Up.
+The whole scrollback is buffer text.  Press =C-c C-e= for Emacs mode,
+where output keeps arriving and Emacs's keys read the buffer: =C-s=,
+type, =RET=, then select with =C-SPC= and copy with =M-w=.  Copying, or
+typing, returns to the terminal, as =C-c C-j= does.  =C-c C-t= is copy
+mode: the same, but the terminal freezes while you read.  =C-c M-p=
+and =C-c M-n= jump to the previous and next prompt, in copy mode.
 
 * Run a full-screen program
 
 Give it room first with =C-x 1=, then run it: =btop=, =htop= or a
 text editor draws on the whole window, and =q= (or its own quit key)
-brings the prompt back.  =M-x my/btop= opens btop in a gterm buffer
-of its own.
-
-* Build gterm's module
-
-gterm needs Zig 0.15.2 or later, and a module built once per machine.
-
-1. Run =M-x my/gterm-compile-module=.  It clones Ghostty if needed,
-   builds a debug module and loads gterm.
-2. The debug module can crash Emacs, so rebuild it at once, in a shell:
-   #+BEGIN_SRC zsh
-   cd ~/.emacs.d/straight/repos/emacs-libgterm
-   zig build -Doptimize=ReleaseSafe
-   #+END_SRC
-3. Restart Emacs: a loaded module cannot be replaced.  =M-x gterm= then
-   opens a terminal.
-
-On macOS 26, Zig must use a macOS 15 SDK.  The configuration arranges
-that for step 1 only; for step 2, see the /gterm/ section of
-=README.org=.
+brings the prompt back.  =M-x my/btop= opens btop in a ghostel buffer
+of its own, without a shell.

@@ -77,7 +77,7 @@ directory is a true path, without the links of macOS's =/tmp=.
 | ~EMACS_TEST_GUI=0~         | no graphical frame; graphic-only files become expected skips.  Needed on macOS         |
 | =EMACS_LIVE_DIR=           | where packages, native code and grammars are read, read-only; =~/.emacs.d= by default  |
 | ~UPDATE_GOLDEN=1~          | the golden tests approve what they see, rewriting =tests/golden/=                      |
-| ~PTY_MATRIX_GAPS=1~        | also runs the terminal scenarios of known gaps                                         |
+| ~PTY_MATRIX_GAPS=1~        | also runs the terminal scenarios of known gaps; ghostel has none                       |
 | ~PTY_MATRIX_TIMING=1~      | also runs the terminal throughput timings; for an idle machine                         |
 | ~SCENARIO_IDLE_UNTIL_MS=1~ | bounds every =(:idle-until ...)= at 1 ms: each must then fail, or it waits for nothing |
 
@@ -106,6 +106,9 @@ its path, with =messages.txt=, =results.jsonl= and =emacs.log= inside.
 - Xvfb on Linux, unless ~EMACS_TEST_GUI=0~.
 - The packages already built in =EMACS_LIVE_DIR=: the tests never
   download or build them.
+- Ghostel's native module in =EMACS_LIVE_DIR='s =straight/build/ghostel/=,
+  from =nix/setup.sh modules= or a first =M-x ghostel=: the tests never
+  download it, and the =PTY ghostel= scenarios fail without it.
 - git and ripgrep; the L3 files also use the language servers of
   [[file:dependencies.org][the dependencies]], and skip when one is missing.
 
@@ -134,8 +137,7 @@ Each runs four jobs:
 
 - The programs besides Emacs come from the configuration's flake, the
   =tests= list of [[file:../../nix/programs.nix][nix/programs.nix]], in the shell of each matrix entry;
-  its nixpkgs is that of the NixOS machine, moved by hand.  The list
-  leaves out zig, so gterm's scenarios skip.
+  its nixpkgs is that of the NixOS machine, moved by hand.
 - Each job restores the packages' sources, cached once for every job
   and keyed by the lock file, and their builds, cached once per system,
   Emacs and version; it saves them once their pins check, whatever the
@@ -143,8 +145,8 @@ Each runs four jobs:
 - Before the tests, each job runs the setup, [[file:../../nix/setup.sh][nix/setup.sh]], in two
   phases: =--strict packages= installs the packages from the lock file
   and fails on one off its pin; then, with the caches saved, =modules=
-  links the flake's tree-sitter grammars, builds jinx's module and, in
-  =full=, fetches what CIDER injects.  Then it checks that a session
+  links the flake's tree-sitter grammars, builds jinx's module,
+  downloads ghostel's and, in =full=, fetches what CIDER injects.  Then it checks that a session
   finds the flake's programs first on =PATH=.
 - A neomacs job measures how far neomacs gets: each of its steps
   continues on error, so the job ends green, and its summary gives the

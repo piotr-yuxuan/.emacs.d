@@ -62,7 +62,32 @@
 
 (defvar my/straight-safe-update-boundaries
   ;; `straight-pull-all' returns only the merge failures.
-  (list :pull (lambda () (delete-dups (append (straight-fetch-all) (straight-merge-all))))
+  (list :pull (lambda ()
+                (delete-dups (append (straight-fetch-all)
+                                     (straight-merge-all
+                                      nil (lambda (package) (not (equal package "ghostel")))))))
+        :release (lambda ()
+                   (let* ((default-directory (straight--repos-dir "ghostel"))
+                          ;; 0: HEAD is on the upstream branch; 1: it holds
+                          ;; commits of its own; else no branch, no upstream.
+                          (ancestry (and (file-directory-p default-directory)
+                                         (call-process "git" nil nil nil "merge-base"
+                                                       "--is-ancestor" "HEAD" "@{upstream}"))))
+                     (cond ((eql ancestry 1)
+                            nil)
+                           ((not (eql ancestry 0))
+                            (list '(:package "ghostel")))
+                           ;; Back from a later commit too, as a plain
+                           ;; `straight-pull-all' leaves it, but never over a
+                           ;; local change.  A release tag is on the upstream
+                           ;; branch, without a suffix such as -rc1.
+                           ((not (when-let* ((tag (seq-find
+                                                   (lambda (tag)
+                                                     (string-match-p "\\`v[0-9]+\\(?:\\.[0-9]+\\)*\\'" tag))
+                                                   (process-lines "git" "tag" "--list" "v*" "--merged"
+                                                                  "@{upstream}" "--sort=-v:refname"))))
+                                   (eql 0 (call-process "git" nil nil nil "reset" "--keep" tag))))
+                            (list '(:package "ghostel"))))))
         :rebuild #'straight-check-all
         :test (lambda (runner done)
                 ;; Run RUNNER fast asynchronously; call DONE with its exit
@@ -85,18 +110,21 @@
         :freeze #'straight-freeze-versions
         :thaw #'straight-thaw-versions)
   "The effects of `my/straight-safe-update', as a plist of functions.
-:pull pulls every package and returns the recipes it could not pull;
-:rebuild rebuilds the changed packages; :test takes the test runner
-and a function it calls with the exit status of `RUNNER fast'; :freeze
-writes the lockfile; :thaw checks out the lockfile versions and returns
-the recipes it could not check out.")
+:pull pulls every package but ghostel and returns the recipes it could
+not pull; :release moves ghostel to its newest release tag, leaves a
+ghostel with commits of its own alone, and returns its recipe when it
+cannot do either; :rebuild rebuilds the changed packages;
+:test takes the test runner and a function it calls with the exit
+status of `RUNNER fast'; :freeze writes the lockfile; :thaw checks out
+the lockfile versions and returns the recipes it could not check out.")
 
 (defun my/straight-safe-update ()
   "Update every package, keeping the update only if the fast tests pass.
-Pull every package and rebuild the changed ones, then run `tests/run
-fast'.  When the tests pass, write the new versions to the lockfile;
-when a pull fails, the pull or rebuild signals or is quit, or the tests
-fail or cannot start, restore the lockfile versions and rebuild."
+Pull every package, ghostel to its newest release, and rebuild the
+changed ones, then run `tests/run fast'.  When the tests pass, write
+the new versions to the lockfile; when a pull fails, the pull or
+rebuild signals or is quit, or the tests fail or cannot start, restore
+the lockfile versions and rebuild."
   (interactive)
   (let* ((effect (lambda (key &rest arguments)
                    (apply (plist-get my/straight-safe-update-boundaries key) arguments)))
@@ -117,7 +145,8 @@ fail or cannot start, restore the lockfile versions and rebuild."
       (user-error "Package update not started: the tests of the previous one still run"))
     (when-let* ((reason
                  (condition-case err
-                     (if-let* ((unpulled (funcall effect :pull)))
+                     (if-let* ((unpulled (append (funcall effect :pull)
+                                                 (funcall effect :release))))
                          (format "%s not pulled" (funcall packages unpulled))
                        (funcall effect :rebuild)
                        ;; Freeze and thaw run from the sentinel, where Emacs
@@ -208,10 +237,7 @@ fail or cannot start, restore the lockfile versions and rebuild."
 (defun my/disable-hl-line ()
   "Disable `hl-line-mode' in the current buffer."
   (hl-line-mode -1))
-(dolist (hook '(mistty-mode-hook
-              gterm-mode-hook
-              term-mode-hook
-              shell-mode-hook
+(dolist (hook '(shell-mode-hook
               eshell-mode-hook))
   (add-hook hook #'my/disable-hl-line))
 
@@ -1105,6 +1131,58 @@ Set it in `local.el' on a machine where vellum is installed."
     (add-to-list 'load-path (expand-file-name my/vellum-directory))
     (require 'vellum)))
 
+;; imprimeur first: a skin's recipe needs it.
+(when (version<= "31.1" emacs-version)
+  (use-package imprimeur
+    :straight (imprimeur :type git :host github :repo "piotr-yuxuan/imprimeur"
+                         :files ("imprimeur/*.el" "imprimeur/assets"))
+    :bind ("C-c v p" . imprimeur-mode))
+
+  (use-package imprimeur-skin-tianlu
+    :straight (imprimeur-skin-tianlu :type git :host github :repo "piotr-yuxuan/imprimeur"
+                                     :local-repo "imprimeur"
+                                     :files ("imprimeur-skin-tianlu/*.el" "imprimeur-skin-tianlu/assets")))
+
+  (use-package imprimeur-skin-dubai
+    :straight (imprimeur-skin-dubai :type git :host github :repo "piotr-yuxuan/imprimeur"
+                                    :local-repo "imprimeur"
+                                    :files ("imprimeur-skin-dubai/*.el" "imprimeur-skin-dubai/assets")))
+
+  (use-package imprimeur-skin-yaqut
+    :straight (imprimeur-skin-yaqut :type git :host github :repo "piotr-yuxuan/imprimeur"
+                                    :local-repo "imprimeur"
+                                    :files ("imprimeur-skin-yaqut/*.el" "imprimeur-skin-yaqut/assets")))
+
+  (use-package imprimeur-skin-minitel
+    :straight (imprimeur-skin-minitel :type git :host github :repo "piotr-yuxuan/imprimeur"
+                                      :local-repo "imprimeur"
+                                      :files ("imprimeur-skin-minitel/*.el" "imprimeur-skin-minitel/assets")))
+
+  (use-package imprimeur-skin-xix
+    :straight (imprimeur-skin-xix :type git :host github :repo "piotr-yuxuan/imprimeur"
+                                  :local-repo "imprimeur"
+                                  :files ("imprimeur-skin-xix/*.el" "imprimeur-skin-xix/assets")))
+
+  (use-package imprimeur-skin-xviii
+    :straight (imprimeur-skin-xviii :type git :host github :repo "piotr-yuxuan/imprimeur"
+                                    :local-repo "imprimeur"
+                                    :files ("imprimeur-skin-xviii/*.el" "imprimeur-skin-xviii/assets")))
+
+  (use-package imprimeur-skin-xvii
+    :straight (imprimeur-skin-xvii :type git :host github :repo "piotr-yuxuan/imprimeur"
+                                   :local-repo "imprimeur"
+                                   :files ("imprimeur-skin-xvii/*.el" "imprimeur-skin-xvii/assets")))
+
+  (use-package imprimeur-skin-briefing
+    :straight (imprimeur-skin-briefing :type git :host github :repo "piotr-yuxuan/imprimeur"
+                                       :local-repo "imprimeur"
+                                       :files ("imprimeur-skin-briefing/*.el" "imprimeur-skin-briefing/assets")))
+
+  (use-package imprimeur-skin-ecrivain
+    :straight (imprimeur-skin-ecrivain :type git :host github :repo "piotr-yuxuan/imprimeur"
+                                       :local-repo "imprimeur"
+                                       :files ("imprimeur-skin-ecrivain/*.el" "imprimeur-skin-ecrivain/assets"))))
+
 (put 'scroll-left 'disabled nil)
 
 (defun my/table-view-org-rows ()
@@ -1632,7 +1710,7 @@ exist, a dangling link, act as `dired-find-file'."
      (consult-ripgrep "Ripgrep" "r")
      (project-find-dir "Find dir" "d")
      (magit-project-status "Magit" "g")
-     (eat-project "Eat" ?e))))
+     (ghostel-project "Ghostel" ?t))))
 
 (use-package imenu-list
   :custom
@@ -1860,6 +1938,19 @@ when it is unset."
     :config
     (setq treesit-auto-install 'prompt))
 
+  ;; Emacs.app (jimeh/emacs-builds) hard-sets LIBRARY_PATH for native
+  ;; compilation (libgccjit).  The Xcode SDK paths it injects conflict
+  ;; with Nix GCC's --sysroot, causing "Undefined symbols" link errors
+  ;; when compiling tree-sitter grammars.  Strip LIBRARY_PATH during
+  ;; grammar compilation so Nix GCC uses its own defaults.
+  (define-advice treesit-install-language-grammar
+      (:around (orig-fn &rest args) strip-library-path)
+    "Remove LIBRARY_PATH for grammar compilation to avoid Nix/Xcode SDK conflict."
+    (let ((process-environment
+           (cl-remove-if (lambda (e) (string-prefix-p "LIBRARY_PATH=" e))
+                         process-environment)))
+      (apply orig-fn args)))
+
   (defun my/treesit-remap-when-ready (lang from to &optional fallback)
     "Remap FROM to TO when LANG grammar is installed.
 Otherwise FROM runs: add FALLBACK, when non-nil, to its hook."
@@ -1875,22 +1966,173 @@ Otherwise FROM runs: add FALLBACK, when non-nil, to its hook."
                (fboundp mode))
       (add-to-list 'auto-mode-alist (cons regexp mode))))
 
-  ;; Only remap modes when the corresponding grammar exists.
-  ;; This prevents "missing grammar" errors on fresh machines.
-  (my/treesit-remap-when-ready 'python     'python-mode     'python-ts-mode)
-  (my/treesit-remap-when-ready 'java       'java-mode       'java-ts-mode #'lsp-deferred)
-  (my/treesit-remap-when-ready 'json       'js-json-mode    'json-ts-mode)
-  (my/treesit-remap-when-ready 'css        'css-mode        'css-ts-mode)
-  (my/treesit-remap-when-ready 'html       'html-mode       'html-ts-mode)
-  (my/treesit-remap-when-ready 'html       'mhtml-mode      'html-ts-mode)
-  (my/treesit-remap-when-ready 'dockerfile 'dockerfile-mode 'dockerfile-ts-mode #'lsp-deferred)
+  (defun my/treesit-apply-remaps ()
+    "Remap the modes whose grammar is installed, at startup and after a refresh."
+    ;; Only remap modes when the corresponding grammar exists.
+    ;; This prevents "missing grammar" errors on fresh machines.
+    (my/treesit-remap-when-ready 'python     'python-mode     'python-ts-mode)
+    (my/treesit-remap-when-ready 'java       'java-mode       'java-ts-mode #'lsp-deferred)
+    (my/treesit-remap-when-ready 'json       'js-json-mode    'json-ts-mode)
+    (my/treesit-remap-when-ready 'css        'css-mode        'css-ts-mode)
+    (my/treesit-remap-when-ready 'html       'html-mode       'html-ts-mode)
+    (my/treesit-remap-when-ready 'html       'mhtml-mode      'html-ts-mode)
+    (my/treesit-remap-when-ready 'dockerfile 'dockerfile-mode 'dockerfile-ts-mode #'lsp-deferred)
 
-  ;; Extensions that should switch to ts-modes only when ready.
-  (my/treesit-auto-mode-when-ready 'yaml       "\\.ya?ml\\'"                                              'yaml-ts-mode)
-  (my/treesit-auto-mode-when-ready 'dockerfile "\\(?:Dockerfile\\(?:\\..*\\)?\\|\\.[Dd]ockerfile\\)\\'" 'dockerfile-ts-mode)
-  (my/treesit-auto-mode-when-ready 'bash       "\\.sh\\'"                                                'bash-ts-mode)
-  (my/treesit-auto-mode-when-ready 'bash       "\\.bash\\'"                                              'bash-ts-mode)
-  (my/treesit-auto-mode-when-ready 'bash       "\\.zsh\\'"                                               'bash-ts-mode))
+    ;; Extensions that should switch to ts-modes only when ready.
+    (my/treesit-auto-mode-when-ready 'yaml       "\\.ya?ml\\'"                                              'yaml-ts-mode)
+    (my/treesit-auto-mode-when-ready 'dockerfile "\\(?:Dockerfile\\(?:\\..*\\)?\\|\\.[Dd]ockerfile\\)\\'" 'dockerfile-ts-mode)
+    (my/treesit-auto-mode-when-ready 'bash       "\\.sh\\'"                                                'bash-ts-mode)
+    (my/treesit-auto-mode-when-ready 'bash       "\\.bash\\'"                                              'bash-ts-mode)
+    (my/treesit-auto-mode-when-ready 'bash       "\\.zsh\\'"                                               'bash-ts-mode))
+  (my/treesit-apply-remaps)
+
+  (defcustom my/treesit-refresh-at-startup t
+    "Whether each interactive start rebuilds the grammars in the background."
+    :type 'boolean
+    :group 'my)
+
+  (defvar my/treesit-refresh-process nil
+    "The batch Emacs that rebuilds the grammars, while it runs.")
+
+  (defun my/treesit-grammar-language (file)
+    "Return the language of the grammar library FILE, a symbol, or nil."
+    (when (string-match "\\`libtree-sitter-\\(.+\\)\\.\\(?:so\\|dylib\\|dll\\)\\'" file)
+      (intern (match-string 1 file))))
+
+  (defun my/treesit-grammar-files (dir)
+    "Return an alist of (FILE . SYMLINK-P) for the grammar files in DIR.
+They include the copies that a build leaves, named FILE.old."
+    (mapcar (lambda (file)
+              (cons file (and (file-symlink-p (expand-file-name file dir)) t)))
+            (and (file-directory-p dir)
+                 (directory-files dir nil "\\`libtree-sitter-"))))
+
+  (defun my/treesit-refresh-actions (present built)
+    "Return what a refresh does once its builder has ended.
+PRESENT is the alist of `my/treesit-grammar-files' for the grammar
+directory, BUILT the file names that the builder left in the staging
+directory.  The result holds (install FILE) for each built file,
+unless the grammar of its language is a symbolic link, and (delete
+FILE) for each regular file of PRESENT that a build left as FILE.old.
+No grammar is deleted for its language: Emacs installs some of its
+own on demand, which no recipe of treesit-auto names."
+    (let ((linked (cl-loop for (file . link) in present
+                           when link collect (my/treesit-grammar-language file))))
+      (append
+       (cl-loop for file in built
+                unless (memq (my/treesit-grammar-language file) linked)
+                collect (list 'install file))
+       (cl-loop for (file . link) in present
+                when (and (not link) (string-suffix-p ".old" file))
+                collect (list 'delete file)))))
+
+  (defun my/treesit-refresh-grammars ()
+    "Rebuild every tree-sitter grammar in a batch Emacs, without waiting.
+The builder compiles each grammar that Emacs's modes and treesit-auto's
+recipes name, Emacs's pinned revision first, into a staging directory
+and keeps those that load; when it ends, they replace the installed
+ones by a rename, and the copies that builds left are deleted.
+Symbolic links are left alone.  A grammar this Emacs has loaded
+already serves its rebuilt version from the next start."
+    (interactive)
+    (require 'treesit-auto)
+    (let* ((dir (expand-file-name "tree-sitter/" user-emacs-directory))
+           (staging (expand-file-name (format ".refresh-%d/" (emacs-pid)) dir))
+           (linked (cl-loop for (file . link) in (my/treesit-grammar-files dir)
+                            when link collect (my/treesit-grammar-language file)))
+           (recipes (cl-remove-if-not (lambda (recipe)
+                                        (memq (treesit-auto-recipe-lang recipe)
+                                              treesit-auto-langs))
+                                      treesit-auto-recipe-list))
+           (wanted (cl-set-difference (mapcar #'treesit-auto-recipe-lang recipes) linked))
+           ;; The builder: loading each mode adds Emacs's own recipe,
+           ;; pinned, and those of the grammars it needs besides; a
+           ;; recipe of treesit-auto serves the other languages.  Each
+           ;; grammar goes into STAGING, kept only if it loads from
+           ;; there: user-emacs-directory points away from the
+           ;; installed grammars, which would otherwise answer.
+           (form `(progn
+                    (require 'treesit)
+                    ;; Through its autoload: python-ts-mode, for one,
+                    ;; lives in python.el.
+                    (dolist (mode ',(mapcar #'treesit-auto-recipe-ts-mode recipes))
+                      (ignore-errors (autoload-do-load (symbol-function mode) mode)))
+                    (dolist (source ',(mapcar (lambda (recipe)
+                                                (list (treesit-auto-recipe-lang recipe)
+                                                      (treesit-auto-recipe-url recipe)
+                                                      (treesit-auto-get-revision recipe)
+                                                      (treesit-auto-recipe-source-dir recipe)
+                                                      (treesit-auto-recipe-cc recipe)
+                                                      (treesit-auto-recipe-c++ recipe)))
+                                              recipes))
+                      (unless (assq (car source) treesit-language-source-alist)
+                        (push source treesit-language-source-alist)))
+                    (setq treesit-extra-load-path (list ,staging)
+                          user-emacs-directory ,staging)
+                    (dolist (lang (delete-dups (mapcar #'car treesit-language-source-alist)))
+                      (unless (memq lang ',linked)
+                        (treesit-install-language-grammar lang ,staging)
+                        (unless (treesit-language-available-p lang)
+                          (dolist (file (directory-files
+                                         ,staging t (format "\\`libtree-sitter-%s\\." lang)))
+                            (delete-file file)))))))
+           ;; See the advice above: the builder runs without it.
+           (process-environment
+            (cl-remove-if (lambda (e) (string-prefix-p "LIBRARY_PATH=" e))
+                          process-environment)))
+      (unless (or (null wanted) (process-live-p my/treesit-refresh-process))
+        ;; The staging directories of Emacs processes gone, this one's
+        ;; included: one killed while its builder ran leaves its own.
+        (dolist (old (directory-files dir t "\\`\\.refresh-[0-9]+\\'"))
+          (let ((pid (string-to-number (substring (file-name-nondirectory old) 9))))
+            (unless (and (/= pid (emacs-pid)) (process-attributes pid))
+              (delete-directory old t))))
+        (make-directory staging t)
+        (with-current-buffer (get-buffer-create " *treesit-refresh*")
+          (erase-buffer))
+        (let ((process
+               (make-process
+                :name "treesit-refresh"
+                :buffer " *treesit-refresh*"
+                :connection-type 'pipe
+                :noquery t
+                :command (append (and (executable-find "nice") '("nice"))
+                                 (list (expand-file-name invocation-name invocation-directory)
+                                       "--batch" "-Q" "--eval" (prin1-to-string form)))
+                :sentinel
+                (lambda (process _event)
+                  (unless (process-live-p process)
+                    (let* ((done (and (eq (process-status process) 'exit)
+                                      (zerop (process-exit-status process))))
+                           ;; A builder killed or crashed may have left a
+                           ;; file half copied or not checked: none counts.
+                           (built (and done (mapcar #'car (my/treesit-grammar-files staging))))
+                           (actions (my/treesit-refresh-actions
+                                     (my/treesit-grammar-files dir) built))
+                           (failed (cl-set-difference
+                                    wanted (mapcar #'my/treesit-grammar-language built))))
+                      (unwind-protect
+                          (pcase-dolist (`(,verb ,file) actions)
+                            (with-demoted-errors "Grammars: %S"
+                              (if (eq verb 'install)
+                                  (rename-file (expand-file-name file staging) dir t)
+                                (delete-file (expand-file-name file dir)))))
+                        (delete-directory staging t))
+                      (my/treesit-apply-remaps)
+                      (message "Grammars: %d rebuilt, %d leftovers removed, %d failed%s"
+                               (cl-count 'install actions :key #'car)
+                               (cl-count 'delete actions :key #'car)
+                               (length failed)
+                               (if failed (format " %S" failed) ""))))))))
+          (setq my/treesit-refresh-process process)
+          (run-with-timer 1800 nil (lambda ()
+                                     (when (process-live-p process)
+                                       (kill-process process))))))))
+
+  (add-hook 'emacs-startup-hook
+            (lambda ()
+              (when (and my/treesit-refresh-at-startup (not noninteractive))
+                (run-with-idle-timer 5 nil #'my/treesit-refresh-grammars)))))
 
 (use-package corfu
   :hook (emacs-startup . global-corfu-mode)
@@ -3182,293 +3424,57 @@ the mode activates lazily."
 
 (use-package restclient)
 
-(defun my/btop ()
-  "Open a gterm buffer running btop."
-  (interactive)
-  (let ((buf-name "*gterm* btop"))
-    (if-let* ((buf (get-buffer buf-name)))
-        (switch-to-buffer buf)
-      (gterm)
-      (rename-buffer buf-name)
-      (gterm-send-string "btop; exit 0\n"))))
-
-(defun my/terminal-send (string)
-  "Send STRING to the shell of the current eat, mistty or gterm buffer."
-  (cond ((derived-mode-p 'eat-mode) (eat-term-send-string eat-terminal string))
-        ((derived-mode-p 'mistty-mode) (mistty-send-string string))
-        ((derived-mode-p 'gterm-mode) (gterm-send-string string))
-        (t (user-error "Not an eat, mistty or gterm buffer"))))
-
 (defun my/terminal-backward-word ()
   "Move the shell's cursor back one word: send ESC b."
   (interactive)
-  (my/terminal-send "\eb"))
+  (ghostel-send-string "\eb"))
 
 (defun my/terminal-forward-word ()
   "Move the shell's cursor forward one word: send ESC f."
   (interactive)
-  (my/terminal-send "\ef"))
+  (ghostel-send-string "\ef"))
 
 (defun my/terminal-backward-kill-word ()
   "Delete the word before the shell's cursor: send ESC DEL."
   (interactive)
-  (my/terminal-send "\e\d"))
+  (ghostel-send-string "\e\d"))
 
 (defun my/terminal-edit-command-line ()
   "Edit the shell's command line in Emacs: send C-x C-e.
 zsh's `edit-command-line' widget then opens it with $VISUAL, an
 emacsclient, and reads the edited line back once the buffer is done."
   (interactive)
-  (my/terminal-send "\C-x\C-e"))
+  (ghostel-send-string "\C-x\C-e"))
 
-(defun my/terminal-send-meta-key ()
-  "Send the last key's character to the shell with Meta: ESC, then it.
-Bound to Meta and a letter, such as M-c for fzf's directory widget."
-  (interactive)
-  (my/terminal-send (string ?\e (event-basic-type last-command-event))))
-
-(defun my/terminal-send-backtab ()
-  "Send Shift-Tab to the shell: CSI Z, as fzf's multi-select expects."
-  (interactive)
-  (my/terminal-send "\e[Z"))
-
-(use-package eat
-  :straight (eat :host codeberg
-                 :repo "akib/emacs-eat"
-                 :files ("*.el" ("term" "term/*.el") "*.texi"
-                         "*.ti" ("terminfo/e" "terminfo/e/*")
-                         ("terminfo/65" "terminfo/65/*")
-                         ("integration" "integration/*")
-                         (:exclude ".dir-locals.el" "*-tests.el")))
-  :custom ((eat-term-scrollback-size (* 100 1024 1024))
-           (eat-enable-directory-tracking t)
-           (eat-enable-shell-prompt-annotation nil))
-  :bind (:map eat-mode-map
-         ("C-k" . eat-reset)
-         ("M-p" . eat-previous-shell-prompt)
-         ("M-n" . eat-next-shell-prompt)
-         ;; Semi-char mode leaves C-x and the Meta arrows to Emacs, and
-         ;; sends ^H for C-<backspace>; send what zsh binds instead, as
-         ;; mistty and gterm do.
-         :map eat-semi-char-mode-map
+(use-package ghostel
+  :custom
+  (ghostel-module-auto-install 'download)
+  ;; Ghostel's own exceptions, and this configuration's F8 and F9.
+  (ghostel-keymap-exceptions
+   '("C-c" "C-x" "C-u" "C-h" "M-x" "M-:" "C-\\" "<f8>" "<f9>"))
+  (ghostel-macos-login-shell nil)
+  :bind (("C-c t" . ghostel)
+         ("C-c T" . ghostel-project)
+         :map ghostel-semi-char-mode-map
          ("M-<left>" . my/terminal-backward-word)
          ("M-<right>" . my/terminal-forward-word)
          ("C-<backspace>" . my/terminal-backward-kill-word)
          ("C-x C-e" . my/terminal-edit-command-line)))
 
-(use-package mistty
-  :straight (:host github :repo "szermatt/mistty")
-  :bind (("C-c t" . mistty)
-         ("C-c T" . mistty-other-window)
-         :map mistty-prompt-map
-         ;; RET runs the command; C-j inserts a newline for multi-line editing.
-         ("RET"        . mistty-send-command)
-         ("C-j"        . mistty-newline)
-         ;; Forward fzf keys to the shell (C-r history, C-t file, M-c cd).
-         ;; Shadows isearch-backward, transpose-chars, capitalize-word
-         ;; in the prompt zone; acceptable trade-off at a shell prompt.
-         ("C-r"       . mistty-send-key)
-         ("C-t"       . mistty-send-key)
-         ("M-c"       . mistty-send-key)
-         ;; zsh's edit-command-line widget.  `mistty-send-key' fails on
-         ;; a sequence of two keys.
-         ("C-x C-e"   . my/terminal-edit-command-line)
-         ;; Pass navigation keys to the shell rather than Emacs.
-         ("M-r"       . mistty-send-key)
-         ("M-s"       . mistty-send-key)
-         ;; Word motion as zsh binds it, ESC b and ESC f.
-         ;; `mistty-send-key' would send the xterm codes \e[1;3D and
-         ;; \e[1;3C, which zsh leaves unbound.
-         ("M-<left>"  . my/terminal-backward-word)
-         ("M-<right>" . my/terminal-forward-word)
-         ;; M-<up> / M-<down> are intentionally NOT overridden here.
-         ;; The default mistty-mode-map already binds them to
-         ;; mistty-send-C-p / mistty-send-C-n, which send C-p / C-n
-         ;; (readline previous/next history).  Binding them to
-         ;; mistty-send-key would send xterm escape codes (\e[1;3A)
-         ;; that most shells don't understand, producing literal ";3A".
-         ))
-
-(use-package gterm
-  :straight (:host github :repo "rwc9u/emacs-libgterm" :files ("*"))
-  :init
-  ;; Point source-dir at the repos checkout so zig build finds
-  ;; vendor/ghostty and the existing zig-out artefacts.  The
-  ;; straight/build/ copy lacks a working emacs-module.h detection on
-  ;; NixOS because the Zig-side fallback is a macOS path.  The
-  ;; checkout is under `straight-base-dir', which is not always
-  ;; `user-emacs-directory': test sessions have their own.
-  (setq gterm-source-dir (expand-file-name "straight/repos/emacs-libgterm/"
-                                           straight-base-dir)
-        gterm-module-path (expand-file-name
-                           (concat "zig-out/lib/libgterm-module" module-file-suffix)
-                           gterm-source-dir)
-        ;; /bin/zsh does not exist on NixOS; find zsh via PATH.
-        gterm-shell (or (executable-find "zsh") (getenv "SHELL") "/bin/sh"))
-
-  ;; Loading gterm.el without its module builds it, after cloning
-  ;; Ghostty, or asks to, before any advice on `gterm' could run: the
-  ;; autoload of `gterm' loads gterm.el first.  So `gterm' stands in
-  ;; for that autoload, and the module is built on request only.
-  (defun my/gterm-compile-module ()
-    "Build gterm's Zig module, cloning Ghostty when missing, then load gterm.
-Run it once after installing gterm: `gterm' refuses to start until
-the module exists.  It builds and loads a Debug module; rebuild it
-with zig build -Doptimize=ReleaseSafe in `gterm-source-dir', then
-restart Emacs."
-    (interactive)
-    ;; `dlet': gterm.el reads it while it loads; a lexical `let' fails.
-    (dlet ((gterm-always-compile-module t))
-      (require 'gterm)))
-
-  (unless (featurep 'gterm)
-    (defalias 'gterm
-      (lambda ()
-        "Create a new gterm terminal buffer, once gterm's module is built.
-Without the module, signal a `user-error' that names
-`my/gterm-compile-module', and leave gterm.el unloaded: loading it
-would build the module.  gterm.el replaces this stand-in for its
-autoload with the real `gterm' when it loads.  Completing a gterm-
-name in C-h f or C-h v still loads gterm.el."
-        (interactive)
-        (unless (file-exists-p gterm-module-path)
-          (user-error "gterm: no module at %s; build it with M-x my/gterm-compile-module"
-                      gterm-module-path))
-        (require 'gterm)
-        (call-interactively #'gterm))))
-
-  ;; macOS 26 SDK workaround: the default SDK (MacOSX.sdk) may lack
-  ;; arm64-macos stubs (only arm64e-macos), breaking Zig's linker.
-  ;; Detect this at compile time and shim xcrun to return a macOS 15
-  ;; SDK that still ships arm64-macos stubs.  None of it is defined
-  ;; elsewhere than on macOS.
-  (when my/macos-p
-    (defun my/gterm--macos15-sdk-path ()
-      "Return the newest macOS 15.x SDK path, or nil if none found."
-      (let ((sdk-dir "/Library/Developer/CommandLineTools/SDKs/"))
-        (when (file-directory-p sdk-dir)
-          (car (last (sort (file-expand-wildcards
-                            (concat sdk-dir "MacOSX15*.sdk"))
-                           #'string<))))))
-
-    (defun my/gterm--sdk-needs-workaround-p ()
-      "Return non-nil if the default macOS SDK lacks arm64-macos stubs."
-      (let ((default-tbd
-             (expand-file-name
-              "usr/lib/libSystem.tbd"
-              "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk")))
-        (and (file-exists-p default-tbd)
-             (with-temp-buffer
-               (insert-file-contents default-tbd nil 0 500)
-               (not (string-match-p "arm64-macos" (buffer-string)))))))
-
-    (defun my/gterm-compile-with-sdk-workaround (orig-fn &rest args)
-      "Advice around `gterm-module-compile' to shim xcrun on macOS 26+.
-Creates a temporary xcrun wrapper that returns a macOS 15.x SDK path,
-prepends it to PATH, and cleans up afterwards."
-      (if-let* (((my/gterm--sdk-needs-workaround-p))
-                (sdk (my/gterm--macos15-sdk-path))
-                (shim-dir (make-temp-file "gterm-xcrun-" t)))
-          (let ((shim-file (expand-file-name "xcrun" shim-dir)))
-            (with-temp-file shim-file
-              ;; Zig calls `xcrun --sdk macosx --show-sdk-path`.  Redirect
-              ;; only macOS SDK queries; let other SDK types (iphoneos etc.)
-              ;; fall through to the real xcrun.
-              (insert "#!/bin/sh\n"
-                      "case \"$*\" in\n"
-                      "  *macosx*--show-sdk-path*|*--show-sdk-path*macosx*)\n"
-                      "    echo '" sdk "' ;;\n"
-                      "  *) exec /usr/bin/xcrun \"$@\" ;;\n"
-                      "esac\n"))
-            (set-file-modes shim-file #o755)
-            (let ((process-environment
-                   (cons (concat "PATH=" shim-dir ":" (getenv "PATH"))
-                         process-environment)))
-              (unwind-protect
-                  (apply orig-fn args)
-                (delete-directory shim-dir t))))
-        (apply orig-fn args)))
-
-    (advice-add 'gterm-module-compile :around
-                #'my/gterm-compile-with-sdk-workaround))
-  :config
-  ;; Upstream bug: `gterm-mode-map' binds (vector 'control c), a
-  ;; two-event sequence [control <char>], instead of the event C-<char>,
-  ;; so every Ctrl+letter from its loop is dead.  It regressed in
-  ;; https://github.com/rwc9u/emacs-libgterm/pull/5 (56c0c69), which
-  ;; replaced the working (vector (list 'control c)).  Rebind them; the canary scenario of
-  ;; tests/scenarios/l3-pty-gterm.el fails once upstream binds the
-  ;; events correctly, and this loop can go.  Exclude letters with
-  ;; dedicated bindings: C-c (prefix), C-g (quit), C-h (help), C-i/TAB,
-  ;; C-m/RET, C-q (send-next-key), C-x (prefix), C-y (yank).
-  (cl-loop for c from ?a to ?z
-           unless (memq c '(?c ?g ?h ?i ?m ?q ?x ?y))
-           do (define-key gterm-mode-map
-                          (kbd (format "C-%c" c))
-                          #'gterm-send-ctrl-key))
-  ;; Meta+letter: send ESC + letter for word navigation and fzf cd.
-  ;; M-f/M-b (word nav), M-d (kill-word), M-c (fzf cd widget).
-  (dolist (c '(?b ?c ?d ?f))
-    (define-key gterm-mode-map (kbd (format "M-%c" c)) #'my/terminal-send-meta-key))
-  ;; Word keys as in eat and mistty; upstream sends the xterm codes
-  ;; \e[1;3D and \e[1;3C for M-<left> and M-<right>, which zsh leaves
-  ;; unbound, and ^H for C-<backspace>.
-  (define-key gterm-mode-map (kbd "M-DEL") #'my/terminal-backward-kill-word)
-  (define-key gterm-mode-map (kbd "C-<backspace>") #'my/terminal-backward-kill-word)
-  (define-key gterm-mode-map (kbd "M-<left>") #'my/terminal-backward-word)
-  (define-key gterm-mode-map (kbd "M-<right>") #'my/terminal-forward-word)
-  (define-key gterm-mode-map (kbd "<backtab>") #'my/terminal-send-backtab)
-  ;; zsh's edit-command-line: C-x C-e as in eat and mistty, and C-c C-e.
-  (define-key gterm-mode-map (kbd "C-x C-e") #'my/terminal-edit-command-line)
-  (define-key gterm-mode-map (kbd "C-c C-e") #'my/terminal-edit-command-line)
-
-  ;; gterm's module reads the shell's output but never answers a
-  ;; terminal query, and ignores OSC 7.  These run after
-  ;; `gterm--filter' has fed OUTPUT to the module.  A sequence split
-  ;; across two reads is missed; both are short and written at once.
-  ;; Upstream issues, drafted in plan 091, not yet filed at
-  ;; https://github.com/rwc9u/emacs-libgterm: "No reply to CSI 6 n"
-  ;; and "OSC 7 is ignored".  Expiry: the CPR cell of
-  ;; tests/scenarios/l3-pty-gterm.el fails on a second reply once
-  ;; upstream answers; then drop `my/gterm-report-cursor'.  Once
-  ;; upstream's filter sets `default-directory' on OSC 7, check with
-  ;; this advice removed that the cd cell still passes, then drop it.
-  (defun my/gterm-report-cursor (process output)
-    "Answer a cursor position query, CSI 6 n, in OUTPUT of gterm's PROCESS.
-fzf asks where the cursor is before it draws its list below the
-prompt, and waits for the answer.  Advice after `gterm--filter'."
-    (when (and (string-search "\e[6n" output)
-               (buffer-live-p (process-buffer process)))
-      (pcase-let ((`(,row . ,column) (gterm-cursor-pos
-                                      (buffer-local-value 'gterm--term
-                                                          (process-buffer process)))))
-        (process-send-string process (format "\e[%d;%dR" (1+ row) (1+ column))))))
-
-  (defun my/gterm-track-directory (process output)
-    "Follow the directories the shell reports with OSC 7 in OUTPUT of PROCESS.
-Set the `default-directory' of gterm's PROCESS buffer to the path of
-the last report, if it is a local directory here.  Unlike eat and mistty,
-it ignores the host and takes the path as sent, not percent-decoded,
-as the shell hook of the Host ZSH setup sends it.  Advice after
-`gterm--filter'."
-    (let ((start 0)
-          (directory nil))
-      (while (string-match (rx "\e]7;file://" (* (not (any "/")))
-                               (group "/" (* (not (any "\a\e"))))
-                               (or "\a" "\e\\"))
-                           output start)
-        (setq directory (decode-coding-string (match-string 1 output) 'utf-8)
-              start (match-end 0)))
-      ;; Any program can print a report: a remote path would make
-      ;; `file-directory-p' open a TRAMP connection from this filter.
-      (when (and directory (not (file-remote-p directory))
-                 (file-directory-p directory)
-                 (buffer-live-p (process-buffer process)))
-        (with-current-buffer (process-buffer process)
-          (setq default-directory (file-name-as-directory directory))))))
-
-  (advice-add 'gterm--filter :after #'my/gterm-report-cursor)
-  (advice-add 'gterm--filter :after #'my/gterm-track-directory))
+(defun my/btop ()
+  "Open a ghostel buffer running btop, or switch to the one running."
+  (interactive)
+  (let ((buffer (get-buffer-create "*ghostel* btop")))
+    ;; Started again when a previous start failed, or btop has quit.
+    (unless (process-live-p (get-buffer-process buffer))
+      (require 'ghostel)
+      ;; `ghostel-exec' sizes the terminal to the window showing the
+      ;; buffer, and that window's width still counts the line numbers
+      ;; of the buffer it showed before, until the next redisplay: btop
+      ;; then finds fewer than its 80 columns.  A buffer not shown yet
+      ;; gets 80 columns and 24 lines.
+      (ghostel-exec buffer "btop"))
+    (switch-to-buffer buffer)))
 
 (use-package daemons)
 
