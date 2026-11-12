@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: EUPL-1.2
+"""A stand-in for `gh api`, which holds GitHub's side of release.py's calls.
+
+It records each call in FAKE_GH_DIR/calls.jsonl, and acts on the bare repository that
+FAKE_GH_ORIGIN names, as GitHub does on its own: the mutation makes the commit, and a
+release makes its tag.  FAKE_GH_DIR holds what else GitHub would know:
+
+    releases.json  the tags that have a release
+    ci.json        the commits on which CI succeeded
+    fail           if present, a call whose text holds this file's text fails
+    garbage        if present, a call whose text holds this file's text gets this as answer
+"""
+
+import base64
+import json
+import os
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
+
+STATE = Path(os.environ["FAKE_GH_DIR"])
+ORIGIN = os.environ["FAKE_GH_ORIGIN"]
+
+
+def git(*arguments, environment=None, stdin=b""):
+    done = subprocess.run(
+        ["git", "--git-dir", ORIGIN, *arguments],
+        input=stdin,
+        capture_output=True,
+        check=True,
+        env={**os.environ, **(environment or {})},
+    )
+    return done.stdout.decode().strip()
+
+
+def refuse(reason):
+    print(f"fake-gh: {reason}", file=sys.stderr)
+    sys.exit(1)
+
+
+def state(name):
+    return json.loads((STATE / name).read_text()) if (STATE / name).exists() else []
+
+
+def commit_on_branch(change):
+    head = git("rev-parse", "refs/heads/main")
+    if change["expectedHeadOid"] != head:
+        refuse("Expected branch to point to another commit")
+    with tempfile.TemporaryDirectory() as scratch:
+        index = {"GIT_INDEX_FILE": f"{scratch}/index"}
+        git("read-tree", head, environment=index)
+        for addition in change["fileChanges"]["additions"]:
+            blob = git("hash-object", "-w", "--stdin", stdin=base64.b64decode(addition["contents"]))
+            git("update-index", "--add", "--cacheinfo", f"100644,{blob},{addition['path']}", environment=index)
+        tree = git("write-tree", environment=index)
+    message = f"{change['message']['headline']}\n\n{change['message']['body']}\n"
+    commit = git("commit-tree", tree, "-p", head, stdin=message.encode())
+    git("update-ref", "refs/heads/main", commit, head)
+    return {"data": {"createCommitOnBranch": {"commit": {"oid": commit}}}}
+
+
+def create_release(release):
+    tag, releases = release["tag_name"], state("releases.json")
+    if tag in releases:
+        refuse(f"Validation failed: the release {tag} exists")
+    git("update-ref", f"refs/tags/{tag}", release["target_commitish"])
+    (STATE / "releases.json").write_text(json.dumps([*releases, tag]))
+    return {"tag_name": tag}
+
+
+def graphql(body):
+    if "createCommitOnBranch" in body["query"]:
+        return commit_on_branch(body["variables"]["input"])
+    tag = body["variables"]["tag"]
+    release = {"tagName": tag} if tag in state("releases.json") else None
+    return {"data": {"repository": {"release": release}}}
+
+
+def runs_of_ci(path):
+    query = parse_qs(urlsplit(path).query)
+    wanted = query["head_sha"][0]
+    success = wanted in state("ci.json") and (
+        query.get("status"), query.get("event"), query.get("branch")
+    ) == (["success"], ["push"], ["main"])
+    return {"workflow_runs": [{"head_sha": wanted, "conclusion": "success"}] if success else []}
+
+
+def main():
+    arguments, stdin = sys.argv[1:], sys.stdin.read()
+    with (STATE / "calls.jsonl").open("a") as calls:
+        calls.write(json.dumps({"arguments": arguments, "stdin": stdin}) + "\n")
+    text = " ".join(arguments) + stdin
+    for name in ("fail", "garbage"):
+        marker = STATE / name
+        if marker.exists() and marker.read_text() in text:
+            if name == "fail":
+                refuse("this call is made to fail")
+            print("<html>garbage</html>")
+            return
+    method, path = arguments[arguments.index("--method") + 1], arguments[arguments.index("--method") + 2]
+    if path == "graphql":
+        print(json.dumps(graphql(json.loads(stdin))))
+    elif method == "POST" and path.endswith("/releases"):
+        print(json.dumps(create_release(json.loads(stdin))))
+    elif method == "GET" and "/actions/workflows/ci.yml/runs" in path:
+        print(json.dumps(runs_of_ci(path)))
+    else:
+        refuse(f"no such call: {arguments}")
+
+
+main()

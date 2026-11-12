@@ -1,0 +1,57 @@
+# SPDX-License-Identifier: EUPL-1.2
+#
+# A release after each successful CI of a push to main, and by hand with a bump.  It holds no
+# rule: the release is in .github/scripts/release.py, and docs/reference/release-pipeline.org
+# describes this file.  Taken from imprimeur's.
+name: CD
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: The part of the version to raise
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  # To read CI's runs, by hand.
+  actions: read
+  contents: write
+
+# One at a time. The one that runs is never cancelled; a newer one takes the place of the one
+# that waits, which would have found that main has moved.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # `branches` above is matched against a name alone, which a fork's branch may share.
+    if: >-
+      !github.event.repository.fork && (
+        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+        (github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.event == 'push' &&
+         github.event.workflow_run.head_repository.full_name == github.repository)
+      )
+    runs-on: ubuntu-24.04
+    # A release that hangs would hold the group above. A second run finishes one cut short.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # The whole history and the tags: the notes are the diff since the tag before.
+          fetch-depth: 0
+          # The script fetches this public repository anonymously, and writes through gh.
+          persist-credentials: false
+      - run: python3 .github/scripts/release.py
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+          RELEASE_BUMP: ${{ inputs.bump || 'patch' }}

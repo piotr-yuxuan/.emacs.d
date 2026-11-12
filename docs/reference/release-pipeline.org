@@ -1,0 +1,54 @@
+#+TITLE: Release pipeline
+#+OPTIONS: toc:nil num:nil
+
+The public repository releases each commit of =main= that CI checks,
+as imprimeur does.  Two workflows of GitHub Actions and one script,
+under =.github/= of the public tree; the private repository keeps them
+under =publish/overlay/.github/=, which its export copies.
+
+* The workflow CD
+
+=.github/workflows/cd.yml= runs in two cases, and never in a fork:
+
+- once CI completes on =main=: it goes on only if CI's conclusion is
+  =success=, its event =push=, and its commit from this repository;
+- by hand on =main=, with a bump: =patch=, =minor= or =major=.  The
+  script then checks that CI succeeded on that commit.
+
+One run at a time: a newer one waits, and replaces any that waits
+already.  Its permissions are =actions: read= and =contents: write=,
+and it stops after 15 minutes.
+
+* The script
+
+=.github/scripts/release.py= makes two writes, in this order, and a
+run makes only those that are missing, so that a second run finishes
+a run cut short:
+
+| Write   | What                                                                                                 |
+|---------+------------------------------------------------------------------------------------------------------|
+| commit  | =Version X.Y.Z=, then =[skip ci]=: the file =.version= alone, through GitHub's API, which signs it |
+| release | the release =X.Y.Z= and its tag on that commit, with the files changed since the release before     |
+
+The first release is =0.0.0=; each next one raises the patch, or the
+part a manual run names.  It writes nothing when =main= has moved past
+the commit CI checked, since the run of the newer push releases.
+
+The export from the private repository keeps =.version= as the public
+branch has it, and accepts on that branch the commits that change
+=.version= alone with that message: the next export starts from the
+version commit, after a =git pull --ff-only= of the public clone.
+
+* Its tests
+
+=.github/scripts/release_test.py= runs the script against a local bare
+repository, with =.github/scripts/fake-gh= standing for =gh=, and
+checks the conditions of =cd.yml=.  The job =release-script= of
+=ci.yml= runs it:
+
+#+BEGIN_SRC zsh :tangle no
+python3 -m unittest discover -s .github/scripts -p release_test.py
+#+END_SRC
+
+In the private repository, the same with =-s
+publish/overlay/.github/scripts=.

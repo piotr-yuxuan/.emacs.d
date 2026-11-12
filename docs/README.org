@@ -43,6 +43,8 @@ repository.
   and fonts in =nix/programs.nix=.
 - [[file:reference/local-el.org][local.el variables]]: what each machine sets.
 - [[file:reference/tests.org][Tests]]: commands, tiers, file headers and environment variables.
+- [[file:reference/release-pipeline.org][Release pipeline]]: how the public repository releases each
+  commit that CI checks.
 
 * Explanation
 
