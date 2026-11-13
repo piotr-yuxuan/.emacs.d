@@ -2272,9 +2272,19 @@ buffer-locally, leave the override `nil' so `indent-bars'' built-in
       (when (fboundp 'indent-bars-reset)
         (indent-bars-reset)))))
 
+(defun my/indent-bars-yaml-spacing ()
+  "Draw this buffer's indentation bars every 2 columns.
+`yaml-ts-mode' has no indentation offset for `indent-bars' to read,
+and 2 columns is the indentation most YAML uses."
+  (setq-local indent-bars-spacing-override 2))
+
+;; Depth -10: the override must be set before `indent-bars-mode' reads it.
+(add-hook 'yaml-ts-mode-hook #'my/indent-bars-yaml-spacing -10)
+
 (use-package indent-bars
   :hook ((prog-mode . indent-bars-mode)
          (LaTeX-mode . indent-bars-mode)
+         (yaml-ts-mode . indent-bars-mode)
          (indent-bars-mode . my/indent-bars-sync-spacing)))
 
 (use-package apheleia

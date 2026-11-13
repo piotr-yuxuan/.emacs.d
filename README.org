@@ -4137,9 +4137,18 @@ natively with tree-sitter when a parser is available, and is markedly
 cheaper to render in deeply nested buffers.
 
 Enabled by default in every =prog-mode= buffer (which covers Python,
-Rust, Java, shell, Yaml-ts, Emacs-Lisp, …). An explicit hook extends
-the same treatment to =LaTeX-mode= (a =text-mode= derivative, not
-=prog-mode=). Prose buffers do not opt in.
+Rust, Java, shell, Emacs-Lisp, …). Explicit hooks extend the same
+treatment to =LaTeX-mode= and =yaml-ts-mode=, which derive from
+=text-mode=, not =prog-mode=. Prose buffers do not opt in.
+
+=yaml-ts-mode= has no indentation offset for =indent-bars= to read, so
+its guess would fall back to =standard-indent=, 4, and miss every other
+level of 2-space YAML. =my/indent-bars-yaml-spacing= draws YAML's bars
+every 2 columns, the indentation that GitHub Actions, Compose,
+Kubernetes and Ansible document; a 4-space file then gets one extra bar
+between its levels, and none is hidden. editorconfig cannot help here:
+its entry for =yaml-ts-mode= names =yaml-indent-offset=, a variable of
+the =yaml-mode= package, which is not installed.
 
 By default =indent-bars= draws the bar via the =:stipple= face
 attribute — a per-character bitmap. On the macOS *NS* build of Emacs
@@ -4230,9 +4239,19 @@ buffer-locally, leave the override `nil' so `indent-bars'' built-in
       (when (fboundp 'indent-bars-reset)
         (indent-bars-reset)))))
 
+(defun my/indent-bars-yaml-spacing ()
+  "Draw this buffer's indentation bars every 2 columns.
+`yaml-ts-mode' has no indentation offset for `indent-bars' to read,
+and 2 columns is the indentation most YAML uses."
+  (setq-local indent-bars-spacing-override 2))
+
+;; Depth -10: the override must be set before `indent-bars-mode' reads it.
+(add-hook 'yaml-ts-mode-hook #'my/indent-bars-yaml-spacing -10)
+
 (use-package indent-bars
   :hook ((prog-mode . indent-bars-mode)
          (LaTeX-mode . indent-bars-mode)
+         (yaml-ts-mode . indent-bars-mode)
          (indent-bars-mode . my/indent-bars-sync-spacing)))
 #+END_SRC
 
