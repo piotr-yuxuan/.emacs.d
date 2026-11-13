@@ -158,14 +158,14 @@ class Workflows(unittest.TestCase):
         self.assertRegex(self.cd, r"workflows: \[CI\]")
         self.assertRegex(self.ci, r"(?m)^name: CI$")
 
-    def test_every_action_is_pinned_by_a_full_commit(self):
-        for text in (self.cd,):
-            uses = re.findall(r"uses: (\S+)( # v\S+)?", text)
-            self.assertTrue(uses)
-            for action, version in uses:
-                with self.subTest(action):
-                    self.assertRegex(action, r"@[0-9a-f]{40}$")
-                    self.assertTrue(version)
+    def test_every_action_of_cd_is_pinned_by_a_full_commit(self):
+        uses = re.findall(r"uses: (\S+)( # v\S+)?", self.cd)
+        self.assertTrue(uses)
+        for action, version in uses:
+            with self.subTest(action):
+                self.assertRegex(action, r"@[0-9a-f]{40}$")
+                self.assertTrue(version)
+
 
 class Bounds(unittest.TestCase):
     def test_a_call_that_lasts_too_long_stops(self):
