@@ -1,0 +1,59 @@
+# Plan 119, step 1: does a pty cut the output of Treemacs's helper on
+# macOS?  Temporary: plan 119 removes it once its decision rests on
+# what it printed.  Run it again from the Actions tab, without an
+# export.
+name: pty probe
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Install GNU Emacs
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then
+            brew install --cask emacs-app
+          else
+            sudo apt-get update -q && sudo apt-get install -yq emacs-nox
+          fi
+
+      - name: Fetch pfuture and Treemacs at their pins
+        shell: bash -eo pipefail {0}
+        run: |
+          for pkg in pfuture treemacs; do
+            rev=$(sed -n "s/.*(\"$pkg\" \. \"\([0-9a-f]*\)\").*/\1/p" straight/versions/default.el)
+            git init -q "$RUNNER_TEMP/$pkg"
+            git -C "$RUNNER_TEMP/$pkg" fetch -q --depth 1 "https://github.com/Alexander-Miller/$pkg" "$rev"
+            git -C "$RUNNER_TEMP/$pkg" checkout -q FETCH_HEAD
+          done
+
+      - name: Probe
+        shell: bash -eo pipefail {0}
+        run: |
+          emacs --batch -l .github/pty-probe.el "$RUNNER_TEMP/pfuture" "$RUNNER_TEMP/treemacs" \
+            tests/fixtures/file-tree 500 | tee "$RUNNER_TEMP/probe.jsonl"
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo '### pty probe'
+            echo '```'
+            cat "$RUNNER_TEMP/probe.jsonl" 2>/dev/null || echo 'no output'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
