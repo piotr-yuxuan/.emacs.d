@@ -1,21 +1,27 @@
 #+TITLE: How the configuration is built and loaded
 #+OPTIONS: toc:nil num:nil
 
+This page is for a reader who wants to change the configuration, or
+to understand where a setting lives.  It explains how one Org file
+becomes the files Emacs reads, in which order Emacs runs them, and how
+every machine gets the same packages.
+
 * One literate source
 
-=README.org= is the configuration.  Its Emacs Lisp blocks are tangled
-into the two files Emacs reads: a block goes to =init.el= by default,
-to =early-init.el= when it says =:tangle ./early-init.el=, and nowhere
-when it says =:tangle no=, as the shell snippets do.  =init.el= and
-=early-init.el= are generated and committed, so that a fresh checkout
-starts without Org; an edit made to them directly is lost at the next
-tangle.
+=README.org= is the configuration.  It is a /literate/ configuration:
+an Org document in which prose and Emacs Lisp code blocks alternate.
+Emacs does not read Org at startup, so the code blocks are /tangled/,
+that is, copied out by Org into the two files Emacs reads.  A block
+goes to =init.el= by default, to =early-init.el= when it says
+=:tangle ./early-init.el=, and nowhere when it says =:tangle no=, as
+the shell snippets do.  =init.el= and =early-init.el= are generated
+and committed, so that a fresh checkout starts without Org; an edit
+made to them directly is lost at the next tangle.
 
 The prose around each block is the reference and the explanation of
 that block: why a package is there, which key it binds, which upstream
 bug a patch works around.  Keeping it next to the code is the point of
-the literate form, decided with the user (D3 of the programme of
-plans 085 to 098): a change to a block and the sentence that explains
+the literate form: a change to a block and the sentence that explains
 it land in the same commit.  The documents under =docs/= hold what
 does not belong to a single block: tutorials, task guides, references
 that span the configuration, and explanations such as this one.
@@ -23,21 +29,27 @@ that span the configuration, and explanations such as this one.
 * What runs when
 
 Emacs reads the files in this order, and the configuration places
-each piece of work as late as it can.
+each piece of work as late as it can, so that the first frame appears
+sooner.
 
 1. =early-init.el=, before the package system and the first frame.
-   It turns off =package.el=, which straight.el replaces, raises the
-   garbage collection threshold and empties =file-name-handler-alist=
-   for the duration of startup, prefers compiled files, and sets the
-   size of the first frame.
-2. =init.el=, in the order of =README.org=.  It first bootstraps
-   straight.el and use-package.  Every package is then deferred by
-   default (=use-package-always-defer=): a =use-package= form only
-   registers autoloads, keys and hooks, unless it says =:demand=.
-   Sections run in the order they appear, which is why the order of
-   =README.org= changes only where load order allows it.
-3. =local.el=, at the very end of =init.el=: the host's values win
-   over everything before them.  See [[file:../reference/local-el.org][the local.el reference]].
+   It turns off =package.el=, Emacs's built-in package manager, which
+   straight.el replaces (see the next section).  For the duration of
+   startup it collects garbage less often, by raising the garbage
+   collection threshold, and empties =file-name-handler-alist=, the
+   list of special handlers Emacs would otherwise try on every file
+   it loads.  It also prefers compiled files and sets the size of the
+   first frame.
+2. =init.el=, in the order of =README.org=.  It first sets up
+   straight.el and use-package, the macro that declares each package.
+   Every package is then deferred by default
+   (=use-package-always-defer=): a =use-package= form only registers
+   autoloads, keys and hooks, so the package loads when first needed,
+   unless the form says =:demand=.  Sections run in the order they
+   appear, which is why the order of =README.org= changes only where
+   load order allows it.
+3. =local.el=, at the very end of =init.el=: the values of this
+   machine win over everything before them.  See [[file:../reference/local-el.org][the local.el reference]].
 4. =after-init-hook=: values computed from =local.el=, such as the
    agenda files, and two global modes, flycheck and editorconfig.
 5. =emacs-startup-hook=: the garbage collection threshold and the file
@@ -47,24 +59,27 @@ each piece of work as late as it can.
 6. =window-setup-hook=: the mode line.
 7. Once Emacs has been idle for one second, the Emacs server starts,
    unless one runs already; at two seconds of idle time, the MCP
-   server starts, unless one runs already, and its tools load Org.
+   server, which lets AI agents use Emacs's tools, starts, unless one
+   runs already, and its tools load Org.
 8. First use: lsp-mode, magit, CIDER, dape, Treemacs, the terminals
    and the other large packages load when their key or their file
-   type first needs them.  The integrity checks of plan 086 fail if
+   type first needs them.  The integrity checks of the tests fail if
    one of them loads at startup.
 
-A daemon session, as the tests start one, runs the same steps;
+Emacs can also run as a /daemon/: a background process that keeps the
+configuration loaded, to which each new window connects at once.  A
+daemon session, as the tests start one, runs the same steps;
 frame-specific settings, such as the default font, run again for each
 new frame from =after-make-frame-functions=.  Theme changes rerun
 =enable-theme-functions=, which keeps comments italic in both themes.
 
 * Packages and versions
 
-straight.el clones each package's git repository under
-=~/.emacs.d/straight/repos/= and builds it under
-=~/.emacs.d/straight/build/=.  The lockfile,
-=straight/versions/default.el=, records the commit of each package and
-is versioned with the configuration, so a checkout gets the same
+straight.el is the package manager of this configuration.  It clones
+each package's git repository under =~/.emacs.d/straight/repos/= and
+builds it under =~/.emacs.d/straight/build/=.  The /lockfile/,
+=straight/versions/default.el=, records the git commit of each package
+and is versioned with the configuration, so a checkout gets the same
 packages on every machine.  [[file:../how-to/update-packages.org][Update the packages safely]] moves the
 lockfile forward only when the tests pass.
 
@@ -75,11 +90,11 @@ need newer versions than older Emacs releases ship.
 
 * Platforms
 
-The configuration runs on GNU/Linux and macOS (decision D16).  Code
-specific to one platform tests one of two constants, =my/linux-p= and
-=my/macos-p=, and nothing else, so that a reader can find every
-platform difference by searching for them.  Paths and names specific
-to one machine go to =local.el=, never to =README.org=.
+The configuration runs on GNU/Linux and macOS.  Code specific to one
+platform tests one of two constants, =my/linux-p= and =my/macos-p=,
+and nothing else, so that a reader can find every platform difference
+by searching for them.  Paths and names specific to one machine go to
+=local.el=, never to =README.org=.
 
 * Generated documents
 

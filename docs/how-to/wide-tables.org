@@ -2,10 +2,55 @@
 #+OPTIONS: toc:nil num:nil
 #+KEYMAPS: org-mode-map my/table-view-mode-map tabulated-list-mode-map
 
-A wide table is hard to read in its source: Org truncates its lines at
-the window edge, and Markdown wraps them, so that the columns no longer
-line up.  The source keeps its wrapping, so that the prose around the
-table reads as before.  Pick one of the ways below.
+This page is for anyone who reads Org or Markdown tables wider than
+the window.  You will learn to show such a table in full with one key,
+and two other ways for Org tables.
+
+In its source, a wide table is hard to read: Org cuts its lines at the
+window edge, and Markdown wraps them, so that the columns no longer
+line up.  The ways below change the view only: the source keeps its
+wrapping, so the prose around the table reads as before.  "Point"
+means the cursor's position.
+
+* View any table in full, in a box
+
+This works for Org tables and for Markdown pipe tables.
+
+1. Put point anywhere in the table and press =C-c v t=.  A read-only
+   box replaces the source in the window: a border around every cell,
+   every cell in full, and the header row as the header line.  The box
+   fits the window: when the table is wider, its widest columns narrow
+   to a common width, and their cells wrap onto as many lines as they
+   need, between words.  A row is as tall as its tallest cell.
+2. A table with many columns can stay wider than the window, since
+   fitting never narrows a column below 10 characters
+   (=my/table-view-min-width=).
+   Scroll sideways with =C-x <= and =C-x >= (press =C-u= and a number
+   first to scroll by that many columns), or move from column to
+   column with =M-<right>= and =M-<left>=; the window follows point.
+   The header line scrolls with the rows.
+3. Press =S= to sort the rows by the column at point; press it again to
+   reverse the order.  =}= widens the column at point and ={= narrows
+   it, so its cells wrap less or more.
+4. After the window changed size, for example after =C-x 3=, press =g=
+   to fit the box to it again.
+5. Press =RET= to go back to the source, at the cell point was on, from
+   any line of its row, or =q= to bury the box and show the source
+   again.
+
+The box does not follow edits: press =C-c v t= in the source again to
+read the table anew.
+
+How the box reads a table:
+- the first row is the header when a rule follows it: =|---+---|= in
+  Org, an alignment row such as =|:---|---:|= in Markdown.  Otherwise,
+  and for an empty or repeated label, a column is named after its
+  number: =$1=, =$2= and so on;
+- a row shorter than the others gets empty cells at its end;
+- in Markdown, a table line starts with =|=, after any indentation, and
+  =\|= is a pipe inside a cell;
+- in Org, rows of width cookies, =<>= included, are hidden, as Org
+  export hides them.
 
 * Narrow the columns of an Org table in place
 
@@ -30,47 +75,7 @@ column.
 Press =M-x org-table-header-line-mode= in the Org buffer; press it
 again to turn the mode off.  Once the header row of the table at the
 top of the window has scrolled off, the top line of the window shows
-it.  The mode is off by default; see Limits.
-
-* View any table in full, in a box
-
-This works for Org tables and for Markdown pipe tables.
-
-1. Put point anywhere in the table and press =C-c v t=.  A read-only
-   box replaces the source in the window: a border around every cell,
-   every cell in full, and the header row as the header line.  The box
-   fits the window: when the table is wider, its widest columns narrow
-   to a common width, and their cells wrap onto as many lines as they
-   need, between words.  A row is as tall as its tallest cell.
-2. A table with many columns can stay wider than the window, since
-   fitting never narrows a column below 10 characters
-   (=my/table-view-min-width=).
-   Scroll sideways with =C-x <= and =C-x >=, which take a prefix
-   argument as a number of columns, or move from column to column with
-   =M-<right>= and =M-<left>=; the window follows point.  The header
-   line scrolls with the rows.
-3. Press =S= to sort the rows by the column at point; press it again to
-   reverse the order.  =}= widens the column at point and ={= narrows
-   it, so its cells wrap less or more.
-4. After the window changed size, for example after =C-x 3=, press =g=
-   to fit the box to it again.
-5. Press =RET= to go back to the source, at the cell point was on, from
-   any line of its row, or =q= to bury the box and show the source
-   again.
-
-The box does not follow edits: press =C-c v t= in the source again to
-read the table anew.
-
-How the box reads a table:
-- the first row is the header when a rule follows it: =|---+---|= in
-  Org, an alignment row such as =|:---|---:|= in Markdown.  Otherwise,
-  and for an empty or repeated label, a column is named after its
-  number: =$1=, =$2= and so on;
-- a row shorter than the others gets empty cells at its end;
-- in Markdown, a table line starts with =|=, after any indentation, and
-  =\|= is a pipe inside a cell;
-- in Org, rows of width cookies, =<>= included, are hidden, as Org
-  export hides them.
+it.  The mode is off by default; see [[*Limits]].
 
 * Limits
 

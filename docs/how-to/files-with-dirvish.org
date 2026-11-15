@@ -2,12 +2,18 @@
 #+OPTIONS: toc:nil num:nil
 #+KEYMAPS: dirvish-mode-map dired-mode-map wdired-mode-map minibuffer-local-map
 
-Dirvish draws every Dired buffer of this configuration: =C-x d=,
-=C-x C-j= and =C-x C-f= on a directory all open it.  Each section
-below is one task: the keys to press, in order, and what you then
-see.  A key is pressed in a Dirvish buffer unless the step says
-otherwise.  =docs/reference/keys.org= lists every key, and the /File
-manager/ section of =README.org= explains the configuration.
+This page is for anyone who wants to browse, find, copy, rename and
+delete files without leaving Emacs.  Each section below is one task:
+the keys to press, in order, and what you then see.
+
+Dired is Emacs's built-in file manager: a buffer that lists a
+directory, one file per line.  Dirvish redraws every Dired buffer of
+this configuration with icons, previews and git information, so
+=C-x d=, =C-x C-j= and =C-x C-f= on a directory all open Dirvish.  A
+key is pressed in a Dirvish buffer unless the step says otherwise, and
+"point" means the cursor's position.  [[file:../reference/keys.org][The key reference]] lists every
+key, and the /File manager/ section of =README.org= explains the
+configuration.
 
 * Open a directory
 
@@ -79,11 +85,12 @@ To add places, set =dirvish-quick-access-entries= in
 
 ** A file somewhere below
 
-1. Press =C-c f= (anywhere, not only in Dirvish).  fd lists every file
-   under the current directory, recursively, as a Dirvish listing,
-   apart from hidden and git-ignored ones; the header line shows the
-   search and how long it took.  Press =C-u= before =C-c f= to choose
-   the directory first.
+1. Press =C-c f= (anywhere, not only in Dirvish).  fd, a fast file
+   search program, lists every file under the current directory,
+   recursively, as a Dirvish listing, apart from hidden and
+   git-ignored ones; the header line shows the search and how long
+   it took.  Press =C-u= before =C-c f= to choose the directory
+   first.
 2. Press =N=.  The prompt starts with =#=: what you type right after
    it is the pattern fd searches for, as in =#App=, and the listing
    follows as you type.
@@ -192,6 +199,6 @@ with =R=.
   when the other program asks for it.
 - Out of Emacs: drag a name, or the marked files, onto another
   program, which copies them; hold Shift to move them instead, Meta to
-  link them.  This works where Emacs can start a drag, on macOS and
-  X11 builds.  The pgtk build used on Linux under Wayland cannot:
-  paste with =y= instead.
+  link them.  This works where Emacs can start a drag: on macOS, and
+  on Linux under X11.  The Wayland build of Emacs on Linux (pgtk)
+  cannot: paste with =y= instead.

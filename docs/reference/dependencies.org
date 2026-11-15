@@ -2,13 +2,20 @@
 #+OPTIONS: toc:nil num:nil
 #+KEYMAPS: prog-mode-map clojure-mode-map
 
-What the configuration needs outside its own files.  The programs and
-fonts are listed in [[file:../../nix/programs.nix][nix/programs.nix]], each with what uses it: the
-configuration's flake installs them, and without Nix you install the
-same ones by other means, since each name there is a nixpkgs
-attribute.  [[file:../tutorials/getting-started.org][Getting started]] installs them on NixOS and macOS.  A
-missing optional program disables only its feature: the language
-server of a language, for example, does not start.
+What the configuration needs outside its own files: Emacs itself,
+then the programs and fonts that some features call.
+
+* What you need to start
+
+| Need             | Why                                                   |
+|------------------+-------------------------------------------------------|
+| GNU Emacs 30.1+  | the editor; the tests need 30.1 too                   |
+| git              | downloads the configuration and its packages          |
+| A C compiler     | builds the grammars that colour and fold code         |
+
+[[file:../tutorials/getting-started.org][Getting started]] installs these on NixOS and on macOS with Homebrew.
+Every other program is optional: when one is missing, only its
+feature stays off, the language server of a language, for example.
 
 * Emacs
 
@@ -31,6 +38,11 @@ setup's =modules= phase, so it needs the network.
 imprimeur and its skins need Emacs 31.1 and pandoc 3.
 
 * The lists of nix/programs.nix
+
+[[file:../../nix/programs.nix][nix/programs.nix]] lists every program and font, each with what uses
+it.  The configuration's Nix flake installs them ([[file:../how-to/install-with-nix.org][how]]); without Nix,
+install the same ones by other means: each name there is the name of
+a package in nixpkgs, often the same in Homebrew.
 
 | List     | Holds                                                                                                                                     | Installed by                              |
 |----------+-------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------------------|

@@ -1,161 +1,182 @@
 #+TITLE: Getting started
 #+OPTIONS: toc:nil num:nil
 
-This tutorial installs the configuration on a new machine, NixOS or
-macOS, starts it for the first time and runs its tests.  It takes
-about an hour, most of it spent waiting for packages to download.
-When you are done, continue with [[file:first-day.org][A first day with this configuration]].
+This lesson takes you from nothing to a working Emacs with this
+configuration, on NixOS or on macOS with Homebrew.  You need no
+experience with Emacs.  You type a dozen commands; the rest is
+waiting while Emacs downloads its packages, about ten minutes.
 
-* 1. Install Emacs
+Each step gives the commands for NixOS, then for macOS.  Run the
+commands in a terminal.
 
-You need GNU Emacs 29.1 or later, with native compilation and
-tree-sitter.  Take 30.1 or later if you can: the tests need it.  The
-configuration is tested with Emacs 31.1.
+* 1. Install Emacs, git and a C compiler
 
-- On NixOS, add Emacs to your Home Manager configuration.  The pgtk
-  build draws natively on Wayland:
-  #+BEGIN_SRC nix
-  home.packages = [ pkgs.emacs-pgtk ];
-  #+END_SRC
-- On macOS, install with Homebrew the build that the Brewfile of the
-  [[https://github.com/piotr-yuxuan/hardware.nix][Nix configuration]] declares:
-  #+BEGIN_SRC zsh
-  brew install --cask jimeh/emacs-builds/emacs-app
-  #+END_SRC
+Emacs is the editor; this configuration needs version 30 or later.
+git downloads the configuration and its packages.  The C compiler
+builds the small grammars that Emacs uses to colour and fold code.
 
-Check the version in a new shell.  Below 30.1 the configuration runs,
-but its tests do not:
+** On NixOS
 
-#+BEGIN_SRC zsh
+Add the three packages to =/etc/nixos/configuration.nix=:
+
+#+BEGIN_SRC nix :beginner nixos
+environment.systemPackages = with pkgs; [ emacs git gcc ];
+#+END_SRC
+
+Then apply the change:
+
+#+BEGIN_SRC sh :beginner nixos
+sudo nixos-rebuild switch
+#+END_SRC
+
+** On macOS
+
+Install Homebrew from [[https://brew.sh][brew.sh]] if you do not have it yet.  It also
+installs Apple's command line tools, which bring git and a C compiler.
+
+Emacs reads the programs it can use from your login shell, so that
+shell must know Homebrew.  On a Mac with Apple silicon, Homebrew's
+installer prints how to do it at the end; this command does it if that
+was skipped, and does nothing otherwise.  On an Intel Mac, Homebrew
+lives in =/usr/local=, which the shell knows already, and the command
+does nothing either:
+
+#+BEGIN_SRC sh :beginner macos
+if [ -x /opt/homebrew/bin/brew ]; then
+  grep -qs 'brew shellenv' ~/.zprofile ||
+    echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
+#+END_SRC
+
+Then install Emacs:
+
+#+BEGIN_SRC sh :beginner macos
+brew install --cask emacs-app
+#+END_SRC
+
+** Check
+
+Open a new terminal and run:
+
+#+BEGIN_SRC sh :beginner both
 emacs --version
 #+END_SRC
 
-* 2. Install the programs it calls
+The first line should say GNU Emacs 30 or later.
 
-[[file:../../nix/programs.nix][nix/programs.nix]] lists every program and font the configuration
-calls, each with what uses it; [[file:../reference/dependencies.org][the dependency reference]] says how the
-file is organised.
+* 2. Get the configuration
 
-- On NixOS, take the configuration's flake as an input of your system's
-  flake, and install its programs with Home Manager:
-  #+BEGIN_SRC nix
-  # In your flake's inputs:
-  emacs-configuration.url = "github:piotr-yuxuan/.emacs.d";
+Emacs reads its configuration from the directory =~/.emacs.d=.  Rather
+than putting the repository there, keep it with your other projects
+and make =~/.emacs.d= a link to it.  You then work on the
+configuration like any other repository, and going back to your old
+setup only means removing the link.
 
-  # In your Home Manager configuration:
-  fonts.fontconfig.enable = true;
-  home.packages = [
-    inputs.emacs-configuration.packages.${pkgs.stdenv.hostPlatform.system}.programs
-  ];
-  #+END_SRC
-  To build them with your own nixpkgs instead, take the lists:
-  =with (inputs.emacs-configuration.lib.programs pkgs); tests ++ others ++ fonts=.
-- On macOS, with Homebrew, start with the core programs; add those of
-  your languages from =nix/programs.nix=:
-  #+BEGIN_SRC zsh
-  brew install git ripgrep fd git-delta difftastic python enchant hunspell pkgconf fzf
-  #+END_SRC
-  Install the Iosevka Nerd Font from [[https://www.nerdfonts.com/][Nerd Fonts]].  The configuration
-  reads =PATH= from your login shell, so a graphical Emacs finds what
-  Homebrew installed.
+If you used Emacs before, move your old configuration aside, since
+Emacs would read =~/.emacs= or =~/.emacs.el= before this one.  This
+command renames whichever of them exists, and changes nothing on a
+machine that has none:
 
-* 3. Get the configuration
+#+BEGIN_SRC sh :beginner both
+for old in ~/.emacs ~/.emacs.el ~/.emacs.d; do
+  if [ -e "$old" ] || [ -L "$old" ]; then mv "$old" "$old.before"; fi
+done
+#+END_SRC
 
-If =~/.emacs.d= or =~/.emacs= exists, move it aside first.  Then clone
-the repository and create your machine's settings:
+Then clone the repository and make the link:
 
-#+BEGIN_SRC zsh
-git clone https://github.com/piotr-yuxuan/.emacs.d.git ~/.emacs.d
+#+BEGIN_SRC sh :beginner both
+git clone https://github.com/piotr-yuxuan/.emacs.d.git ~/emacs-config
+ln -s ~/emacs-config ~/.emacs.d
+#+END_SRC
+
+To go back one day, remove the link with =rm ~/.emacs.d= (the clone
+stays), and rename your old files without their =.before=.
+
+* 3. Start Emacs
+
+- On NixOS, run =emacs= in a terminal, or pick Emacs in your
+  applications menu.
+- On macOS, open Emacs from Applications or Launchpad.  The first
+  time, macOS asks whether to open an application downloaded from the
+  internet: choose Open.
+
+The first start downloads and builds about 150 packages.  The bottom
+line of the window shows "Cloning" and "Building" messages for five to
+ten minutes; let it work.  If it stops with an error about
+=git clone=, a download failed: quit and start Emacs again, and it
+carries on where it stopped.  Then you see the dashboard: the Emacs logo
+and "Welcome to Emacs", in a dark or light theme that follows your
+system's.
+
+A few minutes later, Emacs builds the grammars in the background.  The
+bottom line then says "Grammars:" and how many it built; the few that
+fail are harmless.  Until then a Python or YAML file opens without colours: open
+it again once the grammars are there.
+
+Quit with =C-x C-c=: hold Control, press x, then c.  The next start
+takes a second or two.
+
+You now have a working Emacs.  [[file:first-day.org][A first day with this configuration]]
+teaches the moves of an ordinary day; the steps below can wait.
+
+* 4. Add the programs for what you do
+
+Everything above works with Emacs, git and the compiler alone.  Some
+features call other programs; without them, the feature stays off and
+nothing breaks.  Add the groups you want:
+
+| Group           | What you get                                     | NixOS packages         | Homebrew                 |
+|-----------------+--------------------------------------------------+------------------------+--------------------------|
+| Search          | search a whole project, find files by name       | =ripgrep fd fzf=       | =ripgrep fd fzf=         |
+| Diffs           | readable diffs in Magit, the git interface       | =delta=                | =git-delta=              |
+| Spell checking  | misspelt words underlined as you type            | see below              | =enchant pkgconf=        |
+| Font and icons  | the Iosevka font, and the icons of file lists    | =nerd-fonts.iosevka=   | =font-iosevka-nerd-font= |
+
+On NixOS, extend the list of step 1 and add the font, then run
+=sudo nixos-rebuild switch= again:
+
+#+BEGIN_SRC nix :beginner nixos
+environment.systemPackages = with pkgs; [ emacs git gcc ripgrep fd fzf delta ];
+fonts.packages = [ pkgs.nerd-fonts.iosevka ];
+#+END_SRC
+
+Spell checking on NixOS needs the libraries of a spell checker where
+the compiler finds them: [[file:../how-to/install-with-nix.org][Install everything with Nix]] sets that up.
+
+On macOS:
+
+#+BEGIN_SRC sh :beginner macos
+brew install ripgrep fd fzf git-delta enchant pkgconf
+brew install --cask font-iosevka-nerd-font
+#+END_SRC
+
+Restart Emacs afterwards: it looks for programs when it starts.
+
+For a programming language, its guide says what to add: [[file:../how-to/python.org][Python]],
+[[file:../how-to/clojure.org][Clojure]].  [[file:../reference/dependencies.org][External dependencies]] lists every program the
+configuration can use.
+
+* 5. Tell it who you are
+
+Settings that belong to one machine, such as your name, go in
+=~/.emacs.d/local.el=, which git ignores.  Start from the example:
+
+#+BEGIN_SRC sh :beginner both
 cp ~/.emacs.d/local.el.example ~/.emacs.d/local.el
 #+END_SRC
 
-Open =~/.emacs.d/local.el= in any editor and set at least your name
-and email address.  [[file:../reference/local-el.org][The local.el reference]] lists the other settings;
-leave them commented for now.
+Open it, in Emacs with =C-x C-f= or in any editor, and set your name
+and email address.  [[file:../reference/local-el.org][The local.el reference]] explains the other
+settings; leave them as they are for now.
 
-* 4. Prepare it, then start Emacs
+* Going further
 
-The setup takes the steps between a clone and a first start: it
-installs every package at the version of the lockfile,
-=~/.emacs.d/straight/versions/default.el=, checks that each sits
-there, installs the tree-sitter grammars, builds the module of jinx,
-the spell checker, downloads the module of ghostel, the terminal, and,
-where =clojure= is installed, fetches into
-=~/.m2= what CIDER adds to a Clojure REPL.  It uses the Emacs on =PATH=, the one you will start:
-byte code belongs to the Emacs that compiled it.
-
-- On NixOS, with the flake's programs and grammars:
-  #+BEGIN_SRC zsh
-  cd ~/.emacs.d
-  nix run .#setup
-  #+END_SRC
-- On macOS, with what Homebrew installed; Emacs compiles the grammars:
-  #+BEGIN_SRC zsh
-  cd ~/.emacs.d
-  nix/setup.sh
-  #+END_SRC
-
-Without it, the grammars still arrive: each start rebuilds them in
-the background, a few seconds after startup, and =*Messages*= says
-when they are in place.
-
-This takes many minutes, most of them cloning packages.  It ends with
-a report of any package off its pin, which a fresh clone has none of.
-A module built against the flake's libraries may not load in an Emacs
-from another nixpkgs: if jinx then fails, run the setup from the Emacs
-of that nixpkgs.
-
-Then start Emacs:
-
-#+BEGIN_SRC zsh
-emacs
-#+END_SRC
-
-You see the dashboard: the Emacs logo and "Welcome to Emacs", in a dark
-or light theme that follows your system's.  This first start compiles
-the packages to native code in the background, so it is slower than
-the next ones.  Quit with =C-x C-c=, and start Emacs again: the second
-start takes a second or two.
-
-* 5. Run Emacs as a daemon
-
-A new Emacs takes about a second to be ready; a new frame of a running
-Emacs server takes about a tenth of that.  So start the server once
-per session, and open frames from it:
-
-#+BEGIN_SRC zsh
-emacs --daemon
-emacsclient --create-frame
-#+END_SRC
-
-The frame shows the dashboard.  Close it with =C-x 5 0=: the server
-keeps running, with your buffers.  To stop the server, run
-=M-x kill-emacs= in a frame.
-
-* 6. Run the tests
-
-The tests check that the configuration works on this machine.  They
-run in private Emacs sessions and never touch the one you use.
-
-#+BEGIN_SRC zsh
-cd ~/.emacs.d
-tests/run static
-tests/run fast
-#+END_SRC
-
-On macOS, run the second command without graphical frames, which the
-macOS build cannot draw on a private display:
-
-#+BEGIN_SRC zsh
-EMACS_TEST_GUI=0 tests/run fast
-#+END_SRC
-
-Each command prints one line per test file and ends with a summary.
-Everything should pass.  When a file fails, the runner keeps its
-session directory and prints its path: =messages.txt= there says what
-went wrong.  A missing program is the usual cause; install it and run
-the command again.
-[[file:../reference/tests.org][The test reference]] explains the other commands.
-
-You now have a working configuration.  Continue with [[file:first-day.org][A first day with
-this configuration]].
+- [[file:../how-to/run-emacs-as-a-daemon.org][Run Emacs as a daemon]]: start it once per session, and open windows
+  instantly.
+- [[file:../how-to/check-with-the-tests.org][Check the configuration with its tests]], on your machine.
+- [[file:../how-to/install-with-nix.org][Install everything with Nix]]: every program, font and grammar in
+  one go, from the configuration's own Nix flake.
+- [[file:../how-to/try-the-configuration.org][Try the configuration without installing it]], with Nix.
+- [[file:../how-to/update-packages.org][Update the packages safely]].

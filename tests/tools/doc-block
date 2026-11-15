@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+"""Print the beginner blocks of an Org document for one platform.
+
+Usage: tests/tools/doc-block PLATFORM FILE
+
+A source block belongs to the beginner path when its header holds
+`:beginner TARGET`, TARGET being a platform, such as macos or nixos, or
+`both`.  The blocks of PLATFORM and of both are printed in document
+order, each without the indentation of its list item and without the
+comma that Org puts before a line starting with * or #+, separated by
+a blank line.  The Homebrew beginner workflow runs what it prints, so
+that the tutorial's commands are tested as a reader types them.
+"""
+
+from __future__ import annotations
+
+import re
+import sys
+import textwrap
+from pathlib import Path
+
+BEGIN = re.compile(r"^\s*#\+begin_src\b(.*)$", re.IGNORECASE)
+END = re.compile(r"^\s*#\+end_src\s*$", re.IGNORECASE)
+ESCAPE = re.compile(r"^(\s*),(\*|#\+)")
+USAGE = __doc__.split("\n\n")[1]
+
+
+def beginner_target(header: str) -> str | None:
+    """Return the TARGET of `:beginner TARGET' in a block's HEADER, or None."""
+    words = header.split()
+    if ":beginner" not in words:
+        return None
+    position = words.index(":beginner") + 1
+    return words[position] if position < len(words) else ""
+
+
+def beginner_blocks(text: str, platform: str) -> list[str]:
+    """Return the bodies of TEXT's blocks for PLATFORM and for both."""
+    blocks, target, lines = [], None, None
+    for line in text.splitlines():
+        if lines is None:
+            match = BEGIN.match(line)
+            if match:
+                target, lines = beginner_target(match.group(1)), []
+        elif END.match(line):
+            if target in (platform, "both"):
+                blocks.append(textwrap.dedent("\n".join(lines)))
+            target, lines = None, None
+        else:
+            lines.append(ESCAPE.sub(r"\1\2", line))
+    return blocks
+
+
+def main(argv: list[str]) -> None:
+    """Print the blocks that ARGV, PLATFORM then FILE, name."""
+    arguments = argv[1:]
+    if len(arguments) != len(("PLATFORM", "FILE")):
+        sys.exit(USAGE)
+    platform, file = arguments
+    text = Path(file).read_text(encoding="utf-8")
+    print("\n\n".join(beginner_blocks(text, platform)))
+
+
+if __name__ == "__main__":
+    main(sys.argv)

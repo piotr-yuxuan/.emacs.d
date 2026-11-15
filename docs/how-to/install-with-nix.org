@@ -1,0 +1,77 @@
+#+TITLE: Install everything with Nix
+#+OPTIONS: toc:nil num:nil
+
+For a reader who uses Nix, on NixOS or on macOS, and wants every
+program, font and grammar the configuration can use, in one go and at
+known versions.  [[file:../tutorials/getting-started.org][Getting started]] is the shorter path: Emacs, git, a
+compiler and the programs you pick.
+
+The configuration is also a Nix flake: a description of what it needs
+that Nix can build.  =nix/programs.nix= lists every program and font,
+each with what uses it; the flake installs them, and its setup
+prepares a clone before its first start.
+
+* Install the programs and fonts
+
+On NixOS with Home Manager, take the configuration's flake as an
+input of your own flake:
+
+#+BEGIN_SRC nix
+# In your flake's inputs:
+emacs-configuration.url = "github:piotr-yuxuan/.emacs.d";
+
+# In your Home Manager configuration:
+fonts.fontconfig.enable = true;
+home.packages = [
+  pkgs.emacs-pgtk
+  inputs.emacs-configuration.packages.${pkgs.stdenv.hostPlatform.system}.programs
+];
+#+END_SRC
+
+=emacs-pgtk= draws natively on Wayland; plain =emacs= works too.  To
+build the programs with your own nixpkgs instead, take the lists:
+=with (inputs.emacs-configuration.lib.programs pkgs); tests ++ others ++ fonts=.
+[[file:../reference/dependencies.org][External dependencies]] says what each list holds.
+
+On macOS, the same =programs= package installs with
+=nix profile add github:piotr-yuxuan/.emacs.d#programs=.  macOS draws
+only the fonts it knows, so install Iosevka Nerd Font with Homebrew's
+=font-iosevka-nerd-font= cask or Font Book.
+
+* Prepare the clone before its first start
+
+The setup does in one command what the first start and the first
+days do bit by bit: it installs every package at the version of the
+lockfile (=straight/versions/default.el=, which records the exact
+revision of each package), links nixpkgs's grammars, builds the module
+of jinx, the spell checker, downloads the module of ghostel, the
+terminal, and, where =clojure= is installed, fetches into =~/.m2= what
+CIDER adds to a Clojure REPL.
+
+From the clone:
+
+#+BEGIN_SRC sh
+cd ~/.emacs.d
+nix run .#setup
+#+END_SRC
+
+It uses the Emacs on =PATH=, the one you will start: compiled
+packages belong to the Emacs that compiled them.  It takes many
+minutes and ends with a report of any package off its pinned version,
+which a fresh clone has none of.
+
+This is also how spell checking works on NixOS: the setup builds
+jinx's module with the flake's spell checker and its headers.  A
+module built against the flake's libraries may not load in an Emacs
+from another nixpkgs; if jinx then fails, run the setup from that
+Emacs.
+
+* Without Nix
+
+=nix/setup.sh= is the same setup without the flake.  It uses the
+programs already on =PATH=, and has Emacs compile the grammars:
+
+#+BEGIN_SRC sh
+cd ~/.emacs.d
+nix/setup.sh
+#+END_SRC

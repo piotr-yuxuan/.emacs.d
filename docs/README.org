@@ -1,11 +1,12 @@
 #+TITLE: Documentation
 #+OPTIONS: toc:nil num:nil
 
-The documentation follows [[https://diataxis.fr/][Diataxis]]: four kinds of document, each
-for one need.  Pick the kind that matches what you are doing, then the
-document.  The configuration itself, with the reference and the
-explanation of each of its blocks, is [[file:../README.org][README.org]] at the root of the
-repository.
+New to this configuration?  Start with [[file:tutorials/getting-started.org][Getting started]]: it installs
+it on NixOS or on macOS with Homebrew, in a few commands.  Then [[file:tutorials/first-day.org][A
+first day with this configuration]] shows the moves of an ordinary day.
+
+The pages come in four kinds, so that you can find the right one for
+what you are doing:
 
 | Kind        | Read it when you want to                   | Directory      |
 |-------------+--------------------------------------------+----------------|
@@ -14,54 +15,62 @@ repository.
 | Reference   | look up a fact: a key, a command, a name   | =reference/=   |
 | Explanation | understand why it is built this way        | =explanation/= |
 
+The configuration itself, with the explanation of each of its parts,
+is [[file:../README.org][README.org]] at the root of the repository.
+
 * Tutorials
 
-- [[file:tutorials/getting-started.org][Getting started]]: install the configuration on NixOS or macOS, start
-  it, run the tests.
+- [[file:tutorials/getting-started.org][Getting started]]: install the configuration and start it, on NixOS
+  or on macOS with Homebrew.
 - [[file:tutorials/first-day.org][A first day with this configuration]]: files, search, windows, git
-  and tasks on a practice project.
+  and tasks, on a practice project.
 
 * How-to guides
 
+Daily work:
+
 - [[file:how-to/files-with-dirvish.org][Work with files in Dirvish]]: open, move, rename, copy and delete
   files.
-- [[file:how-to/wide-tables.org][Read a table wider than the window]], in Org or Markdown.
-- [[file:how-to/terminals.org][Use a terminal inside Emacs]]: ghostel.
-- [[file:how-to/shell-prompt.org][Set up a shell prompt readable in every terminal]], with Starship.
 - [[file:how-to/python.org][Work on a Python project]]: navigation, fixes, REPL, tests, debugger.
 - [[file:how-to/clojure.org][Work on a Clojure project]]: navigation, paredit, CIDER, tests.
-- [[file:how-to/org-tasks.org][Working with Org tasks]]: capture, the daily agenda, reviews.
+- [[file:how-to/org-tasks.org][Work with Org tasks]]: capture, the daily agenda, reviews.
+- [[file:how-to/terminals.org][Use a terminal inside Emacs]].
+- [[file:how-to/wide-tables.org][Read a table wider than the window]], in Org or Markdown.
+
+Setting up:
+
+- [[file:how-to/run-emacs-as-a-daemon.org][Run Emacs as a daemon]], and open windows instantly.
+- [[file:how-to/shell-prompt.org][Set up a shell prompt readable in every terminal]], with Starship.
+- [[file:how-to/check-with-the-tests.org][Check the configuration with its tests]].
 - [[file:how-to/update-packages.org][Update the packages safely]].
+- [[file:how-to/install-with-nix.org][Install everything with Nix]]: every program, font and grammar in
+  one go.
 - [[file:how-to/try-the-configuration.org][Try the configuration without installing it]], with Nix.
+
+Changing the configuration:
+
 - [[file:how-to/add-a-scenario-test.org][Add a scenario test]].
 
 * Reference
 
-- [[file:reference/keys.org][Key bindings]]: every key the configuration binds, generated from the
-  keymaps; do not edit it by hand.
-- [[file:reference/dependencies.org][External dependencies]]: what Emacs needs, and the lists of programs
-  and fonts in =nix/programs.nix=.
-- [[file:reference/local-el.org][local.el variables]]: what each machine sets.
-- [[file:reference/tests.org][Tests]]: commands, tiers, file headers and environment variables.
-- [[file:reference/release-pipeline.org][Release pipeline]]: how the public repository releases each
-  commit that CI checks.
+- [[file:reference/keys.org][Key bindings]]: every key the configuration adds, generated from
+  Emacs itself.
+- [[file:reference/dependencies.org][External dependencies]]: what Emacs needs, and every program and font
+  the configuration can use.
+- [[file:reference/local-el.org][local.el variables]]: the settings that belong to one machine.
+- [[file:reference/tests.org][Tests]]: commands, kinds of test, file headers and environment
+  variables.
+- [[file:reference/release-pipeline.org][Release pipeline]]: how the public repository publishes a version
+  after each change that passes its checks.
 
 * Explanation
 
-- [[file:explanation/architecture.org][How the configuration is built and loaded]]: the literate source and
-  the load order.
+- [[file:explanation/architecture.org][How the configuration is built and loaded]].
 - [[file:explanation/startup-performance.org][Startup performance]]: what is measured, and what helped.
 - [[file:explanation/test-strategy.org][Why the tests look the way they do]].
 - [[file:explanation/package-choices.org][Why these packages]].
-- [[file:explanation/foundational-knowledge/Foundational knowledge.tex][Emacs: Foundational Knowledge]], a LaTeX book on the Emacs internals
+- [[file:explanation/foundational-knowledge/Foundational knowledge.tex][Emacs: Foundational Knowledge]], a LaTeX book on the parts of Emacs
   this configuration relies on.  Build it with =latexmk= in its
-  directory.  It was written before plans 085 to 095, so some chapters
-  describe packages since removed, such as compile-angel or eglot.
-
-* Work records
-
-=work/= is not documentation for a reader of the configuration: it
-holds the plans of work in progress (=work/plans/=), the record of
-finished plans (=work/changelog/=), and the research behind them
-(=work/findings/=).  Its index, =work/README.org=, lists them.  The
-work records are not published with the configuration.
+  directory.  It is older than the configuration's present form, so
+  some chapters describe packages since removed, such as
+  compile-angel or eglot.

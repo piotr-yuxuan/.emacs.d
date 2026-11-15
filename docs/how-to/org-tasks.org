@@ -2,13 +2,21 @@
 #+OPTIONS: toc:2 num:nil
 #+KEYMAPS: org-mode-map
 
-This system keeps task management small enough to trust.  Org files
-remain the source of truth.  Agenda is the working view and the local
-dashboard is a read-only visual view of the same active headings.
+This page is for anyone who wants to keep their tasks in plain Org
+files and plan each day from them.  You will capture a task from
+anywhere, see the day's work, and keep the lists short with a daily and a
+weekly review.
 
-* Mental model
+The quickest start: press =C-c i= anywhere to note a task, and
+=C-c a g= to see the day.  The sections below explain the rest, in the
+order you will need it.  The Org files stay the source of truth: the
+Agenda, Org's view that gathers the tasks of several files, is where
+you work, and the dashboard is a read-only picture of the same tasks.
 
-Each active repository owns one root =todo.org=.  The sources are:
+* Where the tasks live
+
+Each active repository has one =todo.org= at its root.  The task files
+are:
 
 - the personal file, with the journal
 - the task file of each repository this machine works on, such as
@@ -18,8 +26,8 @@ The personal file is =my/gtd-file=, =~/org/todo.org= unless
 =local.el= sets it; =my/org-agenda-source-files= lists the others (see
 [[file:../reference/local-el.org][the local.el reference]]).  Missing files are skipped.
 
-The repository is the category.  There is no =CATEGORY= property to
-maintain.  Supporting notes stay in their natural README, transcript,
+The repository is the category, the label the Agenda shows beside
+each task.  There is no =CATEGORY= property to maintain.  Supporting notes stay in their natural README, transcript,
 or design file and the task links to them when useful.
 
 Inside a task file:
@@ -61,30 +69,6 @@ The workflow does not require estimates, priorities, controlled tags,
 manual IDs, stage counters, or contact dates.  Add a real scheduled
 time or deadline only when the outside world supplies one.
 
-* Recurring tasks
-
-Org handles recurrence on the task's normal =SCHEDULED= line.  For
-example, the weekly review is written once:
-
-#+begin_example
-,** TODO Review the week and protect next week's calendar
-SCHEDULED: <2026-08-28 Fri ++1w>
-#+end_example
-
-It appears in the daily Agenda on Friday and remains visible there as
-overdue until it is completed.  Marking it =DONE= resets the heading to
-=TODO= and advances the scheduled date to the next Friday.
-
-Use =C-c C-s= on a task to schedule it.  Add =++1w= when the cadence
-must remain anchored to the calendar; if several occurrences were
-missed, Org advances to the first future one.  Use =.+1w= only when the
-next occurrence should be one week after completion instead.
-
-No habit property is required.  The morning briefing is simply the act
-of opening =C-c a g=, not another checkbox.  Protected breaks and social
-engagements belong in the calendar because they reserve time rather
-than represent work to complete.
-
 * Capture and clarify
 
 Press =C-c i= anywhere to capture an unscheduled =TODO= in the
@@ -100,11 +84,13 @@ During clarification:
 1. Delete the item if it no longer matters.
 2. Rewrite it as a visible action if it takes one step.
 3. Rewrite it as a finish line with child actions if it is a project.
-4. Refile it with =C-c C-w= to the right repository and area.
+4. Refile it, that is move it under another heading, with =C-c C-w=:
+   pick the right repository and area.
 5. Mark it =NEXT= only when you are choosing to act on it.
 
-Refile offers headings from every canonical task source.  It does not
-scan READMEs or nested project notes.
+Refile offers the headings of every task file listed in
+[[*Where the tasks live]].  It does not scan READMEs or nested project
+notes.
 
 * Morning briefing
 
@@ -150,7 +136,7 @@ Once a week:
    moment.
 2. Review every project finish line and make sure each active project
    has a credible next action.
-3. Archive terminal projects and stale tasks.
+3. Archive finished projects (=DONE= or =CANCELLED=) and stale tasks.
 4. Look at the real calendar before selecting work.  Preserve its
    fixed commitments, breaks and travel time.
 5. Leave slack for what the week brings, and for recovery.  Forty
@@ -160,15 +146,45 @@ Once a week:
 The main objective should dominate the week.  Side projects are
 useful, but must not become a refuge from it.
 
+* Recurring tasks
+
+Org handles recurrence on the task's normal =SCHEDULED= line.  For
+example, the weekly review is written once:
+
+#+begin_example
+,** TODO Review the week and protect next week's calendar
+SCHEDULED: <2026-08-28 Fri ++1w>
+#+end_example
+
+It appears in the daily Agenda on Friday and remains visible there as
+overdue until it is completed.  Marking it =DONE= resets the heading to
+=TODO= and advances the scheduled date to the next Friday.
+
+Use =C-c C-s= on a task to schedule it.  Add =++1w= when the cadence
+must remain anchored to the calendar; if several occurrences were
+missed, Org advances to the first future one.  Use =.+1w= only when the
+next occurrence should be one week after completion instead.
+
+No habit property is required.  The morning briefing is simply the act
+of opening =C-c a g=, not another checkbox.  Protected breaks and social
+engagements belong in the calendar because they reserve time rather
+than represent work to complete.
+
 * Archive
 
-When a terminal task no longer belongs in the active file, place point
-on its heading and run =org-archive-subtree-default=, normally available
+When a finished task (=DONE= or =CANCELLED=) no longer belongs in the
+active file, place the cursor on its heading and run =org-archive-subtree-default=, normally available
 through =C-c C-x C-a=.  Org moves it into the sibling
 =todo.org_archive= and records its origin.
 
 Archive completed and cancelled work.  Do not archive =WAIT= merely
 because waiting is uncomfortable.
+
+* Journal
+
+The personal =todo.org= still contains =* Journal=.  Journal captures
+land under today's dated heading.  They have no task state, so they stay
+out of task-only Agenda and dashboard views.
 
 * Visual dashboard
 
@@ -187,12 +203,6 @@ edit or refile Org data.  Use *Refresh from Org* after changing files.
 
 The dashboard has no database, account, cloud service, or second task
 model.  Closing Emacs also ends the local server process.
-
-* Journal
-
-The personal =todo.org= still contains =* Journal=.  Journal captures
-land under today's dated heading.  They have no task state, so they stay
-out of task-only Agenda and dashboard views.
 
 * Small command reference
 

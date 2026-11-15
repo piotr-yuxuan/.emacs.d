@@ -1,10 +1,16 @@
 #+TITLE: Try the configuration without installing it
 #+OPTIONS: toc:nil num:nil
 
-With Nix, one command starts this configuration in an Emacs of its
-own, beside whatever Emacs you have, and changes neither.  It runs on
-=x86_64-linux= and =aarch64-darwin=, the systems the configuration's
-flake knows.
+This page is for anyone who has Nix, the package manager, and wants
+to try this configuration before installing it.  One command starts
+it in an Emacs of its own, beside whatever Emacs you have, and changes
+neither.
+
+It runs on =x86_64-linux= (Linux on an Intel or AMD processor) and
+=aarch64-darwin= (macOS on Apple silicon), the systems the
+configuration's flake knows.  A flake is a Nix file that says what a
+project needs and how to run it.  To install the configuration for
+good, follow [[file:../tutorials/getting-started.org][Getting started]] or [[file:install-with-nix.org][Install everything with Nix]].
 
 * Start a trial
 
@@ -19,13 +25,16 @@ The command:
 
 1. copies the configuration into a new temporary directory;
 2. runs its setup there, [[file:../../nix/setup.sh][nix/setup.sh]], with the flake's Emacs: every
-   package at the version of the lockfile, the tree-sitter grammars,
-   jinx's module, ghostel's module;
+   package at the version the configuration pins (its lockfile), the
+   tree-sitter grammars (the parsers that colour and indent code), the
+   compiled modules of jinx, the spell checker, and of ghostel, the
+   terminal;
 3. starts that Emacs on the directory, with the programs the tests use
    first on =PATH=.
 
-The first trial clones every package: many minutes.  The Emacs is
-=emacs-pgtk= on Linux and nixpkgs's =emacs= on macOS.
+The first trial downloads and compiles every package: it takes many
+minutes.  The Emacs is =emacs-pgtk= on Linux and nixpkgs's =emacs= on
+macOS.
 
 * Keep a trial between runs
 
@@ -57,7 +66,7 @@ nix run github:piotr-yuxuan/.emacs.d -- -nw
 
 It leaves =~/.emacs.d= alone, and the server of your own Emacs: the
 trial's server is named =try=.  It does not fetch CIDER's dependencies
-into =~/.m2=; a jack-in fetches them when you start a Clojure REPL.
+into =~/.m2=; they are fetched when you first start a Clojure REPL.
 
 * Limits
 

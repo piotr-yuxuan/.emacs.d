@@ -1,11 +1,18 @@
 #+TITLE: Update the packages safely
 #+OPTIONS: toc:nil num:nil
 
-straight.el installs the packages at the versions of the lockfile,
-=straight/versions/default.el=.  An update is kept only when the
-configuration still passes its fast tests; otherwise the lockfile
-versions come back.  The /Safe package update/ section of =README.org=
-explains the command.
+This page is for anyone who keeps this configuration up to date.
+You will update every package with one key, and keep the update only
+when the configuration still works.
+
+straight.el, the package manager of this configuration, installs each
+package at the version written in the lockfile,
+=straight/versions/default.el=: a file that pins every package to one
+commit, so that every machine gets the same code.  An update is kept
+only when the configuration still passes its fast tests; otherwise the
+lockfile versions come back.  The /Safe package update/ section of
+=README.org= explains the command, and [[file:check-with-the-tests.org][Check the configuration with
+its tests]] the tests.
 
 * Update every package
 
@@ -18,14 +25,16 @@ explains the command.
    tag only, since its releases publish its modules.
 3. The buffer =*Package update tests*= opens and runs =tests/run fast=.
    Emacs stays usable meanwhile.  On macOS the tests run without
-   graphical frames, so the golden tests are skipped.
+   graphical frames, so the golden tests, below, are skipped.
 4. Read the message when the tests end:
    - /Package update: the tests passed, freezing the lockfile/: the
-     new versions are in =straight/versions/default.el=.  Commit it.
+     new versions are written in =straight/versions/default.el=.
+     Commit it.
    - /Package update undone: .../: the reason follows, and the
      lockfile versions are back.  Read the first failure in
      =*Package update tests*=.  If the message names packages it could
-     not check out, run =M-x straight-thaw-versions= again.
+     not check out, run =M-x straight-thaw-versions= again: it puts
+     every package back at the lockfile's version.
 
 A second =C-c P u= is refused while the tests of the first one run.
 
@@ -36,8 +45,9 @@ scenarios fail in =tests/run full=.
 
 * Keep an update that changes the golden records
 
-The golden tests record the face of every token, and the indentation,
-of the sample files in =tests/golden/=.  A package that changes how a
+The golden tests keep a record of how the sample files in
+=tests/golden/= look: the face (colour and style) of every token, and
+the indentation.  A package that changes how a
 language looks fails them, and =*Package update tests*= names the
 first line that differs.  When the change is what you want:
 

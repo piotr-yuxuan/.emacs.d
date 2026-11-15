@@ -2,17 +2,25 @@
 #+OPTIONS: toc:nil num:nil
 #+KEYMAPS: python-base-mode-map prog-mode-map flycheck-mode-map compilation-mode-map
 
+This page is for anyone who writes Python in this configuration.
+You will open a project, move around its code, fix the problems Emacs
+points out, try code, run the tests and debug a program.
+
 Each section is one task.  Keys are pressed in a Python buffer unless
-the step says otherwise.  The /Python/ section of =README.org= explains
-the configuration, and [[file:../reference/keys.org][the key reference]] lists every key.
+the step says otherwise, and "point" means the cursor's position.  The
+/Python/ section of =README.org= explains the configuration, and
+[[file:../reference/keys.org][the key reference]] lists every key.
 
 * Open a project
 
 1. Open any =.py= file of the project with =C-x C-f=.
-2. Wait a few seconds the first time.  PET finds the project's
-   environment (uv, Poetry, Pipenv or a =.venv= directory), then
-   BasedPyright and Ruff start for that project only, without asking
-   for its root.
+2. Wait a few seconds the first time.  The PET package finds the
+   project's Python environment (uv, Poetry, Pipenv or a =.venv=
+   directory).  Then two language servers start for that project
+   only, without asking for its root: BasedPyright, which checks
+   types, and Ruff, which checks style.  A language server is a
+   program that reads your code and tells the editor about it,
+   through a protocol named LSP.
 3. =M-x lsp-describe-session= lists the servers of each project.  If
    one is missing, install it (see [[file:../reference/dependencies.org][the dependencies]]) and reopen the
    file.
@@ -29,7 +37,8 @@ the configuration, and [[file:../reference/keys.org][the key reference]] lists e
 - =C-c l g h= shows who calls the function at point, as a tree.
 - =<f9>= toggles a tree of the file's classes, functions and
   variables; =RET= on an entry jumps to it.  =C-c l s f= offers the
-  same symbols in the minibuffer, and =M-g i= works in any file.
+  same symbols in the minibuffer, the prompt line at the bottom of the
+  frame, and =M-g i= works in any file.
 - =C-h C-d= shows the documentation of the symbol at point in a
   popup: its signature, inferred type and docstring.
 
@@ -57,10 +66,13 @@ typeCheckingMode = "recommended"
 
 * Try code in a REPL
 
+A REPL is an interactive Python prompt: it runs each piece of code you
+send it and prints the result.
+
 1. Press =C-c C-p= to start the project's Python, with the project's
    interpreter.  Each project gets its own REPL.
 2. Send code to it: =C-M-x= the definition at point, =C-c C-r= the
-   region, =C-c C-c= the whole buffer.
+   region (the selected text), =C-c C-c= the whole buffer.
 3. =C-c C-z= goes to the project's REPL, once =C-c C-p= has started
    it.  Come back with =C-x o= or =C-x b=: in the REPL, =C-c C-z=
    stops the Python process.

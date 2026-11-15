@@ -15,6 +15,9 @@ under =publish/overlay/.github/=, which its export copies.
 - by hand on =main=, with a bump: =patch=, =minor= or =major=.  The
   script then checks that CI succeeded on that commit.
 
+The other workflows, the full suite and the Homebrew beginner, do not
+hold a release back.
+
 One run at a time: a newer one waits, and replaces any that waits
 already.  Its permissions are =actions: read= and =contents: write=,
 and it stops after 15 minutes.

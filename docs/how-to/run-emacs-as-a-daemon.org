@@ -1,0 +1,27 @@
+#+TITLE: Run Emacs as a daemon
+#+OPTIONS: toc:nil num:nil
+
+For a reader who opens Emacs many times a day.  A new Emacs takes
+about a second to be ready; a new window of an Emacs that is already
+running takes a tenth of that.  So start Emacs once per session, in
+the background (a /daemon/, or server), and open windows from it.
+
+* Start it, then open a window
+
+#+BEGIN_SRC sh
+emacs --daemon
+emacsclient --create-frame
+#+END_SRC
+
+The window, which Emacs calls a /frame/, shows the dashboard.  Each
+=emacsclient --create-frame= opens one more on the same Emacs, with
+the same buffers.
+
+* Close a window, keep Emacs
+
+=C-x 5 0= closes the window: the daemon keeps running, with your
+buffers, for the next =emacsclient=.
+
+* Stop the daemon
+
+Run =M-x kill-emacs= in any of its windows.

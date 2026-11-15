@@ -1,0 +1,100 @@
+# A beginner's path through Getting started, on a Mac with Homebrew and
+# no Nix: the tutorial's macOS commands as written, which
+# tests/tools/doc-block prints, then a first start, then the fast suite.
+# No cache: a first start from nothing is what it tests.  It runs for
+# good measure and gates no release: cd.yml waits for CI only.
+name: Homebrew beginner
+
+on:
+  push:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  beginner:
+    runs-on: macos-15
+    timeout-minutes: 120
+    env:
+      # macOS's Emacs cannot draw on a private display.
+      EMACS_TEST_GUI: "0"
+      # A session's socket path must stay short (tests/runner/sessions.py).
+      TMPDIR: /tmp
+    defaults:
+      run:
+        shell: bash -eo pipefail {0}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Follow Getting started on macOS
+        timeout-minutes: 30
+        run: |
+          python3 tests/tools/doc-block macos docs/tutorials/getting-started.org > "$RUNNER_TEMP/beginner.sh"
+          cat "$RUNNER_TEMP/beginner.sh"
+          bash -eo pipefail "$RUNNER_TEMP/beginner.sh"
+
+      - name: Check out the commit under test in the tutorial's clone
+        run: |
+          git -C ~/emacs-config fetch --quiet "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$GITHUB_SHA"
+          git -C ~/emacs-config checkout --quiet --detach "$GITHUB_SHA"
+          test "$(git -C ~/emacs-config rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Start Emacs for the first time
+        timeout-minutes: 45
+        run: |
+          eval "$(/opt/homebrew/bin/brew shellenv)"
+          emacs --version | head -n 1
+          brew info --cask emacs-app | head -n 1
+          start=$SECONDS
+          # A bare environment, as Finder gives Emacs.app: the daemon must
+          # find Homebrew through the login shell, ~/.zprofile included.
+          env -i HOME="$HOME" USER="$USER" LOGNAME="$USER" SHELL=/bin/zsh \
+            TMPDIR="$TMPDIR" LANG=en_US.UTF-8 PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+            /opt/homebrew/bin/emacs --daemon=first
+          echo "The first start took $((SECONDS - start)) s."
+          # The programs of the tutorial, as the daemon finds them through
+          # the login shell: each must come from Homebrew or the system.
+          emacsclient --socket-name=first --eval \
+            "(with-temp-file \"$RUNNER_TEMP/found\" (dolist (p '(\"cc\" \"git\" \"pkg-config\" \"rg\" \"fd\" \"fzf\" \"delta\")) (insert p \" \" (or (executable-find p) \"none\") \"\n\")))"
+          cat "$RUNNER_TEMP/found"
+          if grep -Ev ' (/opt/homebrew|/usr/bin)/' "$RUNNER_TEMP/found"; then exit 1; fi
+          # The grammars build in the background after startup; YAML's
+          # stands for them, since a few always fail upstream.
+          ready=nil
+          for _ in $(seq 1 120); do
+            ready=$(emacsclient --socket-name=first --eval "(treesit-language-available-p 'yaml)")
+            [ "$ready" = t ] && break
+            sleep 10
+          done
+          echo "YAML's grammar after $((SECONDS - start)) s: $ready"
+          emacsclient --socket-name=first --eval \
+            "(with-current-buffer \"*Messages*\" (write-region nil nil \"$RUNNER_TEMP/messages.txt\"))"
+          emacsclient --socket-name=first --eval '(kill-emacs)' || true
+          grep -E '^(Grammars|Error)' "$RUNNER_TEMP/messages.txt" || true
+          test "$ready" = t
+
+      - name: Run the fast suite
+        timeout-minutes: 60
+        run: |
+          eval "$(/opt/homebrew/bin/brew shellenv)"
+          cd ~/emacs-config
+          tests/run fast 2>&1 | tee "$RUNNER_TEMP/fast.log"
+
+      - name: Show the messages of the failing sessions
+        if: failure()
+        run: |
+          { grep -ho 'kept /[^ ]*' "$RUNNER_TEMP/fast.log" 2>/dev/null || true; } | cut -d' ' -f2 |
+            while read -r kept; do
+              echo "::group::$kept"
+              tail -n 60 "$kept/messages.txt" 2>/dev/null || true
+              echo "::endgroup::"
+            done

@@ -1,0 +1,39 @@
+#+TITLE: Check the configuration with its tests
+#+OPTIONS: toc:nil num:nil
+
+For a reader who wants to know that the configuration works on this
+machine: after installing it, after adding programs, or after an
+update.  The tests run in private Emacs sessions of their own and
+never touch the Emacs you use.  They need Emacs 30 or later and
+python3.
+
+* Run the quick checks
+
+From the clone:
+
+#+BEGIN_SRC sh
+cd ~/.emacs.d
+tests/run static
+tests/run fast
+#+END_SRC
+
+On Linux the tests draw their windows on a private display, which
+needs Xvfb.  Where it is missing, and always on macOS, whose Emacs
+cannot draw on such a display, run them without windows:
+
+#+BEGIN_SRC sh
+EMACS_TEST_GUI=0 tests/run fast
+#+END_SRC
+
+* Read the result
+
+Each command prints one line per test file and ends with a summary;
+everything should pass.  A test that needs a program you have not
+installed is skipped, not failed, where the tests expect it.
+
+When a file fails, the runner keeps its session directory and prints
+its path: =messages.txt= there says what went wrong.  A missing program
+is the usual cause: install it and run the command again.
+
+[[file:../reference/tests.org][The test reference]] lists the other commands, such as the slow
+=tests/run full=.

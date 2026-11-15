@@ -2,21 +2,22 @@
 #+OPTIONS: toc:nil num:nil
 #+KEYMAPS: minibuffer-local-map wgrep-mode-map org-capture-mode-map with-editor-mode-map org-mode-map
 
-This tutorial walks through the moves of an ordinary working day on a
-small practice project: opening, searching, editing many files at
-once, arranging windows, committing, and capturing a task.  Most steps
-are daily journeys that the tests of plan 094 replay, so what you see
-should match what this page says.  It assumes [[file:getting-started.org][Getting started]] is
-done.
+This tutorial is for a newcomer who has just installed the
+configuration with [[file:getting-started.org][Getting started]].  On a small practice project,
+it walks through the moves of an ordinary working day: opening, searching, editing many files at once, arranging
+windows, committing, and capturing a task.  The configuration's tests
+replay most of these steps, so what you see should match what this
+page says.
 
 How to read the keys: =C-x= means hold Control and press =x=, =M-x=
 means hold Alt (Meta) and press =x=, and =C-x C-f= is two such presses
-in a row.  =s-= is the Super key: the Windows key on Linux, where the
-Menu key followed by the key also works, and fn on macOS.
+in a row.  A key written with =s-= uses the Super key: on Linux, hold
+the Windows key, or press the Menu key just before the key; on macOS,
+hold the fn key.
 
 * Prepare a practice project
 
-In a shell:
+In a terminal:
 
 #+BEGIN_SRC zsh
 mkdir -p ~/tmp/first-day/docs && cd ~/tmp/first-day
@@ -35,9 +36,9 @@ mkdir -p ~/org
 [ -e ~/org/todo.org ] || printf '* Inbox\n' > ~/org/todo.org
 #+END_SRC
 
-Then open Emacs, or a frame of the daemon.  The agenda reads only the
-task files that existed when Emacs started: if Emacs was already
-running, restart it.
+Then open Emacs, or, if you run Emacs as a daemon in the background, a
+new frame of it.  The agenda reads only the task files that existed
+when Emacs started: if Emacs was already running, restart it.
 
 * When you are lost
 
@@ -141,7 +142,8 @@ The tasks go to the task file you prepared at the start.
    list.
 
 In a project of a language this configuration supports, =M-.= then
-goes to the definition of the symbol at point and =M-,= comes back.
+goes to the definition of the symbol under the cursor and =M-,= comes
+back.
 
 * Where to go next
 

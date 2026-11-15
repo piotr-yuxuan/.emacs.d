@@ -1,21 +1,28 @@
 #+TITLE: Set up a shell prompt readable in every terminal
 #+OPTIONS: toc:nil num:nil
 
+This page is for zsh users who want a prompt that stays readable in
+the terminal inside Emacs, in the light and the dark theme alike.  You
+will install Starship, a prompt program, and give it its Gruvbox
+Rainbow look.
+
 The terminal of this configuration, ghostel, shows the shell's own
-prompt.  These steps install Starship with its Gruvbox
-Rainbow preset, which stays readable in the light and the dark theme.
-They change the shell's files, not Emacs; [[file:../explanation/package-choices.org][the package choices]] say why
-Starship.  To set up the rest of the shell for the terminals, see
-[[file:terminals.org][Use a terminal inside Emacs]].
+prompt, so these steps change the shell's files, not Emacs.
+[[file:../explanation/package-choices.org][The package choices]] say why Starship.  To set up the rest of the
+shell for the terminals, see [[file:terminals.org][Use a terminal inside Emacs]].
+
+Home Manager, named in some steps, is a Nix tool that writes your
+user's configuration files from a Nix file; skip what it says if you
+do not use it.
 
 * Install Starship
 
+- macOS: =brew install starship=.
 - NixOS with Home Manager: enable it in your Home Manager
   configuration, which also adds the zsh hook of the next section:
   #+BEGIN_SRC nix
   programs.starship.enable = true;
   #+END_SRC
-- macOS: =brew install starship=.
 - Arch Linux: =sudo pacman -S starship=.
 
 Check with =starship --version= in a new shell.
@@ -47,7 +54,7 @@ starship preset gruvbox-rainbow -o ~/.config/starship.toml
 #+END_SRC
 
 With Home Manager, =~/.config/starship.toml= is a link into the Nix
-store, so the command above fails.  Write the preset next to your Home
+store, which is read-only, so the command above fails.  Write the preset next to your Home
 Manager configuration instead, then read it from there:
 
 #+BEGIN_SRC zsh
@@ -64,5 +71,6 @@ shown and why.
 
 * macOS
 
-Starship switches to true colour when the terminal sets =COLORTERM=;
-nothing else is needed once the binary is on =PATH=.
+Starship switches to true colour (millions of colours, not 256) when
+the terminal sets =COLORTERM=; nothing else is needed once =starship=
+is on =PATH=.

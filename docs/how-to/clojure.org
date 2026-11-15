@@ -2,15 +2,21 @@
 #+OPTIONS: toc:nil num:nil
 #+KEYMAPS: clojure-mode-map paredit-mode-map cider-mode-map clj-refactor-map
 
+This page is for anyone who writes Clojure in this configuration.
+You will open a project, move around its code, edit it by whole forms,
+evaluate it in a running program, run the tests and refactor.
+
 Each section is one task.  Keys are pressed in a Clojure buffer
 (=.clj=, =.cljs=, =.cljc=, =.edn= or a babashka =.bb= script) unless
-the step says otherwise.  The /Clojure/ section of =README.org=
+the step says otherwise, and "point" means the cursor's position.  The /Clojure/ section of =README.org=
 explains the configuration, and [[file:../reference/keys.org][the key reference]] lists every key.
 
 * Open a project
 
 1. Open a file of the project with =C-x C-f=.  Paredit and rainbow
-   parentheses turn on at once, and clojure-lsp starts.
+   parentheses turn on at once, and clojure-lsp starts: a language
+   server, a program that reads your code and tells the editor about
+   it (definitions, references, problems).
 2. The first time in a project, lsp-mode asks for the project's root:
    press =i= to import the directory it proposes, usually the one with
    =deps.edn= or =project.clj=.
@@ -23,7 +29,7 @@ explains the configuration, and [[file:../reference/keys.org][the key reference]
   in =~/.m2=.
 - =C-c l g r= lists the references of the symbol at point in the
   =*xref*= buffer; =RET= on one goes there.  =M-?= does not: in
-  Clojure buffers it is paredit's convolute.
+  Clojure buffers it is paredit's convolute command.
 - =M-g j n= jumps to a definition of the current namespace, and
   =M-g j p= to one in any open Clojure buffer, by typing part of its
   name.
@@ -32,7 +38,9 @@ explains the configuration, and [[file:../reference/keys.org][the key reference]
 * Edit structure with paredit
 
 Paredit keeps the parentheses balanced: typing =(= inserts =()=, and
-deleting a delimiter only works on an empty pair.
+deleting a delimiter only works on an empty pair.  Its keys move whole
+forms, a form being one expression: a symbol, a string, or a list with
+its parentheses.
 
 - =C-<right>= pulls the next form into the list around point;
   =C-<left>= pushes the list's last form out.
@@ -45,9 +53,14 @@ deleting a delimiter only works on an empty pair.
 
 * Evaluate code in a REPL
 
-1. Press =C-c M-j= to start a REPL for the project.  A JVM takes 20 to
-   40 seconds; the REPL then shows in a window at the bottom, and the
-   cursor stays in your file.
+A REPL is a running Clojure program that evaluates the code you send
+it.  CIDER is the package that starts it and connects your files to
+it.
+
+1. Press =C-c M-j= to start a REPL for the project.  The JVM, the Java
+   runtime Clojure runs on, takes 20 to 40 seconds to start; the REPL
+   then shows in a window at the bottom, and the cursor stays in your
+   file.
 2. Press =C-c C-k= to load the whole file into the REPL.
 3. Put point after a form and press =C-x C-e=: the result appears at
    the end of the line.  =C-c C-p= pretty-prints it in a buffer
@@ -57,8 +70,8 @@ deleting a delimiter only works on an empty pair.
    point.
 
 A babashka REPL does not work yet: this CIDER stops connecting before
-it turns on in your files, because babashka does not run cider-nrepl
-(see the notes of plan 094).
+it turns on in your files, because babashka does not run cider-nrepl,
+the server part CIDER expects.
 
 * Run the tests
 

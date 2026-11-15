@@ -2,18 +2,35 @@
 #+OPTIONS: toc:nil num:nil
 #+KEYMAPS: ghostel-mode-map ghostel-semi-char-mode-map ghostel-readonly-mode-map
 
-Ghostel runs your shell in an Emacs buffer, on Ghostty's terminal
-engine.  The /Shell terminals/ section of =README.org= explains how it
-is set up, and the parity matrix (=tests/scenarios/l3-pty-ghostel.el=)
-checks the shell keys below.
+This page is for anyone who wants a shell in an Emacs buffer, next to
+their files.  You will open a terminal with one key, set up the shell
+for a few handy keys, and search and copy its output with Emacs's
+keys.
+
+The terminal is Ghostel: it runs your shell on the terminal engine of
+Ghostty, a fast terminal program.  The /Shell terminals/ section of
+=README.org= explains how it is set up.
+
+* Open a terminal
+
+- In the current buffer's directory: =C-c t=.  When a terminal is
+  open already, =C-c t= goes to it; with a prefix argument, =C-u=
+  first, it opens another.
+- At the project's root: =C-c T=, or =s-p p=, pick the project, then
+  =t=.  Each project has its own terminal.
+
+The first time, Ghostel downloads a compiled part of itself from
+GitHub, so it needs the network: see [[*Get ghostel's module]].
 
 * Prepare the shell, once
 
-Ghostel brings its own shell integration to zsh, bash, fish and
-nushell: prompt marks and directory tracking need nothing in your
-startup files.  The shell keys below need fzf and zsh's command-line
-editor.  Add this block to =~/.zshrc=, after =source $ZSH/oh-my-zsh.sh=
-if you use oh-my-zsh:
+A terminal works without this step: Ghostel brings its own shell
+integration to zsh, bash, fish and nushell, so it knows where each
+prompt starts and which directory the shell is in, with nothing in
+your startup files.  The shell keys of the next section need more:
+fzf, a program that picks an item from a list as you type, and zsh's
+command-line editor.  Add this block to =~/.zshrc=, after
+=source $ZSH/oh-my-zsh.sh= if you use oh-my-zsh:
 
 #+BEGIN_SRC zsh
 # Prompt marks and directory tracking for the terminals outside Emacs,
@@ -46,29 +63,6 @@ With Home Manager, =programs.fzf.enable = true;= sets up fzf's keys
 instead of the =source= line.  For a readable prompt, see [[file:shell-prompt.org][Set up a
 shell prompt]].
 
-* Get ghostel's module
-
-Ghostel needs a native module, of the same version as its Lisp.  The
-first =M-x ghostel= downloads it from ghostel's releases on GitHub,
-without asking, into =~/.emacs.d/straight/build/ghostel/=; on a fresh
-clone, the setup's =modules= phase does the same (=nix/setup.sh
-modules=).  An update of ghostel rebuilds that directory and so
-deletes the module: once Emacs restarts, its first =M-x ghostel=
-downloads the new one.
-
-The download needs the network, and goes through the proxy that
-=https_proxy= names.  If it failed, the next =M-x ghostel= tries again.
-Whether it passes the TLS inspection of a managed Mac has not been
-checked.
-
-* Open a terminal
-
-- In the current buffer's directory: =C-c t=.  When a terminal is
-  open already, =C-c t= goes to it; with a prefix argument, =C-u=
-  first, it opens another.
-- At the project's root: =C-c T=, or =s-p p=, pick the project, then
-  =t=.  Each project has its own terminal.
-
 * Use the shell's keys
 
 - =C-r= picks a command from the history, =C-t= inserts a file path,
@@ -86,8 +80,9 @@ after =for w in a b; do= asks for the next line.
 Every other key goes to the shell, but =C-c=, =C-x=, =C-u=, =C-h=,
 =M-x=, =M-:= and =C-\=, which stay Emacs's.  So do =<f8>= and =<f9>=,
 the file tree and the symbol outline; the other function keys reach
-the program in the terminal, as htop expects.  =C-y= pastes from the
-kill ring, and =C-SPC= starts a selection in copy mode, below.
+the program in the terminal, as htop expects.  =C-y= pastes what
+Emacs copied last (from the kill ring, Emacs's clipboard history), and
+=C-SPC= starts a selection in copy mode, below.
 
 * Find and copy earlier output
 
@@ -104,3 +99,21 @@ Give it room first with =C-x 1=, then run it: =btop=, =htop= or a
 text editor draws on the whole window, and =q= (or its own quit key)
 brings the prompt back.  =M-x my/btop= opens btop in a ghostel buffer
 of its own, without a shell.
+
+The test file =tests/scenarios/l3-pty-ghostel.el= checks the shell
+keys of this page.
+
+* Get ghostel's module
+
+Ghostel needs a native module, a compiled library of the same version
+as its Emacs Lisp code.  The first =M-x ghostel= downloads it from
+ghostel's releases on GitHub, without asking, into
+=~/.emacs.d/straight/build/ghostel/=; on a fresh clone, the setup's
+=modules= phase does the same (=nix/setup.sh modules=).  An update of
+ghostel rebuilds that directory and so deletes the module: once Emacs
+restarts, its first =M-x ghostel= downloads the new one.
+
+The download needs the network, and goes through the proxy that
+=https_proxy= names.  If it failed, the next =M-x ghostel= tries again.
+Whether it passes the TLS inspection of a managed Mac has not been
+checked.

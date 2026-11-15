@@ -4,52 +4,57 @@
 #+PROPERTY: header-args :tangle ./init.el
 #+TODO: TODO FIXME | DONE
 
-This file might be most readable in an org-mode buffer directly. You
-can also read it from GitHub but it doesn't show source block options
-like =:name= or =:tangle=.
-
-The command =org-babel-tangle= (=C-c C-v t=) will write init files.
+An Emacs configuration for everyday programming and writing: quick
+completion everywhere, git through Magit, language servers for
+Python, Clojure, Java and a dozen other languages, Org for tasks and
+notes, a terminal inside Emacs, and a light or dark theme that follows
+your system.
 
 [[./startup.png]]
 
-* How to use this file
+* Quick start
 
-These are the most important keystrokes of all. If you know these keys
-keystrokes, you can get helpful information whenever you are stuck!
-These keystrokes are far more helpful than Google.
+You need Emacs 30 or later, git and a C compiler.  Then clone the
+repository, point =~/.emacs.d= to it, and start Emacs:
 
-- =C-h(elp) b(indings)= shows the keybindings available in the current
-  buffer.
-- =C-h(elp) d(ocumentation)= lets you search through all available
-  documentation.
-- =C-h(elp) f(unction)= displays the current list of available
-  functions.
-- =C-h(elp) i(nfo)= shows the info docs installed on your computer (no
-  need to have a browser open just to read documentation).
-- =C-h(elp) m(ode)= shows information about all the modes in the buffer.
-- =C-h(elp) k(ey)= let’s you type a keystroke and find out what it does.
-- =C-h(elp) v(ariable)= displays the list of available variables.
+#+BEGIN_SRC sh :tangle no
+git clone https://github.com/piotr-yuxuan/.emacs.d.git ~/emacs-config
+ln -s ~/emacs-config ~/.emacs.d
+emacs
+#+END_SRC
 
-* Getting started
+The first start downloads and builds the packages, which takes five
+to ten minutes.  [[file:docs/tutorials/getting-started.org][Getting started]] walks through every step on NixOS
+and on macOS with Homebrew, including what to do with an older Emacs
+configuration, and [[file:docs/README.org][the documentation]] lists every guide.
 
-[[file:docs/tutorials/getting-started.org][Getting started]] installs this configuration on NixOS or on macOS:
-the Emacs build, the programs it calls, the first start and the
-tests.  The programs and fonts it needs are listed in [[file:nix/programs.nix][nix/programs.nix]],
-each with what uses it: the configuration's flake installs them, and
-its setup, [[file:nix/setup.sh][nix/setup.sh]], prepares a clone: the packages at the
-versions of the lockfile, the tree-sitter grammars, the modules of jinx
-and ghostel, and what CIDER injects.  [[file:docs/reference/dependencies.org][External dependencies]] says what Emacs itself
-needs, and [[file:docs/README.org][the documentation index]] lists the other guides.
+With Nix, you can also try it without installing anything ([[file:docs/how-to/try-the-configuration.org][how]]):
 
-To try the configuration without installing anything, with Nix
-([[file:docs/how-to/try-the-configuration.org][how]]):
-
-#+BEGIN_SRC zsh :tangle no
+#+BEGIN_SRC sh :tangle no
 nix run github:piotr-yuxuan/.emacs.d
 #+END_SRC
 
 :FIXME: Don't forget the dependencies of Rust-based emacs!
 https://github.com/eval-exec/neomacs
+
+* About this file
+
+This file is the configuration itself, written as a literate program:
+prose explains each part, and the blocks of Emacs Lisp between the
+prose are the code.  Emacs reads the files =init.el= and
+=early-init.el=, which are generated from these blocks: the command
+=org-babel-tangle= (=C-c C-v t=) writes them.  The file reads best in
+Emacs, in Org mode; on GitHub, the options of the blocks, such as
+=:tangle=, do not show.
+
+When you are stuck, Emacs answers questions about itself:
+
+- =C-h b= shows the key bindings of the current buffer.
+- =C-h k= then a key says what that key does.
+- =C-h f=, =C-h v= describe a function, a variable.
+- =C-h m= describes the modes active in the buffer.
+- =C-h d= searches all the documentation.
+- =C-h i= opens the manuals installed on your computer.
 
 * Key bindings
 
@@ -59,8 +64,8 @@ the live keymaps, and is run again after each merge; the sections below
 explain keys next to the code that binds them.
 
 * Table of contents :TOC_2_org:
-- [[How to use this file][How to use this file]]
-- [[Getting started][Getting started]]
+- [[Quick start][Quick start]]
+- [[About this file][About this file]]
 - [[Key bindings][Key bindings]]
 - [[Fundamental Emacs setup][Fundamental Emacs setup]]
   - [[Deploy or retrieve configuration][Deploy or retrieve configuration]]
@@ -147,7 +152,7 @@ to live without. Other things like org-mode and LSP are optional.
 
 ** Deploy or retrieve configuration
 
-If you need it you can see [[How to use this file][how to use this file]].
+If you need it you can see [[About this file][how to use this file]].
 
 #+NAME: repo-path
 #+BEGIN_SRC elisp :cache yes :tangle no
@@ -2489,8 +2494,7 @@ recipes are left out.
 
 A table wider than the window is hard to read: Org truncates its
 lines and Markdown wraps them.  The source buffers keep their
-wrapping, so that prose wraps as before (decision D15 in
-=docs/work/README.org=).  Two tools make wide tables readable; the
+wrapping, so that prose wraps as before.  Two tools make wide tables readable; the
 [[file:docs/how-to/wide-tables.org][how-to]] shows how to use them.
 
 In Org, width cookies such as =<20>= narrow columns, and =M-x

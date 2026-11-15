@@ -155,3 +155,13 @@ Each runs four jobs:
   compiler and enchant, and prints its error and =ldd=.
 - GitHub stops the schedule of a public repository after 60 days
   without a push.
+
+=beginner.yml= is not part of that matrix: it is one job, on macOS 15
+with Homebrew alone and no Nix, that follows [[file:../tutorials/getting-started.org][Getting started]] as a
+beginner would.  =tests/tools/doc-block macos= prints the tutorial's
+macOS commands, the blocks marked =:beginner macos= or
+=:beginner both=, and the job runs them as written; then it checks out
+the commit under test in the tutorial's clone, starts Emacs once as a
+daemon, checks that the programs of the tutorial come from Homebrew or
+the system, waits for the YAML grammar, and runs =tests/run fast=
+without graphical frames.  It uses no cache and releases nothing.

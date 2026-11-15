@@ -2,11 +2,16 @@
 #+OPTIONS: toc:nil num:nil
 #+KEYMAPS: org-mode-map
 
+This page is for anyone who changes the configuration and wants a
+test that proves the change works.  You will write a scenario test,
+run it, and check that it fails when the behaviour breaks.
+
 A scenario says what the user does and what the user then sees: it
 opens a file, presses real keys in a fresh Emacs, and checks the
-result.  Write one for every behaviour a change adds.  [[file:../explanation/test-strategy.org][The test
-strategy]] explains why, and [[file:../reference/tests.org][the test reference]] lists the commands and
-the file headers.
+result.  Write one for every behaviour a change adds.  To run the
+existing tests first, see [[file:check-with-the-tests.org][Check the configuration with its tests]].
+[[file:../explanation/test-strategy.org][The test strategy]] explains why scenarios, and [[file:../reference/tests.org][the test reference]]
+lists the commands and the file headers.
 
 * Write the scenario
 
@@ -38,7 +43,7 @@ the file headers.
    ;;; l1-expreg.el ends here
    #+END_SRC
    - =:given= lists where the user starts: here a new file with that
-     text, and point where =-!-= is.  Each row is one spec; add rows to
+     text, and point, the cursor, where =-!-= is.  Each row is one spec; add rows to
      check the same keys in other kinds of file.
    - =:when= lists the keys, as =C-h k= writes them but with the
      graphical name of the Return key, as in =(:keys "C-x b <return>")=.
@@ -50,7 +55,8 @@ the file headers.
      and the wait ends as soon as the answer shows.  Keep =(:idle MS)=
      for a pause the behaviour itself needs, such as the delay of a
      timer.
-   - =:then= lists the outcomes the user must see.
+   - =:then= lists the outcomes the user must see: here
+     =:region-text=, the selected text.
 3. Pick the outcomes from the vocabulary.  Print it from the root of
    the checkout with:
    #+BEGIN_SRC zsh
@@ -86,17 +92,20 @@ purpose and run the scenario again:
 2. Run =tests/run fast l1-expreg=: the scenario must fail.
 3. Restore =init.el= by tangling =README.org= again (=C-c C-v t= in
    its buffer), which keeps the changes you have not committed.
+   Tangling writes =init.el= from the code blocks of =README.org=,
+   the file you edit for lasting changes.
 
-To keep that check, add the edit as a mutant to
-=tests/mutation/mutants.py=.  The example's mutant is already there,
+To keep that check, add the edit as a mutant, a deliberate break that
+the tests must catch, to =tests/mutation/mutants.py=.  The example's mutant is already there,
 =K12-expreg=: =tests/mutate K12= runs it, and reports =KILLED= when the
 tests catch it.  It runs the whole fast profile, so it takes a while.
 
 * Handle a missing program
 
 An =l3-= scenario that waits for a program skips when the program is
-missing, and an unexpected skip fails the run.  Declare the skip in
-your plan's file under =tests/expected-skips/=:
+missing, and an unexpected skip fails the run.  Declare the skip in a
+file of your own under =tests/expected-skips/=, numbered as the others
+are:
 
 #+BEGIN_SRC elisp
 ("\\`J-11: .* in Python " (:missing-executable "basedpyright-langserver"))

@@ -1,16 +1,21 @@
 #+TITLE: local.el variables
 #+OPTIONS: toc:nil num:nil
 
+This page is for a reader making the configuration their own.  It
+lists the variables you can set in =local.el=, with their defaults,
+and ends with an example.
+
 =~/.emacs.d/local.el= holds what differs between machines: identity,
-paths and hosts.  git ignores it.  Copy =local.el.example= to start
-one.  =init.el= loads it at its very end, so its values win; the
-agenda files are computed from them later still, from
-=after-init-hook=.
+paths and hosts.  git ignores it, so it stays private to the machine.
+Copy =local.el.example= to start one.  =init.el= loads it at its very
+end, so its values win; the agenda files are computed from them later
+still, from =after-init-hook=.
 
 * Variables of this configuration
 
-All but the last belong to the customization group =my=:
-=M-x customize-group RET my= shows them with their documentation.
+All but the last belong to the customization group =my=, Emacs's
+name for a set of related settings: =M-x customize-group RET my=
+shows them with their documentation.
 
 | Variable                              | Default                                        | Effect                                                                                    |
 |---------------------------------------+------------------------------------------------+-------------------------------------------------------------------------------------------|
