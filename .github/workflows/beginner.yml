@@ -1,6 +1,7 @@
 # A beginner's path through Getting started, on a Mac with Homebrew and
 # no Nix: the tutorial's macOS commands as written, which
-# tests/tools/doc-block prints, then a first start, then the fast suite.
+# tests/tools/doc-block prints, then a first start, then the commands of
+# "Check the configuration with its tests", the fast suite among them.
 # No cache: a first start from nothing is what it tests.  It runs for
 # good measure and gates no release: cd.yml waits for CI only.
 name: Homebrew beginner
@@ -64,7 +65,7 @@ jobs:
           # The programs of the tutorial, as the daemon finds them through
           # the login shell: each must come from Homebrew or the system.
           emacsclient --socket-name=first --eval \
-            "(with-temp-file \"$RUNNER_TEMP/found\" (dolist (p '(\"cc\" \"git\" \"pkg-config\" \"rg\" \"fd\" \"fzf\" \"delta\")) (insert p \" \" (or (executable-find p) \"none\") \"\n\")))"
+            "(with-temp-file \"$RUNNER_TEMP/found\" (dolist (p '(\"cc\" \"git\" \"gls\" \"pkg-config\" \"rg\" \"fd\" \"fzf\" \"delta\")) (insert p \" \" (or (executable-find p) \"none\") \"\n\")))"
           cat "$RUNNER_TEMP/found"
           if grep -Ev ' (/opt/homebrew|/usr/bin)/' "$RUNNER_TEMP/found"; then exit 1; fi
           # The grammars build in the background after startup; YAML's
@@ -82,12 +83,14 @@ jobs:
           grep -E '^(Grammars|Error)' "$RUNNER_TEMP/messages.txt" || true
           test "$ready" = t
 
-      - name: Run the fast suite
+      - name: Follow Check the configuration with its tests on macOS
         timeout-minutes: 60
         run: |
+          python3 tests/tools/doc-block macos docs/how-to/check-with-the-tests.org > "$RUNNER_TEMP/check.sh"
+          cat "$RUNNER_TEMP/check.sh"
+          # A new terminal reads ~/.zprofile; this shell does not.
           eval "$(/opt/homebrew/bin/brew shellenv)"
-          cd ~/emacs-config
-          tests/run fast 2>&1 | tee "$RUNNER_TEMP/fast.log"
+          bash -eo pipefail "$RUNNER_TEMP/check.sh" 2>&1 | tee "$RUNNER_TEMP/fast.log"
 
       - name: Show the messages of the failing sessions
         if: failure()

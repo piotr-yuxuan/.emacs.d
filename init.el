@@ -1484,6 +1484,10 @@ and \\[my/table-view-goto-source] goes back to the cell in the table."
 
 (use-package dired
   :straight nil
+  :init
+  (when-let* (((eq system-type 'darwin))
+              (gls (executable-find "gls")))
+    (setq insert-directory-program gls))
   :custom
   (delete-by-moving-to-trash t)
   (dired-mouse-drag-files t)

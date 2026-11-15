@@ -25,6 +25,10 @@
   (expand-file-name "docs/tutorials/getting-started.org" beginner-docs-test--root)
   "The tutorial of the beginner path.")
 
+(defconst beginner-docs-test--check
+  (expand-file-name "docs/how-to/check-with-the-tests.org" beginner-docs-test--root)
+  "The how-to whose macOS commands the workflow runs after the tutorial's.")
+
 (defun beginner-docs-test--blocks (file)
   "Return FILE's beginner blocks, as (SECTION TARGET LANGUAGE BODY).
 SECTION is the title of the top-level heading that holds the block."
@@ -86,6 +90,14 @@ SECTION is the title of the top-level heading that holds the block."
                     :to-equal "shared\n\nother platform"))
         (delete-file file)))))
 
+(describe "Check the configuration with its tests"
+  (it "installs every package, then runs the fast suite, on macOS"
+    (let ((commands (beginner-docs-test--doc-block "macos" beginner-docs-test--check)))
+      (expect commands :to-match "^nix/setup\\.sh packages$")
+      (expect commands :to-match "tests/run fast$")
+      (expect (string-match "nix/setup" commands) :to-be-less-than
+              (string-match "tests/run fast" commands)))))
+
 (describe "Getting started"
   (it "marks its beginner blocks for macos, nixos or both"
     (let ((blocks (beginner-docs-test--blocks beginner-docs-test--tutorial)))
@@ -94,10 +106,11 @@ SECTION is the title of the top-level heading that holds the block."
               :to-equal nil)))
 
   (it "runs only shell blocks on macOS"
-    (expect (seq-filter (lambda (b) (and (member (nth 1 b) '("macos" "both"))
-                                         (not (equal (nth 2 b) "sh"))))
-                        (beginner-docs-test--blocks beginner-docs-test--tutorial))
-            :to-equal nil))
+    (dolist (file (list beginner-docs-test--tutorial beginner-docs-test--check))
+      (expect (seq-filter (lambda (b) (and (member (nth 1 b) '("macos" "both"))
+                                           (not (equal (nth 2 b) "sh"))))
+                          (beginner-docs-test--blocks file))
+              :to-equal nil)))
 
   (it "gives a NixOS part to each step that has a macOS part"
     (let* ((blocks (beginner-docs-test--blocks beginner-docs-test--tutorial))

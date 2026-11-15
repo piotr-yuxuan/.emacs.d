@@ -7,21 +7,37 @@ update.  The tests run in private Emacs sessions of their own and
 never touch the Emacs you use.  They need Emacs 30 or later and
 python3.
 
+* Install every package first
+
+Emacs installs some packages only the first time you use them, while
+the tests never download anything: they read the packages already
+installed.  So install them all once, and again after an update.  The
+setup script does it; despite its directory, it needs no Nix:
+
+#+BEGIN_SRC sh :beginner both
+cd ~/.emacs.d
+nix/setup.sh packages
+#+END_SRC
+
 * Run the quick checks
 
-From the clone:
+First the checks that need no Emacs session:
 
-#+BEGIN_SRC sh
-cd ~/.emacs.d
+#+BEGIN_SRC sh :beginner both
 tests/run static
+#+END_SRC
+
+Then, on Linux, where the tests draw their windows on a private
+display (Xvfb):
+
+#+BEGIN_SRC sh :beginner nixos
 tests/run fast
 #+END_SRC
 
-On Linux the tests draw their windows on a private display, which
-needs Xvfb.  Where it is missing, and always on macOS, whose Emacs
-cannot draw on such a display, run them without windows:
+On macOS, whose Emacs cannot draw on such a display, and on Linux
+without Xvfb, run them without windows:
 
-#+BEGIN_SRC sh
+#+BEGIN_SRC sh :beginner macos
 EMACS_TEST_GUI=0 tests/run fast
 #+END_SRC
 

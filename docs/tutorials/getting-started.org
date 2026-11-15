@@ -49,10 +49,12 @@ if [ -x /opt/homebrew/bin/brew ]; then
 fi
 #+END_SRC
 
-Then install Emacs:
+Then install Emacs, and GNU's basic tools, whose =ls= the file manager
+of Emacs needs to list a directory:
 
 #+BEGIN_SRC sh :beginner macos
 brew install --cask emacs-app
+brew install coreutils
 #+END_SRC
 
 ** Check
