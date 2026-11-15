@@ -165,4 +165,5 @@ the commit under test in the tutorial's clone, starts Emacs once as a
 daemon, checks that the programs of the tutorial come from Homebrew or
 the system, waits for the YAML grammar, and runs the macOS commands of
 [[file:../how-to/check-with-the-tests.org][Check the configuration with its tests]] the same way: the setup's
-=packages= phase, then =tests/run fast= without graphical frames.  It uses no cache and releases nothing.
+=packages= phase, then =tests/run fast= without graphical frames.
+It uses no cache and releases nothing.

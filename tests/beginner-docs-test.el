@@ -93,8 +93,8 @@ SECTION is the title of the top-level heading that holds the block."
 (describe "Check the configuration with its tests"
   (it "installs every package, then runs the fast suite, on macOS"
     (let ((commands (beginner-docs-test--doc-block "macos" beginner-docs-test--check)))
-      (expect commands :to-match "^nix/setup\\.sh packages$")
-      (expect commands :to-match "tests/run fast$")
+      (expect commands :to-match "\\`cd ~/\\.emacs\\.d\nnix/setup\\.sh packages$")
+      (expect commands :to-match "^EMACS_TEST_GUI=0 tests/run fast$")
       (expect (string-match "nix/setup" commands) :to-be-less-than
               (string-match "tests/run fast" commands)))))
 
