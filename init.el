@@ -654,6 +654,11 @@ The tree contains source symbols, not runtime variable values."
   ;; src/main/java/com/example/app.  Treemacs sets 3 when it loads, so
   ;; :custom, which runs before, would be overwritten.
   (setq treemacs-collapse-dirs 5)
+  ;; Run Treemacs's helpers on a pipe: on a pty, macOS sometimes ends
+  ;; them at once with no output, and the tree fails to open.
+  (define-advice pfuture-new (:around (new &rest command) my/on-a-pipe)
+    (let ((process-connection-type nil))
+      (apply new command)))
   ;; Select the current file in the tree, and show the project of the
   ;; current buffer.  Treemacs turns the first on when it loads.
   (treemacs-follow-mode 1)
