@@ -23,6 +23,13 @@
     (let ((future (pfuture-new "printf" "(a . b)")))
       (expect (read (pfuture-await-to-finish future)) :to-equal '(a . b)))))
 
+(describe "A process started outside pfuture"
+  (it "keeps its pty, which shells need"
+    (let ((process (make-process :name "tty-probe" :command '("true") :noquery t)))
+      (unwind-protect
+          (expect (process-tty-name process) :not :to-be nil)
+        (delete-process process)))))
+
 (provide 'treemacs-helpers-test)
 
 ;;; treemacs-helpers-test.el ends here
