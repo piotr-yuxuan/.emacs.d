@@ -2733,6 +2733,25 @@ and 2 columns is the indentation most YAML uses."
   :custom
   (python-pytest-unsaved-buffers-behavior 'save-all))
 
+(use-package dbt-mode
+  :if (>= emacs-major-version 31)
+  :straight (dbt-mode :type git :host github :repo "piotr-yuxuan/dbt-mode")
+  :hook ((dbt-mode . dbt-lsp-deferred)
+         (yaml-ts-mode . dbt-properties-mode-maybe))
+  :custom
+  (dbt-executable (if (executable-find "dbt-2.0.9") "dbt-2.0.9" "dbt"))
+  (dbt-lsp-proxy t)
+  :init
+  ;; A project's .dir-locals.el may choose between the two dbt builds,
+  ;; and pass flags to dbt lsp, without a prompt.  The flags come after
+  ;; the executable, so they cannot change which program runs; any other
+  ;; executable still asks.
+  (put 'dbt-executable 'safe-local-variable
+       (lambda (value) (member value '("dbt" "dbt-2.0.9"))))
+  (put 'dbt-lsp-enable-linter 'safe-local-variable #'booleanp)
+  (put 'dbt-lsp-arguments 'safe-local-variable
+       (lambda (value) (and (listp value) (seq-every-p #'stringp value)))))
+
 (defun my/web-template-file-p ()
   "Return non-nil when the current buffer is a server-rendered template."
   (when-let* ((file buffer-file-name))

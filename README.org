@@ -5038,16 +5038,90 @@ Key bindings in Python buffers:
 
 *** DBT
 
-Instead of mindless piling up modes, I should leave a little message
-on how to use it, what it provides, and whether it is enabled
-automatically.
+[[https://github.com/piotr-yuxuan/dbt-mode][dbt-mode]] edits the SQL and Jinja of [[https://www.getdbt.com/][dbt]] projects: navigation across
+models, sources, macros and docs, previews of rows, compiled SQL and
+lineage.  It turns on by itself: a =.sql= file below a
+=dbt_project.yml= opens in =dbt-mode=, unless it lies in the
+project's =target/= or =logs/=, where dbt writes plain SQL.  The YAML
+files of the project get =M-.=, =M-?= and completion through
+=dbt-properties-mode=.  =C-c C-d= opens =dbt-dispatch=, the menu of
+every dbt command; [[https://github.com/piotr-yuxuan/dbt-mode/blob/main/docs/reference/keys.md][its keys]] lists the others.
+
+The language server is [[https://github.com/piotr-yuxuan/dbt-lsp-plus][dbt-lsp-plus]], a proxy in front of =dbt lsp=
+that adds the outline of a model, workspace symbols, the call
+hierarchy of models and macros, and the last run's failures as
+diagnostics.  =dbt lsp= comes only with dbt Labs' proprietary build;
+with the open-source =dbt-oss=, dbt-lsp-plus runs alone, from the
+project's files and its own =dbt parse=.  Without dbt-lsp-plus on
+=exec-path=, dbt-mode starts =dbt lsp= directly, or no server at all,
+and still navigates from the files.  Neither dbt 2 nor dbt-lsp-plus is
+in nixpkgs, so =nix/programs.nix= leaves them to the machine.
+
+=dbt-lsp-deferred= starts one server per dbt project, rooted at its
+=dbt_project.yml=, however many projects a repository holds.  Each
+project chooses its own dbt and profiles in a =.dir-locals.el=; the
+default below takes the proprietary build when it is installed under
+the name =dbt-2.0.9=, and =dbt= otherwise.  dbt-mode needs Emacs 31.1.
+
+#+BEGIN_SRC elisp
+(use-package dbt-mode
+  :if (>= emacs-major-version 31)
+  :straight (dbt-mode :type git :host github :repo "piotr-yuxuan/dbt-mode")
+  :hook ((dbt-mode . dbt-lsp-deferred)
+         (yaml-ts-mode . dbt-properties-mode-maybe))
+  :custom
+  (dbt-executable (if (executable-find "dbt-2.0.9") "dbt-2.0.9" "dbt"))
+  (dbt-lsp-proxy t)
+  :init
+  ;; A project's .dir-locals.el may choose between the two dbt builds,
+  ;; and pass flags to dbt lsp, without a prompt.  The flags come after
+  ;; the executable, so they cannot change which program runs; any other
+  ;; executable still asks.
+  (put 'dbt-executable 'safe-local-variable
+       (lambda (value) (member value '("dbt" "dbt-2.0.9"))))
+  (put 'dbt-lsp-enable-linter 'safe-local-variable #'booleanp)
+  (put 'dbt-lsp-arguments 'safe-local-variable
+       (lambda (value) (and (listp value) (seq-every-p #'stringp value)))))
+#+END_SRC
+
+A realistic layout: one repository with two dbt projects, each its own
+server, and a third project on its own.
+
+#+BEGIN_EXAMPLE
+~/src/example/warehouse/           one git repository
+├── analytics/                     Snowflake, dbt Labs' build: dbt lsp behind dbt-lsp-plus
+│   ├── .dir-locals.el
+│   └── dbt_project.yml
+└── finance/                       DuckDB, dbt-oss: dbt-lsp-plus alone
+    ├── .dir-locals.el
+    ├── profiles/profiles.yml
+    └── dbt_project.yml
+~/src/example/jaffle-shop/         the default: no .dir-locals.el
+#+END_EXAMPLE
+
+=analytics/.dir-locals.el= keeps the profiles of =~/.dbt/= and picks
+the development target and the linter:
 
 #+BEGIN_SRC elisp :tangle no
-(use-package dbt-mode
-  :defer t
-  :commands dbt-mode
-  :straight (:type git :host github :repo "CyberShadow/dbt-mode"))
+((nil . ((dbt-executable . "dbt-2.0.9")
+         (dbt-lsp-enable-linter . t)
+         (dbt-lsp-arguments . ("--target" "dev")))))
 #+END_SRC
+
+=finance/.dir-locals.el= keeps its profiles in the repository, as a
+DuckDB project can, and runs on =dbt-oss=:
+
+#+BEGIN_SRC elisp :tangle no
+((nil . ((dbt-executable . "dbt")
+         (dbt-lsp-arguments . ("--profiles-dir" "profiles" "--target" "local")))))
+#+END_SRC
+
+Opening a model of each starts two servers, which =M-x
+lsp-describe-session= lists side by side, one per project folder.
+=C-c l w r= (=lsp-workspace-restart=) after changing a
+=.dir-locals.el= starts the project's server again with its new
+values.  A relative =--profiles-dir= is read from the project's root,
+where the server runs.
 
 *** TypeScript and friends
 

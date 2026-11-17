@@ -34,6 +34,7 @@
  ("dash.el" . "d746dd9edcb67a108818beb0cdc78dc1cb466832")
  ("dashboard" . "a2c49ba27f3a906fd8b059da55104c1ec562b8b6")
  ("datastar-el" . "434391920f2125ca27aa59892fd2d8d0a6087aa1")
+ ("dbt-mode" . "62ef0b0a62e762ed493b599ae2c06cbc9b9c0766")
  ("devdocs.el" . "25c746024ddf73570195bf42b841f761a2fee10c")
  ("diff-hl" . "8dfb5c27ea43b8c7ac1c008bb97090ad4f059285")
  ("difftastic.el" . "98c61e7dfac8d1ad4451423395da6bc14caa41df")

@@ -82,6 +82,7 @@ in {
   #   podman or docker, for C-c D (docker.el)
   #   mpv, vlc, ffmpeg (ffplay) or mplayer, for ready-player
   #   starship, the shell prompt
+  #   dbt 2 and dbt-lsp-plus, for dbt-mode: neither is in nixpkgs
 
   # The fonts: the default face, its icons, and CJK text.
   fonts = with pkgs; [
