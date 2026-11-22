@@ -2881,33 +2881,47 @@ and 2 columns is the indentation most YAML uses."
 
 (add-hook 'yaml-ts-mode-hook #'lsp-deferred)
 
+;; lsp-yaml-schemas maps a schema, as a symbol, to a vector of globs:
+;; with a string key, lsp-mode fails to encode its settings, and no
+;; server of the buffer receives them.
 (with-eval-after-load 'lsp-yaml
   (setq lsp-yaml-schemas
-        '(("https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json"
-           "docker-compose*.yml" "docker-compose*.yaml" "compose*.yml" "compose*.yaml")
-          ("https://json.schemastore.org/github-workflow"
-           ".github/workflows/*.yml" ".github/workflows/*.yaml")
-          ("https://json.schemastore.org/gitlab-ci"
-           ".gitlab-ci.yml"))
+        `((,(intern "https://json.schemastore.org/github-workflow")
+           . [".github/workflows/*.yml" ".github/workflows/*.yaml"])
+          (,(intern "https://json.schemastore.org/gitlab-ci")
+           . [".gitlab-ci.yml"]))
         lsp-yaml-format-enable t
         lsp-yaml-completion t
         lsp-yaml-validate t))
 
-;; Microsoft compose-language-service registered as a layered add-on
-;; alongside yaml-language-server.
-(with-eval-after-load 'lsp-mode
-  (when-let* ((bin (executable-find "docker-compose-langserver")))
+(defun my/compose-language-server (executable)
+  "Serve Compose files with Docker's language server at EXECUTABLE.
+The language id dockercompose and the server go together: without the
+server, Compose files stay yaml, for yaml-language-server.  With
+EXECUTABLE nil, do nothing."
+  (when executable
+    ;; Before lsp-mode's own entry for YAML, which the first match wins.
+    (add-to-list 'lsp-language-id-configuration
+                 '("/\\(?:docker-\\)?compose\\(?:\\.[^/]+\\)?\\.ya?ml\\'" . "dockercompose"))
     (lsp-register-client
      (make-lsp-client
-      :new-connection (lsp-stdio-connection (lambda () `(,bin "--stdio")))
-      :activation-fn (lambda (filename _mode)
-                       (and (stringp filename)
-                            (string-match-p
-                             "/\\(?:docker-\\)?compose[^/]*\\.ya?ml\\'"
-                             filename)))
-      :priority -1
-      :add-on? t
-      :server-id 'docker-compose-langserver))))
+      :new-connection (lsp-stdio-connection (lambda () `(,executable "start" "--stdio")))
+      :activation-fn (lsp-activate-on "dockercompose")
+      :initialization-options '(:telemetry "off")
+      ;; Its configuration request gets Docker's one setting, not every
+      ;; setting lsp-mode holds for other servers.
+      :request-handlers
+      (ht ("workspace/configuration"
+           (lambda (_workspace params)
+             (apply #'vector (mapcar (lambda (_item) (ht ("telemetry" "off")))
+                                     (lsp-get params :items))))))
+      :server-id 'docker-language-server))))
+
+(with-eval-after-load 'lsp-mode
+  (my/compose-language-server (executable-find "docker-language-server")))
+
+(add-hook 'conf-toml-mode-hook #'lsp-deferred)
+(add-hook 'toml-ts-mode-hook #'lsp-deferred)
 
 (add-hook 'sh-mode-hook      #'lsp-deferred)
 (add-hook 'bash-ts-mode-hook #'lsp-deferred)
@@ -2952,8 +2966,16 @@ and 2 columns is the indentation most YAML uses."
     :enabled (lambda (directory)
                (directory-files directory nil "\\.tf\\'" t 1))))
 
+(defcustom my/terraform-language-server "tofu-ls"
+  "The language server lsp-mode starts for Terraform buffers.
+Set it to \"terraform-ls\" in `local.el' on a machine that writes
+Terraform rather than OpenTofu."
+  :type '(choice (const "tofu-ls") (const "terraform-ls") string)
+  :group 'my)
+
+;; lsp-terraform loads with the first Terraform buffer, after local.el.
 (with-eval-after-load 'lsp-terraform
-  (setq lsp-terraform-ls-server "tofu-ls"))
+  (setq lsp-terraform-ls-server my/terraform-language-server))
 
 (with-eval-after-load 'lsp-diagnostics
   (require 'flycheck)
@@ -3111,9 +3133,34 @@ Set it in `local.el'."
   :group 'my)
 
 (defcustom my/nixd-flake-host (system-name)
-  "The entry of the flake's nixosConfigurations that describes this machine."
+  "The flake's configuration that describes this machine.
+An entry of nixosConfigurations on NixOS, of darwinConfigurations on macOS."
   :type 'string
   :group 'my)
+
+(defcustom my/nixd-nixpkgs-input "nixpkgs-unstable"
+  "The path, under the flake's inputs, of the nixpkgs nixd completes."
+  :type 'string
+  :group 'my)
+
+(defun my/nixd-expressions (flake host input system)
+  "Return nixd's expressions for FLAKE, its configuration HOST, on SYSTEM.
+INPUT is the path of the nixpkgs input under the flake's inputs.  The
+value is a plist of :nixpkgs, :home-manager, and :nixos on gnu/linux or
+:nix-darwin on darwin; any other SYSTEM is an error."
+  (require 'url-util)
+  (let* ((configurations (pcase system
+                           ('gnu/linux "nixosConfigurations")
+                           ('darwin "darwinConfigurations")
+                           (_ (error "nixd: unsupported system-type %S" system))))
+         ;; Nix rejects a space in a git+file reference: percent-encode it.
+         (flake-expr (format "(builtins.getFlake \"git+file://%s\")"
+                             (url-hexify-string (expand-file-name flake)
+                                                url-path-allowed-chars)))
+         (options (format "%s.%s.%s.options" flake-expr configurations host)))
+    (list :nixpkgs (format "import %s.inputs.%s { }" flake-expr input)
+          :home-manager (concat options ".home-manager.users.type.getSubOptions [ ]")
+          (if (eq system 'darwin) :nix-darwin :nixos) options)))
 
 ;; lsp-nix, inside lsp-mode, defines the nixd client and loads when the
 ;; first Nix buffer starts a server, after local.el: read its values then.
@@ -3122,13 +3169,16 @@ Set it in `local.el'."
         lsp-nix-nixd-nixpkgs-expr "import <nixpkgs> {}"
         lsp-nix-nixd-formatting-command ["alejandra"])
   (when my/nixd-flake
-    ;; Nix rejects a space in a git+file reference: percent-encode the path.
-    (require 'url-util)
-    (setq lsp-nix-nixd-nixos-options-expr
-          (format "(builtins.getFlake \"git+file://%s\").nixosConfigurations.%s.options"
-                  (url-hexify-string (expand-file-name my/nixd-flake)
-                                     url-path-allowed-chars)
-                  my/nixd-flake-host))))
+    (let ((expressions (my/nixd-expressions my/nixd-flake my/nixd-flake-host
+                                            my/nixd-nixpkgs-input system-type)))
+      (setq lsp-nix-nixd-nixpkgs-expr (plist-get expressions :nixpkgs)
+            lsp-nix-nixd-nixos-options-expr (plist-get expressions :nixos)
+            lsp-nix-nixd-home-manager-options-expr
+            (plist-get expressions :home-manager))
+      ;; lsp-nix has no setting for nix-darwin's options.
+      (when-let* ((darwin (plist-get expressions :nix-darwin)))
+        (lsp-register-custom-settings
+         `(("nixd.options.nix-darwin.expr" ,darwin)))))))
 
 (use-package lsp-tailwindcss
   :after lsp-mode

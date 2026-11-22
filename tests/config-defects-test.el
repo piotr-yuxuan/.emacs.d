@@ -15,6 +15,7 @@
 (defvar my/nixd-flake)
 (defvar my/nixd-flake-host)
 (defvar lsp-nix-nixd-nixos-options-expr)
+(defvar lsp-nix-nixd-home-manager-options-expr)
 (defvar config-defects-test-vellum-file)
 (defvar lsp-java-server-install-dir)
 (defvar lsp-java-jdt-ls-prefer-native-command)
@@ -166,7 +167,7 @@ they are also in `config-defects-test--calls', newest first."
               :to-equal my/vellum-directory))))
 
 (describe "CF-04: nixd completes the options of the flake local.el names"
-  (it "builds the NixOS option set once lsp-nix loads"
+  (it "builds the system's option set once lsp-nix loads"
     ;; lsp-nix loads when the first Nix buffer starts a server, long
     ;; after local.el; the fixture local.el sets the flake, as a user's.
     (expect (featurep 'lsp-nix) :to-be nil)
@@ -177,9 +178,21 @@ they are also in `config-defects-test--calls', newest first."
             nil t)
       (require 'lsp-nix))
     ;; A git+file reference copies only the tracked files to the store,
-    ;; and Nix accepts it only with its space percent-encoded.
-    (expect lsp-nix-nixd-nixos-options-expr
-            :to-equal "(builtins.getFlake \"git+file:///flakes/my%20fleet/\").nixosConfigurations.fixture-host.options")))
+    ;; and Nix accepts it only with its space percent-encoded.  NixOS
+    ;; and nix-darwin keep their configurations under different names
+    ;; (plan 120).
+    (expect lsp-nix-nixd-home-manager-options-expr
+            :to-equal
+            (format "(builtins.getFlake \"git+file:///flakes/my%%20fleet/\").%s.fixture-host.options.home-manager.users.type.getSubOptions [ ]"
+                    (pcase system-type
+                      ('gnu/linux "nixosConfigurations")
+                      ('darwin "darwinConfigurations"))))
+    (pcase system-type
+      ('gnu/linux
+       (expect lsp-nix-nixd-nixos-options-expr
+               :to-equal "(builtins.getFlake \"git+file:///flakes/my%20fleet/\").nixosConfigurations.fixture-host.options"))
+      ('darwin
+       (expect lsp-nix-nixd-nixos-options-expr :to-be nil)))))
 
 (describe "CF-15: lsp-java runs the jdtls launcher on PATH"
   (it "sees the installation's server, in a directory lsp-java may delete"

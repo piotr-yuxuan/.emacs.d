@@ -34,6 +34,8 @@ in {
       opentofu # OpenTofu formatting and tofu validate
       tofu-ls # OpenTofu's language server
       marksman # Markdown's language server
+      tombi # TOML's language server
+      docker-language-server # Docker Compose's language server
       ltex-ls-plus # grammar of prose buffers (LanguageTool)
       python3Packages.grammalecte # French grammar (flycheck-grammalecte)
     ]
@@ -56,7 +58,6 @@ in {
     nixd # Nix
     yaml-language-server # YAML
     dockerfile-language-server # Dockerfile
-    docker-compose-language-service # Docker Compose
     lua-language-server # Lua
     texlab # LaTeX
     cljfmt # Clojure formatting

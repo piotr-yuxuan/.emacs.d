@@ -39,7 +39,9 @@
 (defconst my/scenario-lsp-servers
   '((clojure-lsp "clojure-lsp")
     (pyright "basedpyright-langserver")
-    (ruff "ruff"))
+    (ruff "ruff")
+    (tombi "tombi")
+    (docker-language-server "docker-language-server"))
   "Language servers a scenario may wait for, with the executables they need.")
 
 (defvar my/scenario-wait-seconds 200

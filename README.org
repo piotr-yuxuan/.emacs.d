@@ -3585,9 +3585,8 @@ without competing with =hl-line-mode=.
 is provisioned by the Nix profile in
 [[https://github.com/piotr-yuxuan/hardware.nix][hardware.nix]] (=home/base.nix=). JDTLS is provided
 as =jdt-language-server=; HTML / CSS / JSON / Markdown via
-=vscode-langservers-extracted=; Docker Compose via
-=docker-compose-language-service= (binary
-=docker-compose-langserver=).
+=vscode-langservers-extracted=; Docker Compose via Docker's
+=docker-language-server=; TOML via =tombi=.
 
 #+BEGIN_SRC elisp
 (use-package eldoc-box
@@ -5322,43 +5321,78 @@ completion, and best practice linting. Compose is YAML, see [[#yaml-and-docker-c
 :CUSTOM_ID: yaml-and-docker-compose
 :END:
 
-=yaml-language-server= covers plain YAML and is layered with
-=lsp-yaml-schemas= for GitHub Actions, GitLab CI, and the Compose
-spec. Microsoft's =docker-compose-language-service= (binary
-=docker-compose-langserver=) registers as an add-on for compose files
-when present, providing service name aware completion on top of the
-schema.
+=yaml-language-server= covers YAML, with =lsp-yaml-schemas= for GitHub
+Actions and GitLab CI, which it downloads when such a file opens.
+
+Compose files go to Docker's =docker-language-server= instead:
+completion, navigation, outline, hover, rename of named references,
+and YAML-level diagnostics such as a duplicate key, but no validation
+against the Compose schema.  It checks a document only under the
+language id =dockercompose=, and lsp-mode gives a buffer one language
+id for all its servers, while yaml-language-server starts only on
+=yaml=; so Compose files get that id and Docker's server alone.  A
+Compose file is named as the Compose specification names it:
+=compose.yaml=, =docker-compose.yml=, or such a name with a part
+before the extension, as =compose.override.yaml=; a workflow named
+=compose.yml= under =.github/workflows/= would match too.  It
+replaces Microsoft's =docker-compose-language-service=, whose
+repository was archived in July 2026.  Its telemetry is off.  It
+serves Compose files only: on a =Dockerfile= it looks up image
+vulnerabilities with Docker Scout over the network (seen on 2026-11-22,
+plan 120), and =dockerfile-language-server= serves Dockerfiles.
 
 #+BEGIN_SRC elisp
 (add-hook 'yaml-ts-mode-hook #'lsp-deferred)
 
+;; lsp-yaml-schemas maps a schema, as a symbol, to a vector of globs:
+;; with a string key, lsp-mode fails to encode its settings, and no
+;; server of the buffer receives them.
 (with-eval-after-load 'lsp-yaml
   (setq lsp-yaml-schemas
-        '(("https://raw.githubusercontent.com/compose-spec/compose-spec/master/schema/compose-spec.json"
-           "docker-compose*.yml" "docker-compose*.yaml" "compose*.yml" "compose*.yaml")
-          ("https://json.schemastore.org/github-workflow"
-           ".github/workflows/*.yml" ".github/workflows/*.yaml")
-          ("https://json.schemastore.org/gitlab-ci"
-           ".gitlab-ci.yml"))
+        `((,(intern "https://json.schemastore.org/github-workflow")
+           . [".github/workflows/*.yml" ".github/workflows/*.yaml"])
+          (,(intern "https://json.schemastore.org/gitlab-ci")
+           . [".gitlab-ci.yml"]))
         lsp-yaml-format-enable t
         lsp-yaml-completion t
         lsp-yaml-validate t))
 
-;; Microsoft compose-language-service registered as a layered add-on
-;; alongside yaml-language-server.
-(with-eval-after-load 'lsp-mode
-  (when-let* ((bin (executable-find "docker-compose-langserver")))
+(defun my/compose-language-server (executable)
+  "Serve Compose files with Docker's language server at EXECUTABLE.
+The language id dockercompose and the server go together: without the
+server, Compose files stay yaml, for yaml-language-server.  With
+EXECUTABLE nil, do nothing."
+  (when executable
+    ;; Before lsp-mode's own entry for YAML, which the first match wins.
+    (add-to-list 'lsp-language-id-configuration
+                 '("/\\(?:docker-\\)?compose\\(?:\\.[^/]+\\)?\\.ya?ml\\'" . "dockercompose"))
     (lsp-register-client
      (make-lsp-client
-      :new-connection (lsp-stdio-connection (lambda () `(,bin "--stdio")))
-      :activation-fn (lambda (filename _mode)
-                       (and (stringp filename)
-                            (string-match-p
-                             "/\\(?:docker-\\)?compose[^/]*\\.ya?ml\\'"
-                             filename)))
-      :priority -1
-      :add-on? t
-      :server-id 'docker-compose-langserver))))
+      :new-connection (lsp-stdio-connection (lambda () `(,executable "start" "--stdio")))
+      :activation-fn (lsp-activate-on "dockercompose")
+      :initialization-options '(:telemetry "off")
+      ;; Its configuration request gets Docker's one setting, not every
+      ;; setting lsp-mode holds for other servers.
+      :request-handlers
+      (ht ("workspace/configuration"
+           (lambda (_workspace params)
+             (apply #'vector (mapcar (lambda (_item) (ht ("telemetry" "off")))
+                                     (lsp-get params :items))))))
+      :server-id 'docker-language-server))))
+
+(with-eval-after-load 'lsp-mode
+  (my/compose-language-server (executable-find "docker-language-server")))
+#+END_SRC
+
+*** TOML
+
+=tombi= serves TOML through lsp-mode's own client, =lsp-toml-tombi=:
+diagnostics against a schema (=Cargo.toml= and =pyproject.toml= out of
+the box), completion, definition, references and formatting.
+
+#+BEGIN_SRC elisp
+(add-hook 'conf-toml-mode-hook #'lsp-deferred)
+(add-hook 'toml-ts-mode-hook #'lsp-deferred)
 #+END_SRC
 
 *** Bash and shell scripts
@@ -5394,7 +5428,10 @@ OpenTofu is the single infrastructure engine. =tofu-ls= uses the
 Terraform language-server protocol and provides completion, navigation,
 hover, diagnostics, and formatting for =.tf=, =.tfvars=, =.tofu=, and
 =.tofutest.hcl= files. =terraform-mode= also invokes =tofu= for its
-interactive commands.
+interactive commands.  A machine that writes Terraform instead, such
+as one for Terraform Enterprise, names HashiCorp's =terraform-ls= in
+=my/terraform-language-server= in its =local.el=: tofu-ls follows
+OpenTofu's language, which drifts from Terraform's.
 
 Flycheck keeps LSP diagnostics as the primary source. It chains =tflint=
 only in projects that contain a =.tflint.hcl= file; this avoids noisy
@@ -5434,8 +5471,16 @@ packages.
     :enabled (lambda (directory)
                (directory-files directory nil "\\.tf\\'" t 1))))
 
+(defcustom my/terraform-language-server "tofu-ls"
+  "The language server lsp-mode starts for Terraform buffers.
+Set it to \"terraform-ls\" in `local.el' on a machine that writes
+Terraform rather than OpenTofu."
+  :type '(choice (const "tofu-ls") (const "terraform-ls") string)
+  :group 'my)
+
+;; lsp-terraform loads with the first Terraform buffer, after local.el.
 (with-eval-after-load 'lsp-terraform
-  (setq lsp-terraform-ls-server "tofu-ls"))
+  (setq lsp-terraform-ls-server my/terraform-language-server))
 
 (with-eval-after-load 'lsp-diagnostics
   (require 'flycheck)
@@ -5656,14 +5701,21 @@ variable propagation (=JAVA_HOME=, =PATH=) is pending migration to
 *** Nix
 
 =nix-mode= for =.nix= files. =nixd= is the language server (ensure it
-is on =PATH=, e.g. via =home/base.nix=).  On a NixOS machine,
-=local.el= names the machine's flake in =my/nixd-flake=, and its
-=nixosConfigurations= entry in =my/nixd-flake-host= when that is not
-the host name.  nixd then completes and documents every =services.…=
-and =programs.…= option of that system.  The flake must be a git
-checkout: nixd reads it as a =git+file:= flake, so Nix copies to the
-store only the files git tracks.  A plain path would copy the whole directory, untracked
-work data included, each time nixd starts.
+is on =PATH=, e.g. via =home/base.nix=).  =local.el= names the
+machine's flake in =my/nixd-flake=, and its configuration in
+=my/nixd-flake-host= when that is not the host name: an entry of
+=nixosConfigurations= on NixOS, of =darwinConfigurations= on macOS.
+nixd then completes and documents the options of that system (NixOS's
+or nix-darwin's) and of its Home Manager, and the packages of the
+flake's input that =my/nixd-nixpkgs-input= names, by default
+=nixpkgs-unstable=, the channel Home Manager takes its packages from.
+On the Mac, whose local flake takes [[https://github.com/piotr-yuxuan/hardware.nix][hardware.nix]] as its
+input =base=, that is =base.inputs.nixpkgs-unstable=.  The flake must
+be a git checkout: nixd reads it as a =git+file:= flake, so Nix copies
+to the store only the files git tracks.  A plain path would copy the
+whole directory, untracked work data included, each time nixd starts.
+Without =my/nixd-flake=, nixd completes the packages of =<nixpkgs>=
+only.
 
 =alejandra= formats on save via apheleia (see *Formatting*).  =C-c n r=
 opens a =nix repl= session for interactive introspection.
@@ -5697,9 +5749,34 @@ Set it in `local.el'."
   :group 'my)
 
 (defcustom my/nixd-flake-host (system-name)
-  "The entry of the flake's nixosConfigurations that describes this machine."
+  "The flake's configuration that describes this machine.
+An entry of nixosConfigurations on NixOS, of darwinConfigurations on macOS."
   :type 'string
   :group 'my)
+
+(defcustom my/nixd-nixpkgs-input "nixpkgs-unstable"
+  "The path, under the flake's inputs, of the nixpkgs nixd completes."
+  :type 'string
+  :group 'my)
+
+(defun my/nixd-expressions (flake host input system)
+  "Return nixd's expressions for FLAKE, its configuration HOST, on SYSTEM.
+INPUT is the path of the nixpkgs input under the flake's inputs.  The
+value is a plist of :nixpkgs, :home-manager, and :nixos on gnu/linux or
+:nix-darwin on darwin; any other SYSTEM is an error."
+  (require 'url-util)
+  (let* ((configurations (pcase system
+                           ('gnu/linux "nixosConfigurations")
+                           ('darwin "darwinConfigurations")
+                           (_ (error "nixd: unsupported system-type %S" system))))
+         ;; Nix rejects a space in a git+file reference: percent-encode it.
+         (flake-expr (format "(builtins.getFlake \"git+file://%s\")"
+                             (url-hexify-string (expand-file-name flake)
+                                                url-path-allowed-chars)))
+         (options (format "%s.%s.%s.options" flake-expr configurations host)))
+    (list :nixpkgs (format "import %s.inputs.%s { }" flake-expr input)
+          :home-manager (concat options ".home-manager.users.type.getSubOptions [ ]")
+          (if (eq system 'darwin) :nix-darwin :nixos) options)))
 
 ;; lsp-nix, inside lsp-mode, defines the nixd client and loads when the
 ;; first Nix buffer starts a server, after local.el: read its values then.
@@ -5708,13 +5785,16 @@ Set it in `local.el'."
         lsp-nix-nixd-nixpkgs-expr "import <nixpkgs> {}"
         lsp-nix-nixd-formatting-command ["alejandra"])
   (when my/nixd-flake
-    ;; Nix rejects a space in a git+file reference: percent-encode the path.
-    (require 'url-util)
-    (setq lsp-nix-nixd-nixos-options-expr
-          (format "(builtins.getFlake \"git+file://%s\").nixosConfigurations.%s.options"
-                  (url-hexify-string (expand-file-name my/nixd-flake)
-                                     url-path-allowed-chars)
-                  my/nixd-flake-host))))
+    (let ((expressions (my/nixd-expressions my/nixd-flake my/nixd-flake-host
+                                            my/nixd-nixpkgs-input system-type)))
+      (setq lsp-nix-nixd-nixpkgs-expr (plist-get expressions :nixpkgs)
+            lsp-nix-nixd-nixos-options-expr (plist-get expressions :nixos)
+            lsp-nix-nixd-home-manager-options-expr
+            (plist-get expressions :home-manager))
+      ;; lsp-nix has no setting for nix-darwin's options.
+      (when-let* ((darwin (plist-get expressions :nix-darwin)))
+        (lsp-register-custom-settings
+         `(("nixd.options.nix-darwin.expr" ,darwin)))))))
 #+END_SRC
 
 *** Web tooling: Tailwind, HTMX, Alpine.JS
